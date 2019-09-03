@@ -1,9 +1,11 @@
 #include <iostream>
-#include "clockwork/example.h"
+#include "clockwork/clockwork_queue.h"
+
+using namespace clockwork;
 
 int main(int argc, char *argv[]) {
 
 	std::cout << "Hello world" << std::endl;
 
-	PubSub::saysomething();
+	PriorityQueue::saysomething();
 }

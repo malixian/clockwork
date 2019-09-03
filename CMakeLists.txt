@@ -29,7 +29,7 @@ link_directories(
 
 add_executable (main 
 	src/main.cc 
-	src/clockwork/example.cc )
+	src/clockwork/clockwork_queue.cpp )
 
 target_link_libraries(
 	main 
