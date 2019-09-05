@@ -29,6 +29,7 @@ link_directories(
 
 add_executable (main 
 	src/main.cc
+	src/clockwork/threadpoolruntime.cpp
 )
 
 target_link_libraries(

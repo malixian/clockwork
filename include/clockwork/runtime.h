@@ -1,5 +1,5 @@
-#ifndef _CLOCKWORK_MANAGER_H_
-#define _CLOCKWORK_MANAGER_H_
+#ifndef _CLOCKWORK_RUNTIME_H_
+#define _CLOCKWORK_RUNTIME_H_
 
 #include <functional>
 
@@ -13,7 +13,7 @@ public:
 	virtual void submit() = 0;
 };
 
-class MultitenantRuntime {
+class Runtime {
 public:
 	virtual RequestBuilder* newRequest() = 0;
 };
@@ -21,4 +21,4 @@ public:
 
 }
 
-// #endif
+#endif
