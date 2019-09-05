@@ -4,6 +4,7 @@
 #include "clockwork/runtime.h"
 #include "clockwork/threadpoolruntime.h"
 #include "clockwork/greedyruntime.h"
+#include "clockwork/clockworkruntime.h"
 #include <sstream>
 #include <atomic>
 #include <thread>
@@ -14,12 +15,13 @@ int main(int argc, char *argv[]) {
 	std::cout << "begin" << std::endl;
 
 	Runtime* runtime;
-	//runtime = newFIFOThreadpoolRuntime(4);
-	runtime = newGreedyRuntime(1, 4);
+	// runtime = newFIFOThreadpoolRuntime(4);
+	// runtime = newGreedyRuntime(1, 4);
+	runtime = newClockworkRuntime(1, 4);
 
 	int expected = 0;
 	std::atomic_int* actual = new std::atomic_int{0};
-	for (unsigned requestID = 1; requestID < 10; requestID++) {
+	for (unsigned requestID = 1; requestID < 6; requestID++) {
 		RequestBuilder* b = runtime->newRequest();
 		for (unsigned taskID = 0; taskID < requestID; taskID++) {
 			expected++;
@@ -37,6 +39,7 @@ int main(int argc, char *argv[]) {
 
 
 	while (actual->load() < expected) {}
+	std::cout << "shutting down" << std::endl;
 
 	runtime->shutdown(true);
 	delete actual;

@@ -11,9 +11,14 @@
 namespace clockwork {
 
 /**
-The threadpool runtime has a fixed-size threadpool for executing requests.
-Each thread executes the entirety of a request at a time, e.g. all the tasks
-of the request.
+The Greedy runtime has an executor for each resource type.
+
+An executor consists of a self-contained threadpool and queue.
+
+numThreadsPerExecutor specifies the size of the threadpool
+
+Threadpools do not block on asynchronous cuda work.  Use maxOutstandingPerExecutor to specify
+a maximum number of incomplete asynchronous tasks before an executor will block.
 **/
 Runtime* newGreedyRuntime(const unsigned numThreadsPerExecutor, const unsigned maxOutstandingPerExecutor);
 
@@ -56,8 +61,6 @@ public:
 	void executorMain(int executorId);
 };
 
-/** A simple manager based on a threadpool.
-Each threadpool thread executes the request in its entirety */
 class GreedyRuntime : public clockwork::Runtime {
 private:
 	std::atomic_bool alive;
