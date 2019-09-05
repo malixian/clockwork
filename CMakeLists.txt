@@ -28,8 +28,8 @@ link_directories(
 )
 
 add_executable (main 
-	src/main.cc 
-	src/clockwork/clockwork_queue.cpp )
+	src/main.cc
+)
 
 target_link_libraries(
 	main 
@@ -38,4 +38,5 @@ target_link_libraries(
 	cuda 
 	cudart 
 	tvm_runtime
+	tbb
 )

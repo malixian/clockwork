@@ -11,6 +11,11 @@ TODO: instructions to build tvm
 TODO: any environment variables to set
 ```
 
+Intel Threading Building Blocks
+```
+apt-get install libtbb-dev
+```
+
 # Building
 
 ```
