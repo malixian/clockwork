@@ -2,10 +2,14 @@
 #define _CLOCKWORK_RUNTIME_H_
 
 #include <functional>
+#include <array>
 
 namespace clockwork {
 
-enum TaskType { Disk, CPU, PCIe_H2D_Weights, PCIe_H2D_Inputs, GPU, PCIe_D2H_output, Sync };
+enum TaskType { 
+	Disk, CPU, PCIe_H2D_Weights, PCIe_H2D_Inputs, GPU, PCIe_D2H_output, Sync 
+};
+extern std::array<TaskType, 7> TaskTypes;
 
 class RequestBuilder {
 public:

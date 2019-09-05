@@ -3,15 +3,19 @@
 #include "tbb/task_scheduler_init.h"
 #include "clockwork/runtime.h"
 #include "clockwork/threadpoolruntime.h"
+#include "clockwork/greedyruntime.h"
 #include <sstream>
 #include <atomic>
+#include <thread>
 
 using namespace clockwork;
 
 int main(int argc, char *argv[]) {
 	std::cout << "begin" << std::endl;
 
-	Runtime* runtime = newFIFOThreadpoolRuntime(4);
+	Runtime* runtime;
+	//runtime = newFIFOThreadpoolRuntime(4);
+	runtime = newGreedyRuntime(1, 4);
 
 	int expected = 0;
 	std::atomic_int* actual = new std::atomic_int{0};
@@ -19,15 +23,17 @@ int main(int argc, char *argv[]) {
 		RequestBuilder* b = runtime->newRequest();
 		for (unsigned taskID = 0; taskID < requestID; taskID++) {
 			expected++;
-			b = b->addTask(TaskType::CPU, [=] {
+			TaskType type = TaskTypes[taskID%TaskTypes.size()];
+			b = b->addTask(type, [=] {
 				std::stringstream ss;
-				ss << "request-" << requestID << "   task-" << taskID << std::endl;
+				ss << std::this_thread::get_id() << "  type-" << type << "   request-" << requestID << "   task-" << taskID << std::endl;
 				std::cout << ss.str();
 				actual->fetch_add(1);
 			});
 		}
 		b->submit();
 	}
+
 
 
 	while (actual->load() < expected) {}
