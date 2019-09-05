@@ -1,0 +1,10 @@
+{
+    "type": "sftp",
+    "host": "maxwell08",
+    "username": "anthony",
+    "password": "1234@321$",
+    "port": 22,
+    "remotePath": "../rkarimi/projects/clockwork",
+    "uploadOnSave": true,
+    "uploadConfigFile": false
+}

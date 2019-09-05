@@ -27,15 +27,19 @@ link_directories(
 	/usr/local/cuda/lib64
 )
 
-add_executable (main 
-	src/main.cc 
+file(GLOB MANAGED_RUNTIME_SRCS src/clockwork/multitenant/*.cc)
+add_library(multitenant ${MANAGED_RUNTIME_SRCS})
+
+add_executable (main
+	src/main.cc
 	src/clockwork/clockwork_queue.cpp )
 
 target_link_libraries(
-	main 
-	Threads::Threads 
-	dl 
-	cuda 
-	cudart 
+	main
+	multitenant
+	Threads::Threads
+	dl
+	cuda
+	cudart
 	tvm_runtime
 )
