@@ -54,9 +54,13 @@ void ThreadpoolRuntime::threadpoolMain(int threadNumber) {
 void ThreadpoolRuntime::shutdown(bool awaitShutdown) {
 	alive.store(false);
 	if (awaitShutdown) {
-		for (unsigned i = 0; i < threads.size(); i++) {
-			threads[i].join();
-		}
+		join();
+	}
+}
+
+void ThreadpoolRuntime::join() {
+	for (unsigned i = 0; i < threads.size(); i++) {
+		threads[i].join();
 	}
 }
 

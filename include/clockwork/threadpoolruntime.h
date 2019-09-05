@@ -51,6 +51,7 @@ public:
 
 	void threadpoolMain(int threadNumber);
 	void shutdown(bool awaitShutdown);
+	void join();
 	virtual clockwork::RequestBuilder* newRequest();
 	void submit(Request* request);
 
@@ -61,7 +62,7 @@ private:
 	ThreadpoolRuntime* runtime;
 	std::vector<Task> tasks;
 public:
-	RequestBuilder(ThreadpoolRuntime *manager) : runtime(runtime) {}
+	RequestBuilder(ThreadpoolRuntime *runtime) : runtime(runtime) {}
 	virtual RequestBuilder* addTask(TaskType type, std::function<void(void)> operation);
 	virtual void submit();
 };

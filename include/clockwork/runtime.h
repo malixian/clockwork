@@ -16,6 +16,8 @@ public:
 class Runtime {
 public:
 	virtual RequestBuilder* newRequest() = 0;
+	virtual void shutdown(bool awaitShutdown) = 0;
+	virtual void join() = 0;
 };
 
 
