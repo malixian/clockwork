@@ -1,1 +1,0 @@
-/usr/bin/c++   -std=c++17 -O2   CMakeFiles/main.dir/src/main.cc.o CMakeFiles/main.dir/src/clockwork/clockwork_queue.cpp.o  -o main  -L/home/rkarimi/projects/tvm/build -Wl,-rpath,/home/rkarimi/projects/tvm/build libmultitenant.a -ldl -lcuda -lcudart -ltvm_runtime -pthread 

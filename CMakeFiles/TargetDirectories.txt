@@ -1,4 +1,0 @@
-/home/rkarimi/projects/clockwork/CMakeFiles/rebuild_cache.dir
-/home/rkarimi/projects/clockwork/CMakeFiles/multitenant.dir
-/home/rkarimi/projects/clockwork/CMakeFiles/edit_cache.dir
-/home/rkarimi/projects/clockwork/CMakeFiles/main.dir

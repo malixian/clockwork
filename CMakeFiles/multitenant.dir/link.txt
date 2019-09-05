@@ -1,2 +1,0 @@
-/usr/bin/ar qc libmultitenant.a  CMakeFiles/multitenant.dir/src/clockwork/multitenant/executor.cc.o CMakeFiles/multitenant.dir/src/clockwork/multitenant/manager.cc.o
-/usr/bin/ranlib libmultitenant.a
