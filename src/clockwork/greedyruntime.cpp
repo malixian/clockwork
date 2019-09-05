@@ -1,6 +1,7 @@
 #include "clockwork/greedyruntime.h"
 #include "tvm/runtime/cuda_common.h"
 #include "clockwork/runtime.h"
+#include "clockwork/tvm_util.h"
 #include <array>
 
 namespace clockwork {
@@ -60,6 +61,7 @@ void Executor::join() {
 }
 
 void Executor::executorMain(int executorId) {
+	tvmutil::initializeTVMCudaStream();
 	std::vector<Task*> pending;
 	while (runtime->isAlive()) {
 		// Finish any pending tasks that are complete

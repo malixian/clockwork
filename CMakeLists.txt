@@ -33,6 +33,8 @@ add_executable (main
 	src/clockwork/threadpoolruntime.cpp
 	src/clockwork/greedyruntime.cpp
 	src/clockwork/clockworkruntime.cpp
+	src/clockwork/util.cpp
+	src/clockwork/tvm_util.cpp
 )
 
 target_link_libraries(
