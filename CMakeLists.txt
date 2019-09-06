@@ -38,6 +38,7 @@ target_link_libraries(runtime PUBLIC
 	cuda
 	cudart
 	tvm_runtime
+	tbb
 )
 
 target_link_libraries(multitenant PUBLIC runtime)

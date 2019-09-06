@@ -31,8 +31,8 @@ public:
 	std::function<void(void)> f;
 	std::atomic_bool syncComplete;
 	cudaEvent_t asyncComplete;
-	Task* prev;
-	Task* next;
+	Task* prev = nullptr;
+	Task* next = nullptr;
 
 	Task(TaskType type, std::function<void(void)> f);
 
