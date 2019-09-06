@@ -5,6 +5,7 @@
 #include "clockwork/threadpoolruntime.h"
 #include "clockwork/greedyruntime.h"
 #include "clockwork/clockworkruntime.h"
+#include "clockwork/decoupledruntime.h"
 #include <sstream>
 #include <atomic>
 #include <thread>
@@ -17,7 +18,7 @@ int main(int argc, char *argv[]) {
 	Runtime* runtime;
 	// runtime = newFIFOThreadpoolRuntime(4);
 	// runtime = newGreedyRuntime(1, 4);
-	runtime = newClockworkRuntime(1, 4);
+	runtime = newDecoupledRuntime();
 
 	int expected = 0;
 	std::atomic_int* actual = new std::atomic_int{0};

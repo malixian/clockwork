@@ -12,12 +12,12 @@ Runtime* newClockworkRuntime(const unsigned numThreadsPerExecutor, const unsigne
 
 namespace clockworkruntime {
 
-Task::Task(TaskType type, std::function<void(void)> f) : type(type), f(f), eligible(0) {
+Task::Task(TaskType type, std::function<void(void)> f) : type(type), f(f), syncComplete(false), eligible(0) {
 	CUDA_CALL(cudaEventCreate(&asyncComplete));
 }
 
-Task::Task(TaskType type, std::function<void(void)> f, uint64_t eligible) : type(type), f(f), eligible(eligible) {
-	CUDA_CALL(cudaEventCreate(&asyncComplete));	
+Task::Task(TaskType type, std::function<void(void)> f, uint64_t eligible) : type(type), f(f), syncComplete(false), eligible(eligible) {
+	CUDA_CALL(cudaEventCreate(&asyncComplete));
 }
 
 void Task::awaitCompletion() {
@@ -34,7 +34,7 @@ bool Task::isAsyncComplete() {
 	if (status == cudaErrorNotReady) {
 		return false;
 	}
-	CHECK(status == cudaSuccess || 
+	CHECK(status == cudaSuccess ||
 		  status == cudaErrorNotReady ||
 		  status == cudaErrorCudartUnloading
 		 ) << "CUDA: " << cudaGetErrorString(status);
@@ -109,7 +109,7 @@ void TaskPriorityQueue::shutdown() {
 	condition.notify_all();
 }
 
-Executor::Executor(TaskType type, const unsigned numThreads, const unsigned maxOutstanding) : type(type), maxOutstanding(maxOutstanding) {
+Executor::Executor(TaskType type, const unsigned numThreads, const unsigned maxOutstanding) : alive(true), type(type), maxOutstanding(maxOutstanding) {
 	for (unsigned i = 0; i < numThreads; i++) {
 		threads.push_back(std::thread(&Executor::executorMain, this, i));
 	}
@@ -141,7 +141,7 @@ void Executor::executorMain(int executorId) {
 			}
 		}
 
-		if (pending.size() == maxOutstanding) {	
+		if (pending.size() == maxOutstanding) {
 			// Too many outstanding async tasks
 			continue;
 		}
@@ -205,7 +205,7 @@ RequestBuilder* RequestBuilder::addTask(TaskType type, std::function<void(void)>
 
 RequestBuilder* RequestBuilder::addTask(TaskType type, std::function<void(void)> operation, uint64_t eligible) {
 	tasks.push_back(new Task(type, operation, eligible));
-	return this;	
+	return this;
 }
 
 void RequestBuilder::submit() {

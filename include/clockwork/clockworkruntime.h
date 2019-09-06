@@ -37,7 +37,7 @@ class Task {
 public:
 	TaskType type;
 	std::function<void(void)> f;
-	std::atomic_bool syncComplete = false;
+	std::atomic_bool syncComplete;
 	cudaEvent_t asyncComplete;
 	uint64_t eligible;
 	Task* prev = nullptr;
@@ -81,8 +81,8 @@ public:
 
 class Executor {
 private:
-	std::atomic_bool alive = true;
-	TaskPriorityQueue queue;	
+	std::atomic_bool alive;
+	TaskPriorityQueue queue;
 	std::vector<std::thread> threads;
 
 
