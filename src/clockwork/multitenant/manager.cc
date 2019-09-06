@@ -12,17 +12,17 @@ namespace clockwork {
 
     auto ret = std::make_shared<std::promise<void>>();
 
-    this->model_manager_.lockModel(name);
+    this->model_manager_->lockModel(name);
 
     RequestBuilder* b = runtime_->newRequest();
 
     b->addTask(TaskType::Disk, [=] {
-      this->model_manager_.loadModelFromDisk(name, source);
+      this->model_manager_->loadModelFromDisk(name, source);
     });
 
     b->addTask(TaskType::CPU, [=]{
-      this->model_manager_.instantiateModel(name);
-      this->model_manager_.releaseModel(name);
+      this->model_manager_->instantiateModel(name);
+      this->model_manager_->releaseModel(name);
       ret->set_value();
     });
 
@@ -47,7 +47,7 @@ namespace clockwork {
 
       void* memaddr = load().operator void*();
       this->pendingGPUUploads_--;
-      tvm::runtime::ManagedCUDADeviceAPI::Global()->ClaimOwnership(ctx, memaddr, model.name);
+      memory_manager_->ClaimOwnership(ctx, memaddr, model.name);
     });
 
     b->addTask(TaskType::PCIe_H2D_Inputs, [=, &model] {
@@ -71,7 +71,7 @@ namespace clockwork {
       model.last_use = std::chrono::high_resolution_clock::now();
 
       // release model for use
-      this->model_manager_.releaseModel(model.name);
+      this->model_manager_->releaseModel(model.name);
 
       ret->set_value();
     });
@@ -108,7 +108,7 @@ namespace clockwork {
       model.last_use = std::chrono::high_resolution_clock::now();
 
       // release model for use
-      this->model_manager_.releaseModel(model.name);
+      this->model_manager_->releaseModel(model.name);
 
       ret->set_value();
     });

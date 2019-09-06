@@ -21,9 +21,17 @@
 namespace clockwork {
 
   class Manager {
+  private:
+    ModelManager* model_manager_;
+    ClockworkMemoryManager* memory_manager_; 
+    Runtime* runtime_;
+    std::atomic<unsigned> pendingGPUUploads_;
+
   public:
-    Manager() : pendingGPUUploads_(0) {
-      runtime_ = newDecoupledRuntime(1, 1, 1, 1, 8);
+    Manager(int managedMemorySize, Runtime* runtime) : pendingGPUUploads_(0), runtime_(runtime) {
+      model_manager_ = new ModelManager();
+      memory_manager_ = new ClockworkMemoryManager(managedMemorySize, model_manager_);
+      tvm::runtime::ManagedCUDADeviceAPI::Global()->SetDataspaceManager(memory_manager_);
     }
 
     std::future<void> loadModel(const std::string& name, const std::string& source);
@@ -35,14 +43,14 @@ namespace clockwork {
         usleep(1000);
       } // wait until all evictions have passed
 
-      auto& model = model_manager_.getModel(name);
+      auto& model = model_manager_->getModel(name);
 
       model.last_use = std::chrono::high_resolution_clock::now();
 
       if (rand() % 100 < kEvictionRate) {
         model.status = ModelStatus::EVICTED;
         model.GetFunction("evicted")();
-        this->model_manager_.insertFauxEviction(name);
+        this->model_manager_->insertFauxEviction(name);
         return loadToGPUAndInfer_(model, inputName, input, outIndex, output);
       } else if (model.status == ModelStatus::READY) {
         return infer_(model, inputName, input, outIndex, output);
@@ -61,9 +69,6 @@ namespace clockwork {
     std::future<void> infer_(Model& model, const std::string& inputName, DLTensor* input,
                   int outIndex, DLTensor* output);
 
-    ModelManager model_manager_;
-    Runtime* runtime_;
-    std::atomic<unsigned> pendingGPUUploads_;
 
   };
 
