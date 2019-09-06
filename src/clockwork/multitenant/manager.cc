@@ -43,11 +43,11 @@ namespace clockwork {
 
     b->addTask(TaskType::PCIe_H2D_Weights, [=, &model] {
       tvm::runtime::PackedFunc load = model.GetFunction("load_to_device");
-      auto ctx = model.GetFunction("get_contig_context")();
+      TVMContext ctx = model.GetFunction("get_contig_context")();
 
       void* memaddr = load().operator void*();
       this->pendingGPUUploads_--;
-      memory_manager_->ClaimOwnership(ctx, memaddr, model.name);
+      memory_manager_->ClaimOwnership(ctx.device_id, memaddr, model.name);
     });
 
     b->addTask(TaskType::PCIe_H2D_Inputs, [=, &model] {
