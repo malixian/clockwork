@@ -56,10 +56,10 @@ namespace clockwork {
     this->mapLock_.lock();
 
     std::shared_ptr<tvm::runtime::DecoupledGraphRuntime> rt = DecoupledGraphRuntimeCreateDirect(*json_data, mod_syslib, device_type, device_id);
-    tvm::runtime::Module mod = tvm::runtime::Module(rt);
+    
     this->models_.emplace(std::piecewise_construct,
                           std::forward_as_tuple(name),
-                          std::forward_as_tuple(mod, name));
+                          std::forward_as_tuple(tvm::runtime::Module(rt), name));
     tvm::runtime::PackedFunc load_params = this->models_[name].GetFunction("load_params_contig");
     this->models_[name].status = ModelStatus::EVICTED;
     this->mapLock_.unlock();
