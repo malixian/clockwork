@@ -20,37 +20,6 @@
 namespace tvm {
 namespace runtime {
 
-inline std::string now() {
-  std::chrono::time_point<std::chrono::system_clock> now = std::chrono::system_clock::now();
-  auto duration = now.time_since_epoch();
-
-  typedef std::chrono::duration<int, std::ratio_multiply<std::chrono::hours::period, std::ratio<8>
-  >::type> Days; /* UTC: +8:00 */
-
-  Days days = std::chrono::duration_cast<Days>(duration);
-      duration -= days;
-  auto hours = std::chrono::duration_cast<std::chrono::hours>(duration);
-      duration -= hours;
-  auto minutes = std::chrono::duration_cast<std::chrono::minutes>(duration);
-      duration -= minutes;
-  auto seconds = std::chrono::duration_cast<std::chrono::seconds>(duration);
-      duration -= seconds;
-  auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(duration);
-      duration -= milliseconds;
-  auto microseconds = std::chrono::duration_cast<std::chrono::microseconds>(duration);
-      duration -= microseconds;
-  auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(duration);
-
-  std::stringstream ss;
-  ss << hours.count() << ":"
-            << minutes.count() << ":"
-            << seconds.count() << "."
-            << milliseconds.count() << " "
-            << microseconds.count() << " "
-            << nanoseconds.count();
-  return ss.str();
-}
-
 #define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define LOG_PREFIX() now() << " " << __FILENAME__ << ":" << __LINE__ << " \t"
 
@@ -487,17 +456,13 @@ void DecoupledGraphRuntime::SetupStorageContiguous() {
 void DecoupledGraphRuntime::SetupOpExecs() {
   op_execs_.resize(this->GetNumOfNodes());
   // setup the array and requirements.
-  std::cout << "Setting up " << this->GetNumOfNodes() << " OpExecs" << std::endl;
   for (uint32_t nid = 0; nid < this->GetNumOfNodes(); ++nid) {
     const auto& inode = nodes_[nid];
     if (inode.op_type == "null") continue;
     std::vector<DLTensor> args;
-    std::cout << inode.name << std::endl;
-    std::cout << "  " << inode.inputs.size() << " inputs" << std::endl;
     for (const auto& e : inode.inputs) {
       args.push_back(*(data_entry_[this->entry_id(e)].operator->()));
     }
-    std::cout << "  " << inode.param.num_outputs << " outputs " << std::endl;
     for (uint32_t index = 0; index < inode.param.num_outputs; ++index) {
       uint32_t eid = this->entry_id(nid, index);
       args.push_back(*(data_entry_[eid].operator->()));
