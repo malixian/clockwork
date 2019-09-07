@@ -3,6 +3,7 @@
 #include <dlpack/dlpack.h>
 #include <chrono>
 #include <future>
+#include "clockwork/tvm/decoupled_graph_runtime.h"
 
 #include "util/shmem.h"
 
@@ -52,11 +53,13 @@ namespace clockwork {
     params_arr.size = params_data->length();
 
     // create the model and set its status as in use
-    const tvm::runtime::PackedFunc create_runtime(*tvm::runtime::Registry::Get("tvm.decoupled_graph_runtime.create_contiguous"));
     this->mapLock_.lock();
+
+    std::shared_ptr<tvm::runtime::DecoupledGraphRuntime> rt = DecoupledGraphRuntimeCreateDirect(*json_data, mod_syslib, device_type, device_id);
+    tvm::runtime::Module mod = tvm::runtime::Module(rt);
     this->models_.emplace(std::piecewise_construct,
                           std::forward_as_tuple(name),
-                          std::forward_as_tuple(create_runtime(*json_data, mod_syslib, device_type, device_id), name));
+                          std::forward_as_tuple(mod, name));
     tvm::runtime::PackedFunc load_params = this->models_[name].GetFunction("load_params_contig");
     this->models_[name].status = ModelStatus::EVICTED;
     this->mapLock_.unlock();

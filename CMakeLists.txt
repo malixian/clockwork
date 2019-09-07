@@ -17,6 +17,7 @@ include(GNUInstallDirs)
 include_directories(
 	include
 	src
+	external
 	$ENV{TVM_HOME}/include
 	$ENV{TVM_HOME}/3rdparty/dmlc-core/include
 	$ENV{TVM_HOME}/3rdparty/dlpack/include
@@ -37,6 +38,7 @@ add_library(clockwork
 	src/clockwork/runtime.cpp
 	src/clockwork/threadpoolruntime.cpp
 	src/clockwork/manager.cc
+	src/clockwork/tvm/decoupled_graph_runtime.cc
 )
 
 target_link_libraries(clockwork PUBLIC
