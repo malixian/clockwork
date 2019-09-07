@@ -12,25 +12,6 @@
 
 namespace clockwork {
 
-/**
-The decoupled runtime has an executor for each resource type.
-
-An executor consists of a basic_threadpool that executes std::functions in the
-order they were enqueued
-
-each parameter specifies the size of the threadpool for the corresponding executor
-
-Threadpools do not block on asynchronous cuda work.
-**/
-Runtime* newDecoupledRuntime(const int disk_load_threads = 1,
-                             const int cpu_threads = 1,
-                             const int upload_params_threads = 1,
-                             const int input_threads = 1,
-                             const int gpu_threads = 1,
-                             const int output_threads = 1,
-                             const int out_proc_threads = 1
-                           );
-
 namespace decoupledruntime {
 
 

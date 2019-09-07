@@ -7,18 +7,19 @@
 #ifndef CLOCKWORK_MULTITENANT_MANAGER_H_
 #define CLOCKWORK_MULTITENANT_MANAGER_H_
 
-#include <clockwork/model_manager.h>
-#include <clockwork/decoupledruntime.h>
-#include <clockwork/greedyruntime.h>
-#include <clockwork/threadpoolruntime.h>
-#include <clockwork/clockworkruntime.h>
 #include <tvm/runtime/managed_cuda_device_api.h>
+#include <clockwork/clockwork.h>
 #include <climits>
 #include <cstdlib>
 #include <map>
 #include <unistd.h>
+#include <future>
 
 namespace clockwork {
+
+  class ModelManager;
+  class ClockworkMemoryManager;
+  class Model;
 
   class Manager {
   private:
@@ -28,38 +29,12 @@ namespace clockwork {
     std::atomic<unsigned> pendingGPUUploads_;
 
   public:
-    Manager(int managedMemorySize, Runtime* runtime) : pendingGPUUploads_(0), runtime_(runtime) {
-      model_manager_ = new ModelManager();
-      memory_manager_ = new ClockworkMemoryManager(managedMemorySize, model_manager_);
-      tvm::runtime::ManagedCUDADeviceAPI::Global()->SetDataspaceManager(memory_manager_);
-    }
+    Manager(int managedMemorySize, Runtime* runtime);
 
     std::future<void> loadModel(const std::string& name, const std::string& source);
 
     std::future<void> infer(const std::string& name, const std::string& inputName,
-                DLTensor* input, int outIndex, DLTensor* output) {
-
-      while (pendingGPUUploads_.load() > 0) {
-        usleep(1000);
-      } // wait until all evictions have passed
-
-      auto& model = model_manager_->getModel(name);
-
-      model.last_use = std::chrono::high_resolution_clock::now();
-
-      if (rand() % 100 < kEvictionRate) {
-        model.status = ModelStatus::EVICTED;
-        model.GetFunction("evicted")();
-        this->model_manager_->insertFauxEviction(name);
-        return loadToGPUAndInfer_(model, inputName, input, outIndex, output);
-      } else if (model.status == ModelStatus::READY) {
-        return infer_(model, inputName, input, outIndex, output);
-      } else if (model.status == ModelStatus::EVICTED) {
-        return loadToGPUAndInfer_(model, inputName, input, outIndex, output);
-      } else {
-        CHECK(false) << "We've gotten the lock for a model while it was in use.";
-      }
-    }
+                DLTensor* input, int outIndex, DLTensor* output);
 
   private:
 

@@ -16,6 +16,7 @@ include(GNUInstallDirs)
 
 include_directories(
 	include
+	src
 	$ENV{TVM_HOME}/include
 	$ENV{TVM_HOME}/3rdparty/dmlc-core/include
 	$ENV{TVM_HOME}/3rdparty/dlpack/include
@@ -28,32 +29,30 @@ link_directories(
 	/usr/local/cuda/lib64
 )
 
-file(GLOB MANAGED_RUNTIME_SRCS src/clockwork/multitenant/*.cc)
-add_library(multitenant ${MANAGED_RUNTIME_SRCS})
+add_library(clockwork
+	src/clockwork/decoupledruntime.cpp
+	src/clockwork/greedyruntime.cpp
+	src/clockwork/clockworkruntime.cpp
+	src/clockwork/model_manager.cc
+	src/clockwork/runtime.cpp
+	src/clockwork/threadpoolruntime.cpp
+	src/clockwork/manager.cc
+)
 
-file(GLOB RUNTIME_SRCS src/clockwork/*runtime.cpp)
-add_library(runtime ${RUNTIME_SRCS})
-
-target_link_libraries(runtime PUBLIC
+target_link_libraries(clockwork PUBLIC
 	cuda
 	cudart
 	tvm_runtime
 	tbb
 )
 
-target_link_libraries(multitenant PUBLIC runtime)
-
 add_executable (main
 	src/main.cc
-	src/clockwork/clockworkruntime.cpp
-	src/clockwork/decoupledruntime.cpp
-	src/clockwork/greedyruntime.cpp
-	src/clockwork/threadpoolruntime.cpp
 )
 
 target_link_libraries(
 	main
-	multitenant
+	clockwork
 	Threads::Threads
 	dl
 	cuda

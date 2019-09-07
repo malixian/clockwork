@@ -1,20 +1,19 @@
 #include <iostream>
-#include "clockwork/queue.h"
 #include "tbb/task_scheduler_init.h"
 #include "clockwork/runtime.h"
-#include "clockwork/threadpoolruntime.h"
-#include "clockwork/greedyruntime.h"
-#include "clockwork/clockworkruntime.h"
-#include "clockwork/decoupledruntime.h"
+#include "clockwork/clockwork.h"
 #include <sstream>
 #include <atomic>
 #include <thread>
+// #include "clockwork/modeldata.h"
 
 using namespace clockwork;
 
-int main(int argc, char *argv[]) {
-	std::cout << "begin" << std::endl;
+void modeldata() {
+	// ModelCodeReader reader = clockwork::binary::ModelCodeReader::create();
+}
 
+void runtime () {
 	Runtime* runtime;
 	// runtime = newFIFOThreadpoolRuntime(4);
 	// runtime = newGreedyRuntime(1, 4);
@@ -44,6 +43,16 @@ int main(int argc, char *argv[]) {
 
 	runtime->shutdown(true);
 	delete actual;
+}
+
+int main(int argc, char *argv[]) {
+	std::cout << "begin" << std::endl;
+
+	modeldata();
+
+	if (false) {
+		runtime();
+	}
 
 	std::cout << "end" << std::endl;
 }

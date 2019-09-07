@@ -8,14 +8,13 @@
 #define CLOCKWORK_MULTITENANT_MODEL_MANAGER_H_
 
 #include <tvm/runtime/managed_cuda_device_api.h>
+#include <clockwork/clockwork.h>
 #include <climits>
 #include <cstdlib>
 #include <map>
 #include <unistd.h>
 
 namespace clockwork {
-
-  static int kEvictionRate = 0;
 
   enum ModelStatus {
     READY = 0,

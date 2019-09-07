@@ -1,35 +1,70 @@
 
 #include <dlpack/dlpack.h>
+#include <clockwork/runtime.h>
 #include <clockwork/manager.h>
+#include <clockwork/model_manager.h>
 #include <chrono>
 #include <future>
 
 namespace clockwork {
 
-  extern std::mutex outLock;
+    extern std::mutex outLock;
 
-  std::future<void> Manager::loadModel(const std::string& name, const std::string& source) {
 
-    auto ret = std::make_shared<std::promise<void>>();
+    Manager::Manager(int managedMemorySize, Runtime* runtime) : pendingGPUUploads_(0), runtime_(runtime) {
+      model_manager_ = new ModelManager();
+      memory_manager_ = new ClockworkMemoryManager(managedMemorySize, model_manager_);
+      tvm::runtime::ManagedCUDADeviceAPI::Global()->SetDataspaceManager(memory_manager_);
+    }
 
-    this->model_manager_->lockModel(name);
 
-    RequestBuilder* b = runtime_->newRequest();
+    std::future<void> Manager::loadModel(const std::string& name, const std::string& source) {
 
-    b->addTask(TaskType::Disk, [=] {
-      this->model_manager_->loadModelFromDisk(name, source);
-    });
+      auto ret = std::make_shared<std::promise<void>>();
 
-    b->addTask(TaskType::CPU, [=]{
-      this->model_manager_->instantiateModel(name);
-      this->model_manager_->releaseModel(name);
-      ret->set_value();
-    });
+      this->model_manager_->lockModel(name);
 
-    b->submit();
+      RequestBuilder* b = runtime_->newRequest();
 
-    return ret->get_future();
-  }
+      b->addTask(TaskType::Disk, [=] {
+        this->model_manager_->loadModelFromDisk(name, source);
+      });
+
+      b->addTask(TaskType::CPU, [=]{
+        this->model_manager_->instantiateModel(name);
+        this->model_manager_->releaseModel(name);
+        ret->set_value();
+      });
+
+      b->submit();
+
+      return ret->get_future();
+    }
+
+    std::future<void> Manager::infer(const std::string& name, const std::string& inputName,
+                DLTensor* input, int outIndex, DLTensor* output) {
+
+      while (pendingGPUUploads_.load() > 0) {
+        usleep(1000);
+      } // wait until all evictions have passed
+
+      auto& model = model_manager_->getModel(name);
+
+      model.last_use = std::chrono::high_resolution_clock::now();
+
+      if (rand() % 100 < kEvictionRate) {
+        model.status = ModelStatus::EVICTED;
+        model.GetFunction("evicted")();
+        this->model_manager_->insertFauxEviction(name);
+        return loadToGPUAndInfer_(model, inputName, input, outIndex, output);
+      } else if (model.status == ModelStatus::READY) {
+        return infer_(model, inputName, input, outIndex, output);
+      } else if (model.status == ModelStatus::EVICTED) {
+        return loadToGPUAndInfer_(model, inputName, input, outIndex, output);
+      } else {
+        CHECK(false) << "We've gotten the lock for a model while it was in use.";
+      }
+    }
 
   std::future<void> Manager::loadToGPUAndInfer_(Model& model, const std::string& inputName,
                 DLTensor* input, int outIndex, DLTensor* output) {

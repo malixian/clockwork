@@ -1,7 +1,7 @@
 #include "clockwork/clockworkruntime.h"
 #include "tvm/runtime/cuda_common.h"
 #include "clockwork/runtime.h"
-#include "clockwork/util.h"
+#include "clockwork/util/util.h"
 #include <array>
 
 namespace clockwork {
