@@ -2,6 +2,7 @@
 #ifndef TVM_CLOCKWORK_SERIALIZED_MODEL_H_
 #define TVM_CLOCKWORK_SERIALIZED_MODEL_H_
 
+#include <cstring>
 #include <dlfcn.h>
 #include <pods/pods.h>
 #include <pods/binary.h>
@@ -11,6 +12,7 @@
 #include "dmlc/logging.h"
 #include <tvm/runtime/cuda_common.h>
 #include <tvm/runtime/c_runtime_api.h>
+#include <tvm/runtime/packed_func.h>
 #include <clockwork/tvm/meta_data.h>
 #include <clockwork/tvm/thread_storage_scope.h>
 #include <unistd.h>
@@ -60,7 +62,7 @@ struct MinModel {
 };
 
 class SharedObject {
-private:
+public:
   const std::string name;
   void* lib_handle_{nullptr};
 
@@ -80,6 +82,68 @@ public:
 
 };
 
+class UnloadedCUDAModule;
+class UnloadedCUDAFunc;
+class LoadedCUDAModule;
+class LoadedCUDAFunc;
+
+
+class UnloadedCUDAModule {
+public:
+  std::string fmt;
+  std::string data;
+  std::unordered_map<std::string, UnloadedCUDAFunc*> functions;
+  UnloadedCUDAModule(SharedObject &so);
+  LoadedCUDAModule* load();
+};
+
+class LoadedCUDAModule {
+public:
+  const UnloadedCUDAModule* source;
+  CUmodule module;
+  std::unordered_map<std::string, LoadedCUDAFunc*> functions;
+
+  LoadedCUDAModule(const UnloadedCUDAModule* source, CUmodule module);
+  ~LoadedCUDAModule();
+
+  tvm::runtime::PackedFunc* getFunction(const std::string &name);
+
+};
+
+// a wrapped function class to get packed func.
+class LoadedCUDAFunc {
+public:
+  UnloadedCUDAFunc* source;
+  CUfunction f;
+  tvm::runtime::PackedFunc packed;
+
+  LoadedCUDAFunc(UnloadedCUDAFunc* source, CUfunction f);
+
+  void operator()(tvm::runtime::TVMArgs args,
+                  tvm::runtime::TVMRetValue* rv,
+                  void** void_args) const;
+};
+
+class UnloadedCUDAFunc {
+public:
+  const std::string name;
+  const tvm::runtime::FunctionInfo info;
+  tvm::runtime::ThreadAxisConfig thread_axis_cfg_;
+
+  UnloadedCUDAFunc(const std::string &name, const tvm::runtime::FunctionInfo &info);
+
+  LoadedCUDAFunc* load(CUmodule &m);
+};
+
+
+// Function signature for generated packed function in shared library
+typedef int (*BackendPackedCFunc)(void* args,
+                                  int* type_codes,
+                                  int num_args);
+
+
+
+
 /** This is a pseudo-alternative to TVM's DSOmodule */
 class TVMSharedObjectHandler {
 private:
@@ -89,6 +153,16 @@ private:
   std::vector<void*> fs;
 
 public:
+  UnloadedCUDAModule* unloadedCUDA;
+  LoadedCUDAModule* loadedCUDA;
+
+  static void __tvm_set_device(tvm::runtime::TVMArgs args, tvm::runtime::TVMRetValue *ret) {
+    std::cout << "inside __tvm_set_device" << std::endl;
+    DLDeviceType device_type = static_cast<DLDeviceType>(args[0].operator int());
+    int device_id = args[1];
+    std::cout << "__tvm_set_device ID=" << device_id << " type=" << device_type << std::endl;
+  }
+
   static int TVMFuncCallP(TVMFunctionHandle func,
                 TVMValue* args,
                 int* arg_type_codes,
@@ -104,10 +178,16 @@ public:
   }
 
   static int TVMBackendGetFuncFromEnvP(void* mod_node, const char* func_name, TVMFunctionHandle *func) {
-    std::cout << "TVMBackendGetFuncFromEnv wheee " << func_name << std::endl;
-    printf("%p\n", mod_node);
-    //std::cout << "   mod_node is " << static_cast<int*>(mod_node);
-    return TVMBackendGetFuncFromEnv(mod_node, func_name, func);
+    if (strcmp(func_name, "__tvm_set_device") == 0) {
+      tvm::runtime::PackedFunc* set_device = new tvm::runtime::PackedFunc(__tvm_set_device);
+      *func = (TVMFunctionHandle)(set_device);
+    } else {
+      std::cout << "TVMBackendGetFuncFromEnv wheee " << func_name << std::endl;
+      printf("%p\n", mod_node);
+      TVMSharedObjectHandler* handler = static_cast<TVMSharedObjectHandler*>(mod_node);
+      *func = (TVMFunctionHandle)(handler->loadedCUDA->getFunction(func_name));
+      std::cout << "   done TVMBackendGetFuncFromEnv" << std::endl;
+    }
   }
 
   TVMSharedObjectHandler(const std::string name, std::vector<std::string> toLoad) : so(name), fs(toLoad.size()) {
@@ -118,10 +198,10 @@ public:
     }
 
     // Eagerly extract the CUDA module code (but don't load it to device yet)
-    const char* cuda_blob = reinterpret_cast<const char*>(so.GetSymbol(tvm::runtime::symbol::tvm_dev_mblob));
-    if (cuda_blob != nullptr) {
+    unloadedCUDA = new UnloadedCUDAModule(so);
 
-    }
+    // Insert pointer to this object for module handler
+    LinkFunction(tvm::runtime::symbol::tvm_module_ctx, this);
 
     // Insert pointers into the SO for callbacks
     LinkFunction("__TVMFuncCall", TVMFuncCallP);
@@ -142,63 +222,6 @@ public:
 
 };
 
-class UnloadedCUDAModule;
-class UnloadedCUDAFunc;
-class LoadedCUDAModule;
-class LoadedCUDAFunc;
-
-
-class UnloadedCUDAModule {
-public:
-  std::string data;
-  std::string fmt;
-  std::unordered_map<std::string, UnloadedCUDAFunc*> functions;
-
-  LoadedCUDAModule* load();
-};
-
-class LoadedCUDAModule {
-public:
-  const UnloadedCUDAModule* source;
-  CUmodule module;
-  std::unordered_map<std::string, LoadedCUDAFunc*> functions;
-
-  LoadedCUDAModule(const UnloadedCUDAModule* source, CUmodule module);
-  ~LoadedCUDAModule();
-
-};
-
-// a wrapped function class to get packed func.
-class LoadedCUDAFunc {
-private:
-  UnloadedCUDAFunc* source;
-  CUfunction f;
-
-public:
-
-  LoadedCUDAFunc(UnloadedCUDAFunc* source, CUfunction f);
-
-  void operator()(tvm::runtime::TVMArgs args,
-                  tvm::runtime::TVMRetValue* rv,
-                  void** void_args) const;
-};
-
-class UnloadedCUDAFunc {
-public:
-  const tvm::runtime::FunctionInfo info;
-  tvm::runtime::ThreadAxisConfig thread_axis_cfg_;
-
-  UnloadedCUDAFunc(const tvm::runtime::FunctionInfo &info);
-
-  LoadedCUDAFunc* load(CUmodule &m);
-};
-
-
-// Function signature for generated packed function in shared library
-typedef int (*BackendPackedCFunc)(void* args,
-                                  int* type_codes,
-                                  int num_args);
-
 
 class Test {
 public:
@@ -209,6 +232,7 @@ static void testModel(MinModel &model) {
 
   TVMSharedObjectHandler so("/home/jcmace/modelzoo/resnet50/tesla-m40_batchsize1/tvm-model.so", model.so_functions);
 
+  so.loadedCUDA = so.unloadedCUDA->load();
 
   for (unsigned i = 0; i < 5; i++) {
     Op op = model.ops[i];
@@ -246,12 +270,6 @@ static void testModel(MinModel &model) {
     tvm::runtime::TVMArgs targs(values.data(), tcodes.data(), static_cast<int>(values.size()));
 
     void* f = so[op.so_function];
-
-
-    int* testModNode = new int();
-    std::cout << "I am " << testModNode << std::endl;
-
-    so.LinkFunction(tvm::runtime::symbol::tvm_module_ctx, testModNode);
 
 
     int ret = (*reinterpret_cast<BackendPackedCFunc>(f))(
