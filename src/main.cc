@@ -16,6 +16,7 @@
 #include <pods/pods.h>
 #include <pods/binary.h>
 #include <pods/buffers.h>
+#include <pods/streams.h>
 #include "clockwork/tvm/decoupled_graph_runtime.h"
 
 using namespace clockwork;
@@ -75,109 +76,34 @@ void loadmodel() {
 	const int device_id = 0;
 
 	std::string model = "/home/jcmace/modelzoo/resnet50/tesla-m40_batchsize1/tvm-model";
-	const tvm::runtime::PackedFunc load_module(*tvm::runtime::Registry::Get("module.loadfile_so"));
-	tvm::runtime::Module mod_syslib = load_module(model + ".so", "so");
-
-	// Graph structure
-	std::ifstream json_in(model + ".json", std::ios::in);  // read as text
-	std::string json_data((std::istreambuf_iterator<char>(json_in)), std::istreambuf_iterator<char>());
-	json_in.close();
-
-	// Construct TVM runtime
-	std::shared_ptr<tvm::runtime::DecoupledGraphRuntime> rt = DecoupledGraphRuntimeCreateDirect(json_data, mod_syslib, device_type, device_id);
-	tvm::runtime::Module mod = tvm::runtime::Module(rt);
-	// const tvm::runtime::PackedFunc create_graph_runtime(*tvm::runtime::Registry::Get("tvm.decoupled_graph_runtime.create_contiguous"));
-	// tvm::runtime::Module mod = create_graph_runtime(json_data, mod_syslib, device_type, device_id);
-	
-	// tvm::runtime::Module mod = ClockworkGraphRuntimeCreate(json_data, mod_syslib, device_type, device_id);
 
 
-    // Read params from file
-    std::ifstream params_in(model + ".params", std::ios::binary);  // read as binary
-    std::string params_data((std::istreambuf_iterator<char>(params_in)), std::istreambuf_iterator<char>());
-    params_in.close();
+    clockwork::binary::MinModel m;
 
-    TVMByteArray params_arr;
-    params_arr.data = params_data.c_str();
-    params_arr.size = params_data.length();
-    tvm::runtime::PackedFunc load_params = mod.GetFunction("load_params");
-    load_params(params_arr);
+    std::ifstream infile;
+    infile.open(model + ".clockwork");
 
-	  // // Pull out params blob
-	  // tvm::runtime::PackedFunc get_const_params = mod.GetFunction("get_const_params");
-	  // tvm::runtime::PackedFunc set_const_params = mod.GetFunction("set_const_params");
-	  // tvm::runtime::NDArray const_params = get_const_params();
+    pods::InputStream in(infile);
+    pods::BinaryDeserializer<decltype(in)> deserializer(in);
+    if (deserializer.load(m) != pods::Error::NoError)
+    {
+        std::cerr << "deserialization error\n";
+        return;
+    }
+    infile.close();
+    std::cout << "loaded clockwork model" << std::endl;
 
-    // load the model onto device
-    tvm::runtime::PackedFunc load_to_device = mod.GetFunction("load_to_device");
-    load_to_device();
-
-
-    tvm::runtime::PackedFunc extract_model = mod.GetFunction("extract_model_spec");
-    clockwork::binary::MinModel* minmodel = static_cast<clockwork::binary::MinModel*>((void*) extract_model());
-
-    clockwork::binary::Test::testModel(*minmodel);
+    clockwork::binary::Test::testModel(m);
 
     // tvm::runtime::PackedFunc run = mod.GetFunction("run");
     // run();
 
 }
 
-void modeldata() {
-
-	std::ifstream file("main", std::ios::binary | std::ios::ate);
-	std::streamsize size = file.tellg();
-	file.seekg(0, std::ios::beg);
-
-	std::cout << "create reader size " << size << std::endl;
-
-	binary::ModelCodeReader reader = clockwork::binary::ModelCodeReader::create(size);
-	while (!reader.readFrom(file)) {};
-
-	std::cout << "done" << std::endl;
-}
-
-void runtime () {
-	Runtime* runtime;
-	// runtime = newFIFOThreadpoolRuntime(4);
-	// runtime = newGreedyRuntime(1, 4);
-	runtime = newDecoupledRuntime();
-
-	int expected = 0;
-	std::atomic_int* actual = new std::atomic_int{0};
-	for (unsigned requestID = 1; requestID < 6; requestID++) {
-		RequestBuilder* b = runtime->newRequest();
-		for (unsigned taskID = 0; taskID < requestID; taskID++) {
-			expected++;
-			TaskType type = TaskTypes[taskID%TaskTypes.size()];
-			b = b->addTask(type, [=] {
-				std::stringstream ss;
-				ss << std::this_thread::get_id() << "  type-" << type << "   request-" << requestID << "   task-" << taskID << std::endl;
-				std::cout << ss.str();
-				actual->fetch_add(1);
-			});
-		}
-		b->submit();
-	}
-
-
-
-	while (actual->load() < expected) {}
-	std::cout << "shutting down" << std::endl;
-
-	runtime->shutdown(true);
-	delete actual;
-}
-
 int main(int argc, char *argv[]) {
 	std::cout << "begin" << std::endl;
 
-	//dopods();
-		loadmodel();
-	if (false) {
-		runtime();
-		modeldata();
-	}
+	loadmodel();
 
 	std::cout << "end" << std::endl;
 }

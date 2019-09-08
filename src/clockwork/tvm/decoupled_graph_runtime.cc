@@ -456,17 +456,17 @@ void DecoupledGraphRuntime::SetupStorageContiguous() {
 void DecoupledGraphRuntime::SetupOpExecs() {
   op_execs_.resize(this->GetNumOfNodes());
   // setup the array and requirements.
-  //std::cout << "Setting up " << this->GetNumOfNodes() << " OpExecs" << std::endl;
+  std::cout << "Setting up " << this->GetNumOfNodes() << " OpExecs" << std::endl;
   for (uint32_t nid = 0; nid < this->GetNumOfNodes(); ++nid) {
     const auto& inode = nodes_[nid];
     if (inode.op_type == "null") continue;
     std::vector<DLTensor> args;
-    //std::cout << inode.name << std::endl;
-    //std::cout << "  " << inode.inputs.size() << " inputs" << std::endl;
+    std::cout << inode.name << std::endl;
+    std::cout << "  " << inode.inputs.size() << " inputs" << std::endl;
     for (const auto& e : inode.inputs) {
       args.push_back(*(data_entry_[this->entry_id(e)].operator->()));
     }
-    //std::cout << "  " << inode.param.num_outputs << " outputs " << std::endl;
+    std::cout << "  " << inode.param.num_outputs << " outputs " << std::endl;
     for (uint32_t index = 0; index < inode.param.num_outputs; ++index) {
       uint32_t eid = this->entry_id(nid, index);
       args.push_back(*(data_entry_[eid].operator->()));
@@ -648,9 +648,13 @@ clockwork::binary::MinModel* DecoupledGraphRuntime::ExtractModelSpec() {
   std::unordered_map<std::string, unsigned> so_functions;
   std::unordered_map<std::string, unsigned> cuda_functions;
 
+  int skipped = 0;
   for (uint32_t nid = 0; nid < this->GetNumOfNodes(); ++nid) {
     const auto& inode = nodes_[nid];
-    if (inode.op_type == "null") continue;
+    if (inode.op_type == "null") {
+      skipped++;
+      continue;
+    };
 
     clockwork::binary::Op op;
 
@@ -682,6 +686,12 @@ clockwork::binary::MinModel* DecoupledGraphRuntime::ExtractModelSpec() {
 
     mm->ops.push_back(op);
   }
+
+
+  std::cout << "skipped " << skipped << std::endl;
+  std::cout << "there are " << op_execs_.size() << " op_execs_" << std::endl;
+  std::cout << "there are " << nodes_.size() << " nodes_" << std::endl;
+  std::cout << "there are " << this->GetNumOfNodes() << " numofnodes" << std::endl;
 
   std::cout << "mm has " << mm->total_memory << " total memory" << std::endl;
   std::cout << "mm has " << mm->weights_memory << " weights memory" << std::endl;

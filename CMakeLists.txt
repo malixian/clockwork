@@ -65,3 +65,18 @@ target_link_libraries(
 	tvm_runtime
 	tbb
 )
+
+add_executable (convert
+	src/convert.cpp
+)
+
+target_link_libraries(
+	convert
+	clockwork
+	Threads::Threads
+	dl
+	cuda
+	cudart
+	tvm_runtime
+	tbb
+)

@@ -295,34 +295,34 @@ static void testModel(MinModel &model) {
       }
     }
 
-    std::vector<TVMValue> values(op.inputs.size());
-    std::vector<int> tcodes(op.inputs.size());
-    for (unsigned j = 0; j < op.inputs.size(); j++) {
-      DLTensor* input = new DLTensor();
-      input->data = ptr + op.inputs[j].offset;
-      input->ctx = DLContext{kDLGPU, 0};
-      input->ndim = op.inputs[j].shape.size();
-      input->dtype = DLDataType{kDLFloat, 32, 1};
-      input->shape = op.inputs[j].shape.data();
-      input->strides = nullptr;
-      input->byte_offset = 0;
+    // std::vector<TVMValue> values(op.inputs.size());
+    // std::vector<int> tcodes(op.inputs.size());
+    // for (unsigned j = 0; j < op.inputs.size(); j++) {
+    //   DLTensor* input = new DLTensor();
+    //   input->data = ptr + op.inputs[j].offset;
+    //   input->ctx = DLContext{kDLGPU, 0};
+    //   input->ndim = op.inputs[j].shape.size();
+    //   input->dtype = DLDataType{kDLFloat, 32, 1};
+    //   input->shape = op.inputs[j].shape.data();
+    //   input->strides = nullptr;
+    //   input->byte_offset = 0;
 
-      values[j].v_handle = input;
-      tcodes[j] = kArrayHandle;
-    }
+    //   values[j].v_handle = input;
+    //   tcodes[j] = kArrayHandle;
+    // }
 
-    tvm::runtime::TVMRetValue rv;
-    tvm::runtime::TVMArgs targs(values.data(), tcodes.data(), static_cast<int>(values.size()));
+    // tvm::runtime::TVMRetValue rv;
+    // tvm::runtime::TVMArgs targs(values.data(), tcodes.data(), static_cast<int>(values.size()));
 
-    void* f = so[op.so_function];
+    // void* f = so[op.so_function];
 
 
-    int ret = (*reinterpret_cast<BackendPackedCFunc>(f))(
-      const_cast<TVMValue*>(values.data()), 
-      const_cast<int*>(tcodes.data()), 
-      static_cast<int>(values.size())
-    );
-    CHECK_EQ(ret, 0) << TVMGetLastError();
+    // int ret = (*reinterpret_cast<BackendPackedCFunc>(f))(
+    //   const_cast<TVMValue*>(values.data()), 
+    //   const_cast<int*>(tcodes.data()), 
+    //   static_cast<int>(values.size())
+    // );
+    // CHECK_EQ(ret, 0) << TVMGetLastError();
 
   }
 }
