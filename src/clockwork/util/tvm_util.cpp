@@ -1,4 +1,4 @@
-#include "clockwork/tvm_util.h"
+#include "clockwork/util/tvm_util.h"
 #include "tvm/runtime/cuda_common.h"
 
 namespace clockwork {

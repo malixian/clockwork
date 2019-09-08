@@ -9,13 +9,6 @@
 
 namespace clockwork {
 
-/**
-The threadpool runtime has a fixed-size threadpool for executing requests.
-Each thread executes the entirety of a request at a time, e.g. all the tasks
-of the request.
-**/
-Runtime* newFIFOThreadpoolRuntime(const unsigned numThreads);
-
 namespace threadpoolruntime {
 
 struct Task {

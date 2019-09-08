@@ -4,6 +4,7 @@ project(clockwork)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -O2")
 set(THREADS_PREFER_PTHREAD_FLAG ON)
+set(CMAKE_BUILD_TYPE Debug)
 
 find_package(Threads REQUIRED)
 
@@ -15,6 +16,8 @@ include(GNUInstallDirs)
 
 include_directories(
 	include
+	src
+	external
 	$ENV{TVM_HOME}/include
 	$ENV{TVM_HOME}/3rdparty/dmlc-core/include
 	$ENV{TVM_HOME}/3rdparty/dlpack/include
@@ -27,22 +30,38 @@ link_directories(
 	/usr/local/cuda/lib64
 )
 
-add_executable (main 
-	src/main.cc
-	src/clockwork/runtime.cpp
-	src/clockwork/threadpoolruntime.cpp
+add_library(clockwork
+	src/clockwork/decoupledruntime.cpp
 	src/clockwork/greedyruntime.cpp
 	src/clockwork/clockworkruntime.cpp
-	src/clockwork/util.cpp
-	src/clockwork/tvm_util.cpp
+	src/clockwork/util/util.cpp
+	src/clockwork/util/tvm_util.cpp
+	src/clockwork/model_manager.cc
+	src/clockwork/runtime.cpp
+	src/clockwork/threadpoolruntime.cpp
+	src/clockwork/manager.cc
+	src/clockwork/serializedmodel.cpp
+	src/clockwork/tvm/decoupled_graph_runtime.cc
+)
+
+target_link_libraries(clockwork PUBLIC
+	cuda
+	cudart
+	tvm_runtime
+	tbb
+)
+
+add_executable (main
+	src/main.cc
 )
 
 target_link_libraries(
-	main 
-	Threads::Threads 
-	dl 
-	cuda 
-	cudart 
+	main
+	clockwork
+	Threads::Threads
+	dl
+	cuda
+	cudart
 	tvm_runtime
 	tbb
 )

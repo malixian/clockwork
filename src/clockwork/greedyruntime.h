@@ -9,19 +9,7 @@
 #include "tbb/concurrent_queue.h"
 
 namespace clockwork {
-
-/**
-The Greedy runtime has an executor for each resource type.
-
-An executor consists of a self-contained threadpool and queue.
-
-numThreadsPerExecutor specifies the size of the threadpool
-
-Threadpools do not block on asynchronous cuda work.  Use maxOutstandingPerExecutor to specify
-a maximum number of incomplete asynchronous tasks before an executor will block.
-**/
-Runtime* newGreedyRuntime(const unsigned numThreadsPerExecutor, const unsigned maxOutstandingPerExecutor);
-
+	
 namespace greedyruntime {
 
 
@@ -31,8 +19,8 @@ public:
 	std::function<void(void)> f;
 	std::atomic_bool syncComplete;
 	cudaEvent_t asyncComplete;
-	Task* prev;
-	Task* next;
+	Task* prev = nullptr;
+	Task* next = nullptr;
 
 	Task(TaskType type, std::function<void(void)> f);
 
