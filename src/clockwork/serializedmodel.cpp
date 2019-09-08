@@ -1,6 +1,8 @@
 
 
 #include "clockwork/serializedmodel.h"
+#include <cuda.h>
+#include <cuda_runtime.h>
 
 namespace clockwork {
 namespace binary {

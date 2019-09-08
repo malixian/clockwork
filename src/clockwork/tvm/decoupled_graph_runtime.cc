@@ -456,17 +456,17 @@ void DecoupledGraphRuntime::SetupStorageContiguous() {
 void DecoupledGraphRuntime::SetupOpExecs() {
   op_execs_.resize(this->GetNumOfNodes());
   // setup the array and requirements.
-  std::cout << "Setting up " << this->GetNumOfNodes() << " OpExecs" << std::endl;
+  //std::cout << "Setting up " << this->GetNumOfNodes() << " OpExecs" << std::endl;
   for (uint32_t nid = 0; nid < this->GetNumOfNodes(); ++nid) {
     const auto& inode = nodes_[nid];
     if (inode.op_type == "null") continue;
     std::vector<DLTensor> args;
-    std::cout << inode.name << std::endl;
-    std::cout << "  " << inode.inputs.size() << " inputs" << std::endl;
+    //std::cout << inode.name << std::endl;
+    //std::cout << "  " << inode.inputs.size() << " inputs" << std::endl;
     for (const auto& e : inode.inputs) {
       args.push_back(*(data_entry_[this->entry_id(e)].operator->()));
     }
-    std::cout << "  " << inode.param.num_outputs << " outputs " << std::endl;
+    //std::cout << "  " << inode.param.num_outputs << " outputs " << std::endl;
     for (uint32_t index = 0; index < inode.param.num_outputs; ++index) {
       uint32_t eid = this->entry_id(nid, index);
       args.push_back(*(data_entry_[eid].operator->()));
