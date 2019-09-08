@@ -456,13 +456,17 @@ void DecoupledGraphRuntime::SetupStorageContiguous() {
 void DecoupledGraphRuntime::SetupOpExecs() {
   op_execs_.resize(this->GetNumOfNodes());
   // setup the array and requirements.
+  std::cout << "Setting up " << this->GetNumOfNodes() << " OpExecs" << std::endl;
   for (uint32_t nid = 0; nid < this->GetNumOfNodes(); ++nid) {
     const auto& inode = nodes_[nid];
     if (inode.op_type == "null") continue;
     std::vector<DLTensor> args;
+    std::cout << inode.name << std::endl;
+    std::cout << "  " << inode.inputs.size() << " inputs" << std::endl;
     for (const auto& e : inode.inputs) {
       args.push_back(*(data_entry_[this->entry_id(e)].operator->()));
     }
+    std::cout << "  " << inode.param.num_outputs << " outputs " << std::endl;
     for (uint32_t index = 0; index < inode.param.num_outputs; ++index) {
       uint32_t eid = this->entry_id(nid, index);
       args.push_back(*(data_entry_[eid].operator->()));
@@ -586,11 +590,14 @@ clockwork::binary::MinModel* DecoupledGraphRuntime::ExtractModelSpec() {
   } storage_spec;
 
   std::unordered_map<int, storage_spec> specs;
+  std::vector<int> spec_order;
 
   for (data_entry_spec &d : ds) {
     if (specs.find(d.storage_id) != specs.end()) {
       int device_type = specs[d.storage_id].device_type;
       CHECK(device_type == -1 || device_type == d.device_type) << "The same pool entry cannot be assigned to multiple devices";
+    } else {
+      spec_order.push_back(d.storage_id);
     }
 
     storage_spec &s = specs[d.storage_id];
@@ -600,6 +607,7 @@ clockwork::binary::MinModel* DecoupledGraphRuntime::ExtractModelSpec() {
     s.size = std::max(s.size, d.size);
     s.device_type = d.device_type;
     s.ctx = d.ctx;
+    s.offset = 0;
   }
 
 
@@ -607,8 +615,8 @@ clockwork::binary::MinModel* DecoupledGraphRuntime::ExtractModelSpec() {
   std::vector<storage_spec> gpu_contiguous_inputs;
   std::vector<storage_spec> gpu_contiguous_other;
   std::vector<storage_spec> non_gpu;
-  for (const auto &e : specs) {
-    const storage_spec &s = e.second;
+  for (int &storage_id : spec_order) {
+    const storage_spec &s = specs[storage_id];
     if (s.is_input && s.device_type == kDLGPU) gpu_contiguous_inputs.push_back(s);
     else if (s.device_type == kDLGPU) gpu_contiguous_other.push_back(s);
     else non_gpu.push_back(s);
@@ -618,12 +626,12 @@ clockwork::binary::MinModel* DecoupledGraphRuntime::ExtractModelSpec() {
   // Calculate offsets
   uint64_t total_contiguous_size = 0;
   for (storage_spec &s : gpu_contiguous_inputs) {
-    s.offset = total_contiguous_size;
+    specs[s.storage_id].offset = total_contiguous_size;
     total_contiguous_size += 4 * ((s.size + 3) / 4);
   }
   uint64_t weights_size = total_contiguous_size;
   for (storage_spec &s : gpu_contiguous_other) {
-    s.offset = total_contiguous_size;
+    specs[s.storage_id].offset = total_contiguous_size;
     total_contiguous_size += 4 * ((s.size + 3) / 4);
   }
 
@@ -649,7 +657,7 @@ clockwork::binary::MinModel* DecoupledGraphRuntime::ExtractModelSpec() {
     // Get the DLTensor sizes for this op
     std::vector<DLTensor> args;
     for (const auto& e : inode.inputs) {
-      storage_spec &spec = specs[this->entry_id(e)];
+      storage_spec &spec = specs[ds[this->entry_id(e)].storage_id];
       clockwork::binary::DLTensorDef d;
       d.offset = spec.offset;
       d.shape = this->attrs_.shape[this->entry_id(e)];
@@ -657,7 +665,7 @@ clockwork::binary::MinModel* DecoupledGraphRuntime::ExtractModelSpec() {
     }
     for (uint32_t index = 0; index < inode.param.num_outputs; ++index) {
       uint32_t eid = this->entry_id(nid, index);
-      storage_spec &spec = specs[eid];
+      storage_spec &spec = specs[ds[eid].storage_id];
       clockwork::binary::DLTensorDef d;
       d.offset = spec.offset;
       d.shape = this->attrs_.shape[eid];

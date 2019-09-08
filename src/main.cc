@@ -116,9 +116,10 @@ void loadmodel() {
     tvm::runtime::PackedFunc extract_model = mod.GetFunction("extract_model_spec");
     clockwork::binary::MinModel* minmodel = static_cast<clockwork::binary::MinModel*>((void*) extract_model());
 
+    clockwork::binary::Test::testModel(*minmodel);
 
-    tvm::runtime::PackedFunc run = mod.GetFunction("run");
-    run();
+    // tvm::runtime::PackedFunc run = mod.GetFunction("run");
+    // run();
 
 }
 

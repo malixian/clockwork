@@ -38,6 +38,7 @@ add_library(clockwork
 	src/clockwork/runtime.cpp
 	src/clockwork/threadpoolruntime.cpp
 	src/clockwork/manager.cc
+	src/clockwork/serializedmodel.cpp
 	src/clockwork/tvm/decoupled_graph_runtime.cc
 )
 

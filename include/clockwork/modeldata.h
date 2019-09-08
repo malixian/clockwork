@@ -1,3 +1,7 @@
+
+#ifndef CLOCKWORK_MODELDATA_H_
+#define CLOCKWORK_MODELDATA_H_
+
 #include <string>
 #include <unistd.h>
 #include <sys/syscall.h>
@@ -34,11 +38,12 @@ private:
 };
 
 class ModelCodeReader {
-private:
+public:
 	int memfd;
 	std::string memfile;
-	std::ofstream memstrm;
 
+private:
+	std::ofstream memstrm;
 	unsigned remaining;
 
 	ModelCodeReader(unsigned remaining, const int &memfd, const std::string &memfile) : 
@@ -112,3 +117,5 @@ private:
 
 }
 }
+
+#endif
