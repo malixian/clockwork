@@ -98,6 +98,9 @@ void convert(std::string model_so, std::string model_json, std::string model_par
 	auto p = save_params().operator std::string();
 	params_out << p;
 	params_out.close();
+
+	// TODO: don't dump the ndarray, dump the actual bytes, 
+	// bypassing NDarray class
 }
 
 void show_usage() {

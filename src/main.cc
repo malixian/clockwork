@@ -18,56 +18,11 @@
 #include <pods/buffers.h>
 #include <pods/streams.h>
 #include "clockwork/tvm/decoupled_graph_runtime.h"
+#include "clockwork/model.h"
 
 using namespace clockwork;
 
-struct Test {
-    std::vector<uint32_t> blahs;        // this is default value
-
-    PODS_SERIALIZABLE(
-        1, //version             
-        PODS_MDR(blahs)) //mandatory
-        // PODS_OPT(port))         // this field is optional
-};
-
-void dopods() {
-	Test v1;
-	v1.blahs.push_back(5);
-	v1.blahs.push_back(10);
-	v1.blahs.push_back(15);
-
-
-    pods::ResizableOutputBuffer out;
-    pods::BinarySerializer<decltype(out)> serializer(out);
-    if (serializer.save(v1) != pods::Error::NoError)
-    {
-        std::cerr << "serialization error\n";
-        return;
-    }
-
-    Test v2;
-
-    pods::InputBuffer in(out.data(), out.size());
-    pods::BinaryDeserializer<decltype(in)> deserializer(in);
-    if (deserializer.load(v2) != pods::Error::NoError)
-    {
-        std::cerr << "deserialization error\n";
-        return;
-    }
-
-    for (unsigned i = 0; i < v1.blahs.size(); i++) {
-    	std::cout << v1.blahs[i] << std::endl;
-    }
-    std::cout << std::endl;
-
-    for (unsigned i = 0; i < v2.blahs.size(); i++) {
-    	std::cout << v2.blahs[i] << std::endl;
-    }
-}
-
 void loadmodel() {
-
-
 
 	const int dtype_code = kDLFloat;
 	const int dtype_bits = 32;
@@ -77,26 +32,33 @@ void loadmodel() {
 
 	std::string model = "/home/jcmace/modelzoo/resnet50/tesla-m40_batchsize1/tvm-model";
 
+    ColdDiskModel* cold = new ColdDiskModel(
+            model + ".so",
+            model + ".clockwork",
+            model + ".clockwork_params"
+        );
 
-    clockwork::binary::MinModel m;
+    CoolModel* cool = cold->load();
 
-    std::ifstream infile;
-    infile.open(model + ".clockwork");
+    WarmModel* warm = cool->load();
 
-    pods::InputStream in(infile);
-    pods::BinaryDeserializer<decltype(in)> deserializer(in);
-    if (deserializer.load(m) != pods::Error::NoError)
-    {
-        std::cerr << "deserialization error\n";
-        return;
-    }
-    infile.close();
-    std::cout << "loaded clockwork model" << std::endl;
 
-    clockwork::binary::Test::testModel(m);
+    // clockwork::binary::MinModel m;
 
-    // tvm::runtime::PackedFunc run = mod.GetFunction("run");
-    // run();
+    // std::ifstream infile;
+    // infile.open(model + ".clockwork");
+
+    // pods::InputStream in(infile);
+    // pods::BinaryDeserializer<decltype(in)> deserializer(in);
+    // if (deserializer.load(m) != pods::Error::NoError)
+    // {
+    //     std::cerr << "deserialization error\n";
+    //     return;
+    // }
+    // infile.close();
+    // std::cout << "loaded clockwork model" << std::endl;
+
+    // clockwork::binary::Test::testModel(m);
 
 }
 

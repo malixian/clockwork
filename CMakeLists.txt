@@ -27,6 +27,7 @@ include_directories(
 
 link_directories(
 	$ENV{TVM_HOME}/build
+	$ENV{TVM_HOME}/3rdparty/dmlc-core/build
 	/usr/local/cuda/lib64
 )
 
@@ -41,6 +42,8 @@ add_library(clockwork
 	src/clockwork/threadpoolruntime.cpp
 	src/clockwork/manager.cc
 	src/clockwork/serializedmodel.cpp
+	src/clockwork/memfile.cpp
+	src/clockwork/model.cpp
 	src/clockwork/tvm/decoupled_graph_runtime.cc
 )
 

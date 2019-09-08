@@ -159,10 +159,9 @@ public:
   LoadedCUDAModule* loadedCUDA;
 
   static void __tvm_set_device(tvm::runtime::TVMArgs args, tvm::runtime::TVMRetValue *ret) {
-    std::cout << "inside __tvm_set_device" << std::endl;
     DLDeviceType device_type = static_cast<DLDeviceType>(args[0].operator int());
     int device_id = args[1];
-    std::cout << "__tvm_set_device ID=" << device_id << " type=" << device_type << std::endl;
+    std::cout << "__tvm_set_device " << device_id << std::endl;
   }
 
   static int TVMFuncCallP(TVMFunctionHandle func,
@@ -199,7 +198,7 @@ public:
                                  uint64_t size,
                                  int dtype_code_hint,
                                  int dtype_bits_hint) {
-    std::cout << "TVMBackendAllocWorkspaceP" << std::endl;
+    std::cout << "TVMBackendAllocWorkspaceP " << device_id << std::endl;
     CHECK(device_type == kDLGPU) << "TVM Backend alloc non-GPU workspace";
 
     // TODO: plug into managed memory
@@ -279,7 +278,7 @@ static void testModel(MinModel &model) {
 
   so.loadedCUDA = so.unloadedCUDA->load();
 
-  for (unsigned i = 0; i < 5; i++) {
+  for (unsigned i = 0; i < model.ops.size(); i++) {
     Op op = model.ops[i];
     std::cout << "op " << i << " " << model.so_functions[op.so_function] << std::endl;
 
@@ -295,34 +294,35 @@ static void testModel(MinModel &model) {
       }
     }
 
-    // std::vector<TVMValue> values(op.inputs.size());
-    // std::vector<int> tcodes(op.inputs.size());
-    // for (unsigned j = 0; j < op.inputs.size(); j++) {
-    //   DLTensor* input = new DLTensor();
-    //   input->data = ptr + op.inputs[j].offset;
-    //   input->ctx = DLContext{kDLGPU, 0};
-    //   input->ndim = op.inputs[j].shape.size();
-    //   input->dtype = DLDataType{kDLFloat, 32, 1};
-    //   input->shape = op.inputs[j].shape.data();
-    //   input->strides = nullptr;
-    //   input->byte_offset = 0;
+    std::vector<TVMValue> values(op.inputs.size());
+    std::vector<int> tcodes(op.inputs.size());
+    for (unsigned j = 0; j < op.inputs.size(); j++) {
+      DLTensor* input = new DLTensor();
+      input->data = ptr + op.inputs[j].offset;
+      input->ctx = DLContext{kDLGPU, 0};
+      //input->ctx = DLContext{kDLGPU, i};
+      input->ndim = op.inputs[j].shape.size();
+      input->dtype = DLDataType{kDLFloat, 32, 1};
+      input->shape = op.inputs[j].shape.data();
+      input->strides = nullptr;
+      input->byte_offset = 0;
 
-    //   values[j].v_handle = input;
-    //   tcodes[j] = kArrayHandle;
-    // }
+      values[j].v_handle = input;
+      tcodes[j] = kArrayHandle;
+    }
 
-    // tvm::runtime::TVMRetValue rv;
-    // tvm::runtime::TVMArgs targs(values.data(), tcodes.data(), static_cast<int>(values.size()));
+    tvm::runtime::TVMRetValue rv;
+    tvm::runtime::TVMArgs targs(values.data(), tcodes.data(), static_cast<int>(values.size()));
 
-    // void* f = so[op.so_function];
+    void* f = so[op.so_function];
 
 
-    // int ret = (*reinterpret_cast<BackendPackedCFunc>(f))(
-    //   const_cast<TVMValue*>(values.data()), 
-    //   const_cast<int*>(tcodes.data()), 
-    //   static_cast<int>(values.size())
-    // );
-    // CHECK_EQ(ret, 0) << TVMGetLastError();
+    int ret = (*reinterpret_cast<BackendPackedCFunc>(f))(
+      const_cast<TVMValue*>(values.data()), 
+      const_cast<int*>(tcodes.data()), 
+      static_cast<int>(values.size())
+    );
+    CHECK_EQ(ret, 0) << TVMGetLastError();
 
   }
 }
