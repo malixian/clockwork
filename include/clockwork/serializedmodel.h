@@ -12,11 +12,13 @@
 #include "dmlc/logging.h"
 #include <tvm/runtime/cuda_common.h>
 #include <tvm/runtime/c_runtime_api.h>
+#include <tvm/runtime/c_backend_api.h>
 #include <tvm/runtime/packed_func.h>
 #include <clockwork/tvm/meta_data.h>
 #include <clockwork/tvm/thread_storage_scope.h>
 #include <unistd.h>
 #include <functional>
+#include "clockwork/tvm/runtime_base.h"
 
 namespace clockwork {
 namespace binary {
@@ -169,7 +171,7 @@ public:
                 int num_args,
                 TVMValue* ret_val,
                 int* ret_type_code) {
-    std::cout << "blaaaaah" << std::endl;
+    std::cout << "TVMFuncCall " << std::endl;
     return TVMFuncCall(func, args, arg_type_codes, num_args, ret_val, ret_type_code);
   }
 
@@ -178,6 +180,7 @@ public:
   }
 
   static int TVMBackendGetFuncFromEnvP(void* mod_node, const char* func_name, TVMFunctionHandle *func) {
+    API_BEGIN();
     if (strcmp(func_name, "__tvm_set_device") == 0) {
       tvm::runtime::PackedFunc* set_device = new tvm::runtime::PackedFunc(__tvm_set_device);
       *func = (TVMFunctionHandle)(set_device);
@@ -188,6 +191,44 @@ public:
       *func = (TVMFunctionHandle)(handler->loadedCUDA->getFunction(func_name));
       std::cout << "   done TVMBackendGetFuncFromEnv" << std::endl;
     }
+    API_END();
+  }
+
+  static void* TVMBackendAllocWorkspaceP(int device_type,
+                                 int device_id,
+                                 uint64_t size,
+                                 int dtype_code_hint,
+                                 int dtype_bits_hint) {
+    std::cout << "TVMBackendAllocWorkspaceP" << std::endl;
+    CHECK(device_type == kDLGPU) << "TVM Backend alloc non-GPU workspace";
+
+    // TODO: plug into managed memory
+    CUDA_CALL(cudaSetDevice(device_id));
+
+    void* ptr;
+    CUDA_CALL(cudaMalloc(&ptr, size));
+    return ptr;
+  }
+
+
+  static int TVMBackendFreeWorkspaceP(int device_type,
+                              int device_id,
+                              void* ptr) {
+    std::cout << "TVMBackendFreeWorkspaceP" << std::endl;
+    CHECK(device_type == kDLGPU) << "TVM Backend alloc non-GPU workspace";
+    CUDA_CALL(cudaSetDevice(device_id));
+    CUDA_CALL(cudaFree(ptr));
+    return 0;
+  }
+
+  static int TVMBackendParallelLaunchP(FTVMParallelLambda flambda,
+                                     void* cdata,
+                                     int num_task) {
+    CHECK(false) << "TVMBackendParallelLaunch unsupported";
+  }
+
+  static int TVMBackendParallelBarrierP(int task_id, TVMParallelGroupEnv* penv) {
+    CHECK(false) << "TVMBackendParallelBarrier unsupported";
   }
 
   TVMSharedObjectHandler(const std::string name, std::vector<std::string> toLoad) : so(name), fs(toLoad.size()) {
@@ -207,6 +248,10 @@ public:
     LinkFunction("__TVMFuncCall", TVMFuncCallP);
     LinkFunction("__TVMAPISetLastError", TVMAPISetLastErrorP);
     LinkFunction("__TVMBackendGetFuncFromEnv", TVMBackendGetFuncFromEnvP);
+    LinkFunction("__TVMBackendAllocWorkspace", TVMBackendAllocWorkspaceP);
+    LinkFunction("__TVMBackendFreeWorkspace", TVMBackendFreeWorkspaceP);
+    LinkFunction("__TVMBackendParallelLaunch", TVMBackendParallelLaunchP);
+    LinkFunction("__TVMBackendParallelBarrier", TVMBackendParallelBarrierP);
   }
 
   template<typename T> void LinkFunction(const char* funcNameInSo, T func) {
