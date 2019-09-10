@@ -19,6 +19,7 @@
 #include <pods/streams.h>
 #include "clockwork/tvm/decoupled_graph_runtime.h"
 #include "clockwork/model.h"
+#include <cuda_runtime.h>
 
 using namespace clockwork;
 
@@ -32,27 +33,40 @@ void loadmodel() {
 
 	std::string model = "/home/jcmace/modelzoo/resnet50/tesla-m40_batchsize1/tvm-model";
 
+
     ColdDiskModel* cold = new ColdDiskModel(
             model + ".so",
             model + ".clockwork",
             model + ".clockwork_params"
         );
-    std::cout << "cold" << std::endl;
 
     CoolModel* cool = cold->load();
-    std::cout << "cool" << std::endl;
-    WarmModel* warm = cool->load();
-    std::cout << "warm" << std::endl;
 
-    void* ptr;
-    CUDA_CALL(cudaMalloc(&ptr, warm->size()));
-    std::cout << "warm malloc" << std::endl;
 
-    HotModel* hot = warm->load(ptr);
-    std::cout << "hot" << std::endl;
+    unsigned runs = 10000;
+    for (unsigned i = 0; i < runs; i++) {
+        if (i % 100 == 0) {
+            std::cout << "Run " << i << std::endl;
 
-    hot->call();
-    std::cout << "call" << std::endl;
+            size_t free, total;
+            CUDA_CALL(cudaMemGetInfo(&free, &total));
+            std::cout << "   GPU " << (total-free) << " used" << std::endl;
+        }
+
+        WarmModel* warm = cool->load();
+
+        void* ptr;
+        CUDA_CALL(cudaMalloc(&ptr, warm->size()));
+        HotModel* hot = warm->load(ptr);
+        hot->call();
+
+        CUDA_CALL(cudaStreamSynchronize(tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream));
+
+        hot->unload();
+        warm->unload();
+
+        CUDA_CALL(cudaFree(ptr));
+    }
 
 }
 

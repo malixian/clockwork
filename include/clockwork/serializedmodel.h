@@ -109,6 +109,12 @@ public:
     }
   }
 
+  ~WarmOp() {
+    for (unsigned i = 0; i < size; i++) {
+      delete input_tensors[i];
+    }
+  }
+
   void call(void* baseptr) {
     for (unsigned i = 0; i < size; i++) {
       input_tensors[i]->data = static_cast<char *>(baseptr) + offsets[i];
@@ -141,6 +147,12 @@ public:
       ops[i] = new WarmOp(mm.ops[i], fs[mm.ops[i].so_function]);
 
       // TODO: no need at the moment, but later, eager load cuda functions and workspace allocs
+    }
+  }
+
+  ~WarmModel() {
+    for (unsigned i = 0; i < ops.size(); i++) {
+      delete ops[i];
     }
   }
 

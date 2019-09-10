@@ -52,8 +52,16 @@ CoolModel::CoolModel(ColdDiskModel* cold) :
 	std::memcpy(this->params, params.data(), paramsSize);
 }
 
+CoolModel::~CoolModel() {
+	CUDA_CALL(cudaFreeHost(this->params));
+}
+
 WarmModel* CoolModel::load() {
 	return new WarmModel(this);
+}
+
+void CoolModel::unload() {
+	delete this;
 }
 
 WarmModel::WarmModel(CoolModel* cool) {
@@ -69,12 +77,21 @@ WarmModel::WarmModel(CoolModel* cool) {
 	paramsSize = cool->paramsSize;
 }
 
+WarmModel::~WarmModel() {
+	delete so;
+	delete this->clockwork;
+}
+
 int WarmModel::size() {
 	return clockwork->size;
 }
 
 HotModel* WarmModel::load(void* ptr) {
 	return new HotModel(this, ptr);
+}
+
+void WarmModel::unload() {
+	delete this;
 }
 
 HotModel::HotModel(WarmModel* warm, void* params) : params(params), clockwork(warm->clockwork) {

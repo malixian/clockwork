@@ -121,6 +121,10 @@ TVMWarmSharedObject::TVMWarmSharedObject(const std::string &so_filename) : so(so
     this->linkErrors();
 }
 
+TVMWarmSharedObject::~TVMWarmSharedObject() {
+    delete this->cuda;
+}
+
 void TVMWarmSharedObject::linkHot(TVMHotSharedObject* hot) {
     // Insert pointer to the hot SO for module context
     so.LinkFunctionPtr(ptr_ModuleCtx, hot);

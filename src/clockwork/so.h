@@ -63,6 +63,7 @@ public:
   void* ptr_TVMBackendFreeWorkspace;
 
   TVMWarmSharedObject(const std::string &so_filename);
+  ~TVMWarmSharedObject();
 
   TVMHotSharedObject* load();
 

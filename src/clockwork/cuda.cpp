@@ -42,6 +42,12 @@ UnloadedCUDAModule::UnloadedCUDAModule(const char* &cuda_blob) {
   stream->Read(&this->data);
 }
 
+UnloadedCUDAModule::~UnloadedCUDAModule() {
+  for (auto &e : this->functions) {
+    delete(e.second);
+  }
+}
+
 LoadedCUDAModule* UnloadedCUDAModule::load() {
   CUmodule module;
   CUresult result = cuModuleLoadData(&module, data.c_str());

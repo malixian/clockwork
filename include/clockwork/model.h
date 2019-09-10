@@ -44,12 +44,11 @@ public:
 	int paramsSize;
 
 	CoolModel(ColdDiskModel* cold);
+	~CoolModel();
 
 	WarmModel* load();
 
-	void unload() {
-		// TODO: delete memfile
-	}
+	void unload();
 
 };
 
@@ -66,9 +65,12 @@ public:
 	
 
 	WarmModel(CoolModel* cool);
+	~WarmModel();
 
 	int size();
 	HotModel* load(void* ptr);
+
+	void unload();
 
 };
 

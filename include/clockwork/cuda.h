@@ -26,6 +26,7 @@ public:
   std::string data;
   std::unordered_map<std::string, UnloadedCUDAFunc*> functions;
   UnloadedCUDAModule(const char* &cuda_blob);
+  ~UnloadedCUDAModule();
   LoadedCUDAModule* load();
 };
 
