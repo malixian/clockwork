@@ -20,10 +20,21 @@
 #include "clockwork/tvm/decoupled_graph_runtime.h"
 #include "clockwork/model.h"
 #include <cuda_runtime.h>
+#include <chrono>
+#include "clockwork/util/tvm_util.h"
 
 using namespace clockwork;
 
+struct ProfileData {
+    std::chrono::high_resolution_clock::time_point cool, warm, malloced, hot, submitted, complete, warm2, warm2freed, cool2;
+};
+
+uint64_t nanos(std::chrono::high_resolution_clock::time_point t) {
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(t.time_since_epoch()).count();
+}
+
 void loadmodel() {
+    tvmutil::initializeTVMCudaStream();
 
 	const int dtype_code = kDLFloat;
 	const int dtype_bits = 32;
@@ -43,7 +54,10 @@ void loadmodel() {
     CoolModel* cool = cold->load();
 
 
-    unsigned runs = 10000;
+    void* ptr;
+
+    unsigned runs = 1000;
+    std::vector<ProfileData> d(runs);
     for (unsigned i = 0; i < runs; i++) {
         if (i % 100 == 0) {
             std::cout << "Run " << i << std::endl;
@@ -53,21 +67,60 @@ void loadmodel() {
             std::cout << "   GPU " << (total-free) << " used" << std::endl;
         }
 
-        WarmModel* warm = cool->load();
+        d[i].cool = std::chrono::high_resolution_clock::now();
 
-        void* ptr;
-        CUDA_CALL(cudaMalloc(&ptr, warm->size()));
+        WarmModel* warm = cool->load();
+        d[i].warm = std::chrono::high_resolution_clock::now();
+
+        if (i == 0) {
+            CUDA_CALL(cudaMalloc(&ptr, warm->size()));
+        }
+        d[i].malloced = std::chrono::high_resolution_clock::now();
+
         HotModel* hot = warm->load(ptr);
+        CUDA_CALL(cudaStreamSynchronize(tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream));
+        d[i].hot = std::chrono::high_resolution_clock::now();
+
         hot->call();
+        d[i].submitted = std::chrono::high_resolution_clock::now();
 
         CUDA_CALL(cudaStreamSynchronize(tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream));
+        d[i].complete = std::chrono::high_resolution_clock::now();
 
         hot->unload();
+        d[i].warm2 = std::chrono::high_resolution_clock::now();
+
+        d[i].warm2freed = std::chrono::high_resolution_clock::now();
+
         warm->unload();
-
-        CUDA_CALL(cudaFree(ptr));
+        d[i].cool2 = std::chrono::high_resolution_clock::now();
     }
+    CUDA_CALL(cudaFree(ptr));
 
+    std::ofstream out("times.out");
+    out << "i" << "\t"
+        << "t" << "\t"
+        << "warm" << "\t"
+        << "malloced" << "\t"
+        << "hot" << "\t"
+        << "submitted" << "\t"
+        << "complete" << "\t"
+        << "warm2" << "\t"
+        << "warm2freed" << "\t"
+        << "cool2" << "\n";
+    for (unsigned i = 10; i < d.size(); i++) {
+        out << i << "\t"
+            << nanos(d[i].cool) << "\t"
+            << nanos(d[i].warm) - nanos(d[i].cool) << "\t"
+            << nanos(d[i].malloced) - nanos(d[i].warm) << "\t"
+            << nanos(d[i].hot) - nanos(d[i].malloced) << "\t"
+            << nanos(d[i].submitted) - nanos(d[i].hot) << "\t"
+            << nanos(d[i].complete) - nanos(d[i].submitted) << "\t"
+            << nanos(d[i].warm2) - nanos(d[i].complete) << "\t"
+            << nanos(d[i].warm2freed) - nanos(d[i].warm2) << "\t"
+            << nanos(d[i].cool2) - nanos(d[i].warm2freed) << "\n";
+    }
+    out.close();
 }
 
 int main(int argc, char *argv[]) {

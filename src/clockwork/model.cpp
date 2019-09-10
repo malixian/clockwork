@@ -48,7 +48,8 @@ CoolModel::CoolModel(ColdDiskModel* cold) :
 	readFileAsString(cold->params, params);
 
 	// malloc cuda pinned memory
-	CUDA_CALL(cudaMallocHost(&this->params, params.size()));
+	paramsSize = params.size();
+	CUDA_CALL(cudaMallocHost(&this->params, paramsSize));
 	std::memcpy(this->params, params.data(), paramsSize);
 }
 
@@ -95,8 +96,6 @@ void WarmModel::unload() {
 }
 
 HotModel::HotModel(WarmModel* warm, void* params) : params(params), clockwork(warm->clockwork) {
-	so = warm->so->load();  // Loads CUDA code into memory
-	
 	// Do the CUDA memcpy
 	cudaStream_t stream = tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream;
 	CUDA_CALL(
@@ -108,6 +107,8 @@ HotModel::HotModel(WarmModel* warm, void* params) : params(params), clockwork(wa
 			stream
 		)
 	)
+
+	so = warm->so->load();  // Loads CUDA code into memory
 }
 
 HotModel::~HotModel() {
