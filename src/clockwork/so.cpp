@@ -13,7 +13,6 @@ int TVMFuncCallProxy(TVMFunctionHandle func,
                  int num_args,
                  TVMValue* ret_val,
                  int* ret_type_code) {
-    std::cout << "TVMFuncCall " << std::endl;
     return TVMFuncCall(func, args, arg_type_codes, num_args, ret_val, ret_type_code);
 }
 
@@ -23,8 +22,10 @@ void TVMAPISetLastErrorProxy(const char* msg) {
 
 void __tvm_set_device(tvm::runtime::TVMArgs args, tvm::runtime::TVMRetValue *ret) {
     DLDeviceType device_type = static_cast<DLDeviceType>(args[0].operator int());
+    CHECK(device_type == kDLGPU) << "TVM set device to non-GPU device " << device_type;
     int device_id = args[1];
-    std::cout << "__tvm_set_device " << device_id << std::endl;
+    CUDA_CALL(cudaSetDevice(device_id));
+
 }
 tvm::runtime::PackedFunc* set_device = new tvm::runtime::PackedFunc(__tvm_set_device);
 
@@ -33,11 +34,8 @@ int TVMBackendGetFuncFromEnvHot(void* mod_node, const char* func_name, TVMFuncti
 	if (strcmp(func_name, "__tvm_set_device") == 0) {
 	  *func = (TVMFunctionHandle)(set_device);
 	} else {
-	  std::cout << "TVMBackendGetFuncFromEnv wheee " << func_name << std::endl;
-	  printf("%p\n", mod_node);
 	  TVMHotSharedObject* hot = static_cast<TVMHotSharedObject*>(mod_node);
 	  *func = (TVMFunctionHandle)(hot->cuda->getFunction(func_name));
-	  std::cout << "   done TVMBackendGetFuncFromEnv" << std::endl;
 	}
 	API_END();
 }
@@ -47,7 +45,6 @@ void* TVMBackendAllocWorkspaceHot(int device_type,
                                 uint64_t size,
                                 int dtype_code_hint,
                                 int dtype_bits_hint) {
-	std::cout << "TVMBackendAllocWorkspaceP " << device_id << std::endl;
 	CHECK(device_type == kDLGPU) << "TVM Backend alloc non-GPU workspace";
 
 	// TODO: plug into managed memory
@@ -62,7 +59,6 @@ void* TVMBackendAllocWorkspaceHot(int device_type,
 int TVMBackendFreeWorkspaceHot(int device_type,
                              int device_id,
                              void* ptr) {
-	std::cout << "TVMBackendFreeWorkspaceP" << std::endl;
 	CHECK(device_type == kDLGPU) << "TVM Backend alloc non-GPU workspace";
 	CUDA_CALL(cudaSetDevice(device_id));
 	CUDA_CALL(cudaFree(ptr));

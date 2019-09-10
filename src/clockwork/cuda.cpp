@@ -91,15 +91,11 @@ tvm::runtime::PackedFunc* LoadedCUDAModule::getFunction(const std::string &name)
 
 LoadedCUDAFunc::LoadedCUDAFunc(UnloadedCUDAFunc* source, CUfunction f) : source(source), f(f) {
   packed = tvm::runtime::PackFuncVoidAddr(*this, source->info.arg_types);
-  // packed = tvm::runtime::PackedFunc([](tvm::runtime::TVMArgs args, tvm::runtime::TVMRetValue* rv) {
-  //   std::cout << "hello from packed " << std::endl;
-  // });
 }
 
 void LoadedCUDAFunc::operator()(tvm::runtime::TVMArgs args,
                 tvm::runtime::TVMRetValue* rv,
                 void** void_args) const {
-  std::cout << "Invoke CUDA func " << this->source->name << std::endl;
   CUstream strm = static_cast<CUstream>(tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream);
   tvm::runtime::ThreadWorkLoad wl = source->thread_axis_cfg_.Extract(args);
   CUDA_LOG(

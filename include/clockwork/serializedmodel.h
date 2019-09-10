@@ -114,8 +114,6 @@ public:
       input_tensors[i]->data = static_cast<char *>(baseptr) + offsets[i];
     }
 
-    std::cout << "invoke function " << op.so_function << std::endl;
-
     int ret = (*f)(
       const_cast<TVMValue*>(op_inputs.data()),
       const_cast<int*>(op_tcodes.data()), 
@@ -148,7 +146,6 @@ public:
 
   void call(void* baseptr) {
     for (unsigned i = 0; i < ops.size(); i++) {
-      std::cout << "Call op " << i << std::endl;
       ops[i]->call(baseptr);
     }
   }
