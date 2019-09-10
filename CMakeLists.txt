@@ -44,6 +44,8 @@ add_library(clockwork
 	src/clockwork/serializedmodel.cpp
 	src/clockwork/memfile.cpp
 	src/clockwork/model.cpp
+	src/clockwork/cuda.cpp
+	src/clockwork/so.cpp
 	src/clockwork/tvm/decoupled_graph_runtime.cc
 )
 

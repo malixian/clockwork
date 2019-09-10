@@ -19,6 +19,8 @@
 #include <unistd.h>
 #include <functional>
 #include "clockwork/tvm/runtime_base.h"
+#include "clockwork/cuda.h"
+#include "clockwork/so.h"
 
 namespace clockwork {
 namespace binary {
@@ -84,59 +86,6 @@ public:
 
 };
 
-class UnloadedCUDAModule;
-class UnloadedCUDAFunc;
-class LoadedCUDAModule;
-class LoadedCUDAFunc;
-
-
-class UnloadedCUDAModule {
-public:
-  std::string fmt;
-  std::string data;
-  std::unordered_map<std::string, UnloadedCUDAFunc*> functions;
-  UnloadedCUDAModule(SharedObject &so);
-  LoadedCUDAModule* load();
-};
-
-class LoadedCUDAModule {
-public:
-  const UnloadedCUDAModule* source;
-  CUmodule module;
-  std::unordered_map<std::string, LoadedCUDAFunc*> functions;
-
-  LoadedCUDAModule(const UnloadedCUDAModule* source, CUmodule module);
-  ~LoadedCUDAModule();
-
-  tvm::runtime::PackedFunc* getFunction(const std::string &name);
-
-};
-
-// a wrapped function class to get packed func.
-class LoadedCUDAFunc {
-public:
-  UnloadedCUDAFunc* source;
-  CUfunction f;
-  tvm::runtime::PackedFunc packed;
-
-  LoadedCUDAFunc(UnloadedCUDAFunc* source, CUfunction f);
-
-  void operator()(tvm::runtime::TVMArgs args,
-                  tvm::runtime::TVMRetValue* rv,
-                  void** void_args) const;
-};
-
-class UnloadedCUDAFunc {
-public:
-  const std::string name;
-  const tvm::runtime::FunctionInfo info;
-  tvm::runtime::ThreadAxisConfig thread_axis_cfg_;
-
-  UnloadedCUDAFunc(const std::string &name, const tvm::runtime::FunctionInfo &info);
-
-  LoadedCUDAFunc* load(CUmodule &m);
-};
-
 
 // Function signature for generated packed function in shared library
 typedef int (*BackendPackedCFunc)(void* args,
@@ -155,8 +104,8 @@ private:
   std::vector<void*> fs;
 
 public:
-  UnloadedCUDAModule* unloadedCUDA;
-  LoadedCUDAModule* loadedCUDA;
+  cuda::UnloadedCUDAModule* unloadedCUDA;
+  cuda::LoadedCUDAModule* loadedCUDA;
 
   static void __tvm_set_device(tvm::runtime::TVMArgs args, tvm::runtime::TVMRetValue *ret) {
     DLDeviceType device_type = static_cast<DLDeviceType>(args[0].operator int());
@@ -238,7 +187,11 @@ public:
     }
 
     // Eagerly extract the CUDA module code (but don't load it to device yet)
-    unloadedCUDA = new UnloadedCUDAModule(so);
+
+  const char* cuda_blob = reinterpret_cast<const char*>(so.GetSymbol(tvm::runtime::symbol::tvm_dev_mblob));
+  CHECK(cuda_blob != nullptr) << "Could not find " << tvm::runtime::symbol::tvm_dev_mblob 
+                              << " in SO " << so.name;
+    unloadedCUDA = new cuda::UnloadedCUDAModule(cuda_blob);
 
     // Insert pointer to this object for module handler
     LinkFunction(tvm::runtime::symbol::tvm_module_ctx, this);
@@ -274,9 +227,8 @@ static void testModel(MinModel &model) {
   void* ptr;
   CUDA_CALL(cudaMalloc(&ptr, model.total_memory));
 
-  TVMSharedObjectHandler so("/home/jcmace/modelzoo/resnet50/tesla-m40_batchsize1/tvm-model.so", model.so_functions);
-
-  so.loadedCUDA = so.unloadedCUDA->load();
+  clockwork::so::TVMWarmSharedObject warm("/home/jcmace/modelzoo/resnet50/tesla-m40_batchsize1/tvm-model.so", model.so_functions);
+  clockwork::so::TVMHotSharedObject* hot = warm.load();
 
   for (unsigned i = 0; i < model.ops.size(); i++) {
     Op op = model.ops[i];
@@ -314,7 +266,7 @@ static void testModel(MinModel &model) {
     tvm::runtime::TVMRetValue rv;
     tvm::runtime::TVMArgs targs(values.data(), tcodes.data(), static_cast<int>(values.size()));
 
-    void* f = so[op.so_function];
+    void* f = warm.fs[op.so_function];
 
 
     int ret = (*reinterpret_cast<BackendPackedCFunc>(f))(
