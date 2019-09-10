@@ -160,7 +160,7 @@ public:
                                  << "Needed: " << nbytes << ", got: " << total;
 
           MemBlock allocated(false, nbytes, ret);
-          MemBlock stillfree(true, total - nbytes, ret + nbytes);
+          MemBlock stillfree(true, total - nbytes, static_cast<char *>(ret) + nbytes);
           mem.insert(start, allocated);
           if (stillfree.size > 0) {
             mem.insert(start, stillfree);
@@ -175,7 +175,7 @@ public:
       } else {
         ret = it->start;
         MemBlock allocated(false, nbytes, ret);
-        MemBlock stillfree(true, it->size - nbytes, ret + nbytes);
+        MemBlock stillfree(true, it->size - nbytes, static_cast<char *>(ret) + nbytes);
         mem.insert(it, allocated);
         if (stillfree.size > 0) {
           mem.insert(it, stillfree);

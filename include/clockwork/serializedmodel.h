@@ -111,7 +111,7 @@ public:
 
   void call(void* baseptr) {
     for (unsigned i = 0; i < size; i++) {
-      input_tensors[i]->data = baseptr + offsets[i];
+      input_tensors[i]->data = static_cast<char *>(baseptr) + offsets[i];
     }
 
     std::cout << "invoke function " << op.so_function << std::endl;
