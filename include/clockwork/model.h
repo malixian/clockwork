@@ -40,7 +40,8 @@ class CoolModel {
 public:
 	const Memfile so;
 	std::string clockwork;
-	std::string params;
+	void* params; // cuda pinned host memory
+	int paramsSize;
 
 	CoolModel(ColdDiskModel* cold);
 
@@ -53,18 +54,37 @@ public:
 };
 
 /** A model that's been deserialized but isn't yet loaded to device */
+
+// TODO: pin params in memory as void*
 class WarmModel {
 public:
-	binary::MinModel clockwork;
-	so::TVMWarmSharedObject* warm;
-	tvm::runtime::NDArray* params;
+	binary::MinModel clockwork_spec;
+	binary::WarmModel* clockwork;
+	so::TVMWarmSharedObject* so;
+	void* params;
+	int paramsSize;
+	
 
 	WarmModel(CoolModel* cool);
+
+	int size();
+	HotModel* load(void* ptr);
 
 };
 
 /** A model that's ready to be inferenced */
 class HotModel {
+public:
+	binary::WarmModel* clockwork;
+	void* params;
+	so::TVMHotSharedObject* so;
+
+	HotModel(WarmModel* warm, void* params);
+	~HotModel();
+
+	void call();
+	void unload();
+
 
 };
 

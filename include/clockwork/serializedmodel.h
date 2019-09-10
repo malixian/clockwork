@@ -74,16 +74,22 @@ typedef int (*BackendPackedCFunc)(void* args,
 
 class WarmOp {
 public:
+  Op &op;
+  std::vector<uint64_t> offsets;
   std::vector<DLTensor*> input_tensors;
 
   std::vector<TVMValue> op_inputs;
   std::vector<int> op_tcodes;
-  const int size;
+  int size;
 
   BackendPackedCFunc f;
 
-  WarmOp(Op &op, BackendPackedCFunc f) : 
-      f(f), size(op.inputs.size()), op_inputs(size), op_tcodes(size), input_tensors(size) {
+  WarmOp(Op &op, BackendPackedCFunc f) : op(op), f(f) {
+    size = op.inputs.size();
+    offsets.reserve(size);
+    op_inputs.reserve(size);
+    op_tcodes.reserve(size);
+    input_tensors.reserve(size);
 
     for (unsigned i = 0; i < size; i++) {
       DLTensor* input = new DLTensor();
@@ -93,7 +99,9 @@ public:
       input->dtype = DLDataType{kDLFloat, 32, 1};
       input->shape = op.inputs[i].shape.data();
       input->strides = nullptr;
-      input->byte_offset = op.inputs[i].offset;
+      input->byte_offset = 0;
+
+      offsets[i] = op.inputs[i].offset;
       
       input_tensors[i] = input;
       op_inputs[i].v_handle = input;
@@ -103,8 +111,10 @@ public:
 
   void call(void* baseptr) {
     for (unsigned i = 0; i < size; i++) {
-      input_tensors[i]->data = baseptr;
+      input_tensors[i]->data = baseptr + offsets[i];
     }
+
+    std::cout << "invoke function " << op.so_function << std::endl;
 
     int ret = (*f)(
       const_cast<TVMValue*>(op_inputs.data()),
@@ -119,9 +129,10 @@ public:
 
 class WarmModel {
 public:
+  int size;
   std::vector<WarmOp*> ops;
 
-  WarmModel(MinModel &mm, clockwork::so::TVMWarmSharedObject* warm) : ops(mm.ops.size()) {
+  WarmModel(MinModel &mm, clockwork::so::TVMWarmSharedObject* warm) : ops(mm.ops.size()), size(mm.total_memory) {
     // Extract the SO functions
     std::vector<BackendPackedCFunc> fs(mm.so_functions.size());
     for (unsigned i = 0; i < mm.so_functions.size(); i++) {
@@ -137,31 +148,12 @@ public:
 
   void call(void* baseptr) {
     for (unsigned i = 0; i < ops.size(); i++) {
+      std::cout << "Call op " << i << std::endl;
       ops[i]->call(baseptr);
     }
   }
 
 };
-
-
-
-class Test {
-public:
-
-static void testModel(MinModel &model) {
-  void* ptr;
-  CUDA_CALL(cudaMalloc(&ptr, model.total_memory));
-
-  clockwork::so::TVMWarmSharedObject warm_so("/home/jcmace/modelzoo/resnet50/tesla-m40_batchsize1/tvm-model.so");
-  clockwork::so::TVMHotSharedObject* hot = warm_so.load();
-
-  WarmModel warm_model(model, &warm_so);
-
-  warm_model.call(ptr);
-}
-};
-
-
 
 }
 }

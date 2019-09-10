@@ -5,9 +5,12 @@
 #include <tvm/runtime/registry.h>
 #include <tvm/runtime/serializer.h>
 #include <fstream>
+#include <tvm/runtime/cuda_common.h>
+#include <cuda_runtime.h>
 #include <pods/pods.h>
 #include <pods/binary.h>
 #include <pods/buffers.h>
+#include <cstring>
 
 namespace clockwork {
 
@@ -26,12 +29,6 @@ void readMinModel(const std::string &data, binary::MinModel &model) {
     CHECK(status == pods::Error::NoError) << "Cannot deserialize minmodel";
 }
 
-tvm::runtime::NDArray* readParams(const std::string &data) {
-  dmlc::MemoryStringStream stream(const_cast<std::string*>(&data));
-  tvm::runtime::NDArray* a = new tvm::runtime::NDArray();
-  a->Load(&stream);
-}
-
 ColdDiskModel::ColdDiskModel(
 		std::string so, 
 		std::string clockwork, 
@@ -46,7 +43,13 @@ CoolModel* ColdDiskModel::load() {
 CoolModel::CoolModel(ColdDiskModel* cold) :
 	so(Memfile::readFrom(cold->so)) {
 	readFileAsString(cold->clockwork, clockwork);
+
+	std::string params;
 	readFileAsString(cold->params, params);
+
+	// malloc cuda pinned memory
+	CUDA_CALL(cudaMallocHost(&this->params, params.size()));
+	std::memcpy(this->params, params.data(), paramsSize);
 }
 
 WarmModel* CoolModel::load() {
@@ -54,10 +57,52 @@ WarmModel* CoolModel::load() {
 }
 
 WarmModel::WarmModel(CoolModel* cool) {
-	readMinModel(cool->clockwork, clockwork);
-	warm = new so::TVMWarmSharedObject(cool->so.filename);
-	params = readParams(cool->params);
-	// TODO: don't treat params as NDarray, it's unnecessary
+	// Load shared object
+	so = new so::TVMWarmSharedObject(cool->so.filename);
+
+	// Deserialize minmodel data structure
+	readMinModel(cool->clockwork, clockwork_spec);
+	this->clockwork = new binary::WarmModel(clockwork_spec, so);
+
+	// Don't do anything with params yet
+	params = cool->params;
+	paramsSize = cool->paramsSize;
+}
+
+int WarmModel::size() {
+	return clockwork->size;
+}
+
+HotModel* WarmModel::load(void* ptr) {
+	return new HotModel(this, ptr);
+}
+
+HotModel::HotModel(WarmModel* warm, void* params) : params(params), clockwork(warm->clockwork) {
+	so = warm->so->load();  // Loads CUDA code into memory
+	
+	// Do the CUDA memcpy
+	cudaStream_t stream = tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream;
+	CUDA_CALL(
+		cudaMemcpyAsync(
+			params, 
+			warm->params, 
+			warm->paramsSize, 
+			cudaMemcpyHostToDevice,
+			stream
+		)
+	)
+}
+
+HotModel::~HotModel() {
+	so->unload();
+}
+
+void HotModel::call() {
+	clockwork->call(params);
+}
+
+void HotModel::unload() {
+	delete this;
 }
 
 }

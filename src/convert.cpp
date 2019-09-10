@@ -93,11 +93,20 @@ void convert(std::string model_so, std::string model_json, std::string model_par
     outfile.close();
 
 
-	tvm::runtime::PackedFunc save_params = mod.GetFunction("save_params");
 	std::ofstream params_out(clockwork_params_out, std::ofstream::binary);
-	auto p = save_params().operator std::string();
-	params_out << p;
+
+	tvm::runtime::PackedFunc get_const_params = mod.GetFunction("get_const_params");
+	tvm::runtime::NDArray params = get_const_params();
+
+	void* ptr = params.dataptr();
+	uint64_t size = params.Size();
+
+	params_out.write((const char*) ptr, size);
 	params_out.close();
+
+
+
+
 
 	// TODO: don't dump the ndarray, dump the actual bytes, 
 	// bypassing NDarray class

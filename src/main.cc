@@ -37,28 +37,22 @@ void loadmodel() {
             model + ".clockwork",
             model + ".clockwork_params"
         );
+    std::cout << "cold" << std::endl;
 
     CoolModel* cool = cold->load();
-
+    std::cout << "cool" << std::endl;
     WarmModel* warm = cool->load();
+    std::cout << "warm" << std::endl;
 
+    void* ptr;
+    CUDA_CALL(cudaMalloc(&ptr, warm->size()));
+    std::cout << "warm malloc" << std::endl;
 
-    // clockwork::binary::MinModel m;
+    HotModel* hot = warm->load(ptr);
+    std::cout << "hot" << std::endl;
 
-    // std::ifstream infile;
-    // infile.open(model + ".clockwork");
-
-    // pods::InputStream in(infile);
-    // pods::BinaryDeserializer<decltype(in)> deserializer(in);
-    // if (deserializer.load(m) != pods::Error::NoError)
-    // {
-    //     std::cerr << "deserialization error\n";
-    //     return;
-    // }
-    // infile.close();
-    // std::cout << "loaded clockwork model" << std::endl;
-
-    // clockwork::binary::Test::testModel(m);
+    hot->call();
+    std::cout << "call" << std::endl;
 
 }
 
