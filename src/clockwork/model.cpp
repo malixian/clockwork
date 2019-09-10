@@ -55,7 +55,7 @@ WarmModel* CoolModel::load() {
 
 WarmModel::WarmModel(CoolModel* cool) {
 	readMinModel(cool->clockwork, clockwork);
-	so = new binary::TVMSharedObjectHandler(cool->so.filename, clockwork.so_functions);
+	warm = new so::TVMWarmSharedObject(cool->so.filename);
 	params = readParams(cool->params);
 	// TODO: don't treat params as NDarray, it's unnecessary
 }

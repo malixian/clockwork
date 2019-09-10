@@ -9,6 +9,7 @@
 #include <tvm/runtime/registry.h>
 #include <tvm/runtime/serializer.h>
 #include "clockwork/serializedmodel.h"
+#include "clockwork/so.h"
 
 namespace clockwork{
 
@@ -55,7 +56,7 @@ public:
 class WarmModel {
 public:
 	binary::MinModel clockwork;
-	binary::TVMSharedObjectHandler* so;
+	so::TVMWarmSharedObject* warm;
 	tvm::runtime::NDArray* params;
 
 	WarmModel(CoolModel* cool);

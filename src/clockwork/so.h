@@ -38,7 +38,9 @@ public:
   }
 
   template<typename T> void LinkFunctionPtr(void* funcPtr, T func) {
-    *(reinterpret_cast<T*>(funcPtr)) = func;
+    if (funcPtr != nullptr) {
+      *(reinterpret_cast<T*>(funcPtr)) = func;
+    }
   }
 
   template<typename T> void LinkFunction(const char* funcNameInSo, T func) {
@@ -54,14 +56,13 @@ class TVMWarmSharedObject {
 public:
   SharedObject so;
   clockwork::cuda::UnloadedCUDAModule* cuda;
-  std::vector<void*> fs;
 
   void* ptr_ModuleCtx;
   void* ptr_TVMBackendGetFuncFromEnv;
   void* ptr_TVMBackendAllocWorkspace;
   void* ptr_TVMBackendFreeWorkspace;
 
-  TVMWarmSharedObject(const std::string &so_filename, std::vector<std::string> &toLoad);
+  TVMWarmSharedObject(const std::string &so_filename);
 
   TVMHotSharedObject* load();
 

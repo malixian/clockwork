@@ -65,27 +65,6 @@ struct MinModel {
     )
 };
 
-class SharedObject {
-public:
-  const std::string name;
-  void* lib_handle_{nullptr};
-
-public:
-  SharedObject(const std::string name) : name(name) {
-    lib_handle_ = dlopen(name.c_str(), RTLD_LOCAL | RTLD_NOW);
-    CHECK(lib_handle_ != nullptr) << "Failed to load SO " << name << dlerror();
-  }
-
-  ~SharedObject() {
-    dlclose(lib_handle_);
-  }
-
-  void* GetSymbol(const char* symbolName) {
-    return dlsym(lib_handle_, symbolName);
-  }
-
-};
-
 
 // Function signature for generated packed function in shared library
 typedef int (*BackendPackedCFunc)(void* args,
@@ -93,131 +72,77 @@ typedef int (*BackendPackedCFunc)(void* args,
                                   int num_args);
 
 
-
-
-/** This is a pseudo-alternative to TVM's DSOmodule */
-class TVMSharedObjectHandler {
-private:
-  SharedObject so;
-  std::vector<std::string> fnames;
-
-  std::vector<void*> fs;
-
+class WarmOp {
 public:
-  cuda::UnloadedCUDAModule* unloadedCUDA;
-  cuda::LoadedCUDAModule* loadedCUDA;
+  std::vector<DLTensor*> input_tensors;
 
-  static void __tvm_set_device(tvm::runtime::TVMArgs args, tvm::runtime::TVMRetValue *ret) {
-    DLDeviceType device_type = static_cast<DLDeviceType>(args[0].operator int());
-    int device_id = args[1];
-    std::cout << "__tvm_set_device " << device_id << std::endl;
-  }
+  std::vector<TVMValue> op_inputs;
+  std::vector<int> op_tcodes;
+  const int size;
 
-  static int TVMFuncCallP(TVMFunctionHandle func,
-                TVMValue* args,
-                int* arg_type_codes,
-                int num_args,
-                TVMValue* ret_val,
-                int* ret_type_code) {
-    std::cout << "TVMFuncCall " << std::endl;
-    return TVMFuncCall(func, args, arg_type_codes, num_args, ret_val, ret_type_code);
-  }
+  BackendPackedCFunc f;
 
-  static void TVMAPISetLastErrorP(const char* msg) {
-    TVMAPISetLastError(msg);
-  }
+  WarmOp(Op &op, BackendPackedCFunc f) : 
+      f(f), size(op.inputs.size()), op_inputs(size), op_tcodes(size), input_tensors(size) {
 
-  static int TVMBackendGetFuncFromEnvP(void* mod_node, const char* func_name, TVMFunctionHandle *func) {
-    API_BEGIN();
-    if (strcmp(func_name, "__tvm_set_device") == 0) {
-      tvm::runtime::PackedFunc* set_device = new tvm::runtime::PackedFunc(__tvm_set_device);
-      *func = (TVMFunctionHandle)(set_device);
-    } else {
-      std::cout << "TVMBackendGetFuncFromEnv wheee " << func_name << std::endl;
-      printf("%p\n", mod_node);
-      TVMSharedObjectHandler* handler = static_cast<TVMSharedObjectHandler*>(mod_node);
-      *func = (TVMFunctionHandle)(handler->loadedCUDA->getFunction(func_name));
-      std::cout << "   done TVMBackendGetFuncFromEnv" << std::endl;
-    }
-    API_END();
-  }
-
-  static void* TVMBackendAllocWorkspaceP(int device_type,
-                                 int device_id,
-                                 uint64_t size,
-                                 int dtype_code_hint,
-                                 int dtype_bits_hint) {
-    std::cout << "TVMBackendAllocWorkspaceP " << device_id << std::endl;
-    CHECK(device_type == kDLGPU) << "TVM Backend alloc non-GPU workspace";
-
-    // TODO: plug into managed memory
-    CUDA_CALL(cudaSetDevice(device_id));
-
-    void* ptr;
-    CUDA_CALL(cudaMalloc(&ptr, size));
-    return ptr;
-  }
-
-
-  static int TVMBackendFreeWorkspaceP(int device_type,
-                              int device_id,
-                              void* ptr) {
-    std::cout << "TVMBackendFreeWorkspaceP" << std::endl;
-    CHECK(device_type == kDLGPU) << "TVM Backend alloc non-GPU workspace";
-    CUDA_CALL(cudaSetDevice(device_id));
-    CUDA_CALL(cudaFree(ptr));
-    return 0;
-  }
-
-  static int TVMBackendParallelLaunchP(FTVMParallelLambda flambda,
-                                     void* cdata,
-                                     int num_task) {
-    CHECK(false) << "TVMBackendParallelLaunch unsupported";
-  }
-
-  static int TVMBackendParallelBarrierP(int task_id, TVMParallelGroupEnv* penv) {
-    CHECK(false) << "TVMBackendParallelBarrier unsupported";
-  }
-
-  TVMSharedObjectHandler(const std::string name, std::vector<std::string> toLoad) : so(name), fs(toLoad.size()) {
-    // Eagerly extract all of the op functions
-    for (unsigned i = 0; i < toLoad.size(); i++) {
-      const char* name = toLoad[i].c_str();
-      fs[i] = so.GetSymbol(name);
-    }
-
-    // Eagerly extract the CUDA module code (but don't load it to device yet)
-
-  const char* cuda_blob = reinterpret_cast<const char*>(so.GetSymbol(tvm::runtime::symbol::tvm_dev_mblob));
-  CHECK(cuda_blob != nullptr) << "Could not find " << tvm::runtime::symbol::tvm_dev_mblob 
-                              << " in SO " << so.name;
-    unloadedCUDA = new cuda::UnloadedCUDAModule(cuda_blob);
-
-    // Insert pointer to this object for module handler
-    LinkFunction(tvm::runtime::symbol::tvm_module_ctx, this);
-
-    // Insert pointers into the SO for callbacks
-    LinkFunction("__TVMFuncCall", TVMFuncCallP);
-    LinkFunction("__TVMAPISetLastError", TVMAPISetLastErrorP);
-    LinkFunction("__TVMBackendGetFuncFromEnv", TVMBackendGetFuncFromEnvP);
-    LinkFunction("__TVMBackendAllocWorkspace", TVMBackendAllocWorkspaceP);
-    LinkFunction("__TVMBackendFreeWorkspace", TVMBackendFreeWorkspaceP);
-    LinkFunction("__TVMBackendParallelLaunch", TVMBackendParallelLaunchP);
-    LinkFunction("__TVMBackendParallelBarrier", TVMBackendParallelBarrierP);
-  }
-
-  template<typename T> void LinkFunction(const char* funcNameInSo, T func) {
-    if (T* fp = reinterpret_cast<T*>(so.GetSymbol(funcNameInSo))) {
-      *fp = func;
+    for (unsigned i = 0; i < size; i++) {
+      DLTensor* input = new DLTensor();
+      input->data = nullptr;
+      input->ctx = DLContext{kDLGPU, 0};
+      input->ndim = op.inputs[i].shape.size();
+      input->dtype = DLDataType{kDLFloat, 32, 1};
+      input->shape = op.inputs[i].shape.data();
+      input->strides = nullptr;
+      input->byte_offset = op.inputs[i].offset;
+      
+      input_tensors[i] = input;
+      op_inputs[i].v_handle = input;
+      op_tcodes[i] = kArrayHandle;
     }
   }
 
-  void* &operator[](int i) {
-    CHECK(i >= 0 && i < fs.size()) << "Function lookup index out of bounds";
-    return fs[i];
+  void call(void* baseptr) {
+    for (unsigned i = 0; i < size; i++) {
+      input_tensors[i]->data = baseptr;
+    }
+
+    int ret = (*f)(
+      const_cast<TVMValue*>(op_inputs.data()),
+      const_cast<int*>(op_tcodes.data()), 
+      size
+    );
+    CHECK_EQ(ret, 0) << TVMGetLastError();
   }
 
 };
+
+
+class WarmModel {
+public:
+  std::vector<WarmOp*> ops;
+
+  WarmModel(MinModel &mm, clockwork::so::TVMWarmSharedObject* warm) : ops(mm.ops.size()) {
+    // Extract the SO functions
+    std::vector<BackendPackedCFunc> fs(mm.so_functions.size());
+    for (unsigned i = 0; i < mm.so_functions.size(); i++) {
+      fs[i] = reinterpret_cast<BackendPackedCFunc>(warm->so.GetSymbol(mm.so_functions[i].c_str()));
+    }
+
+    for (unsigned i = 0; i < mm.ops.size(); i++) {
+      ops[i] = new WarmOp(mm.ops[i], fs[mm.ops[i].so_function]);
+
+      // TODO: no need at the moment, but later, eager load cuda functions and workspace allocs
+    }
+  }
+
+  void call(void* baseptr) {
+    for (unsigned i = 0; i < ops.size(); i++) {
+      ops[i]->call(baseptr);
+    }
+  }
+
+};
+
 
 
 class Test {
@@ -227,56 +152,12 @@ static void testModel(MinModel &model) {
   void* ptr;
   CUDA_CALL(cudaMalloc(&ptr, model.total_memory));
 
-  clockwork::so::TVMWarmSharedObject warm("/home/jcmace/modelzoo/resnet50/tesla-m40_batchsize1/tvm-model.so", model.so_functions);
-  clockwork::so::TVMHotSharedObject* hot = warm.load();
+  clockwork::so::TVMWarmSharedObject warm_so("/home/jcmace/modelzoo/resnet50/tesla-m40_batchsize1/tvm-model.so");
+  clockwork::so::TVMHotSharedObject* hot = warm_so.load();
 
-  for (unsigned i = 0; i < model.ops.size(); i++) {
-    Op op = model.ops[i];
-    std::cout << "op " << i << " " << model.so_functions[op.so_function] << std::endl;
+  WarmModel warm_model(model, &warm_so);
 
-    bool print_op_input_info = false;
-    if (print_op_input_info) {
-      std::cout << "Op " << i << " is " << model.so_functions[op.so_function] << " with " << op.inputs.size() << " inputs" << std::endl;
-      for (unsigned j = 0; j < op.inputs.size(); j++) {
-        std::cout << "   Input " << j << " at offset " << op.inputs[j].offset << " shape ";
-        for (unsigned k = 0; k < op.inputs[j].shape.size(); k++) {
-          std::cout << op.inputs[j].shape[k] << " ";
-        }
-        std::cout << std::endl;
-      }
-    }
-
-    std::vector<TVMValue> values(op.inputs.size());
-    std::vector<int> tcodes(op.inputs.size());
-    for (unsigned j = 0; j < op.inputs.size(); j++) {
-      DLTensor* input = new DLTensor();
-      input->data = ptr + op.inputs[j].offset;
-      input->ctx = DLContext{kDLGPU, 0};
-      //input->ctx = DLContext{kDLGPU, i};
-      input->ndim = op.inputs[j].shape.size();
-      input->dtype = DLDataType{kDLFloat, 32, 1};
-      input->shape = op.inputs[j].shape.data();
-      input->strides = nullptr;
-      input->byte_offset = 0;
-
-      values[j].v_handle = input;
-      tcodes[j] = kArrayHandle;
-    }
-
-    tvm::runtime::TVMRetValue rv;
-    tvm::runtime::TVMArgs targs(values.data(), tcodes.data(), static_cast<int>(values.size()));
-
-    void* f = warm.fs[op.so_function];
-
-
-    int ret = (*reinterpret_cast<BackendPackedCFunc>(f))(
-      const_cast<TVMValue*>(values.data()), 
-      const_cast<int*>(tcodes.data()), 
-      static_cast<int>(values.size())
-    );
-    CHECK_EQ(ret, 0) << TVMGetLastError();
-
-  }
+  warm_model.call(ptr);
 }
 };
 

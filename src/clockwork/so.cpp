@@ -102,13 +102,7 @@ int TVMBackendParallelBarrierError(int task_id, TVMParallelGroupEnv* penv) {
 	CHECK(false) << "TVMBackendParallelBarrier unsupported";
 }
 
-TVMWarmSharedObject::TVMWarmSharedObject(const std::string &so_filename, std::vector<std::string> &toLoad) : so(so_filename), fs(toLoad.size()) {
-	// Eagerly extract all of the op functions
-    for (unsigned i = 0; i < toLoad.size(); i++) {
-      const char* name = toLoad[i].c_str();
-      fs[i] = so.GetSymbol(name);
-    }
-
+TVMWarmSharedObject::TVMWarmSharedObject(const std::string &so_filename) : so(so_filename) {
     // Extract the CUDA module blob
     const char* cuda_blob = reinterpret_cast<const char*>(so.GetSymbol(tvm::runtime::symbol::tvm_dev_mblob));
     CHECK(cuda_blob != nullptr) << "Could not find " << tvm::runtime::symbol::tvm_dev_mblob 
