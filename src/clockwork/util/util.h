@@ -21,6 +21,8 @@ std::string getGPUmodel(int deviceNumber);
 
 extern "C" char* getGPUModelToBuffer(int deviceNumber, char* buf);
 
+void setCurrentThreadMaxPriority();
+
 }
 }
 
