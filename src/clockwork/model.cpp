@@ -55,6 +55,7 @@ CoolModel::CoolModel(ColdDiskModel* cold) :
 
 CoolModel::~CoolModel() {
 	CUDA_CALL(cudaFreeHost(this->params));
+	// TODO: delete so memfile
 }
 
 WarmModel* CoolModel::load() {
