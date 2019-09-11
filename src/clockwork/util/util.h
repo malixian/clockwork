@@ -2,6 +2,7 @@
 #define _CLOCKWORK_UTIL_H_
 
 #include <cstdint>
+#include <string>
 
 
 namespace clockwork {
