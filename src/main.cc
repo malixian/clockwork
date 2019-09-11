@@ -42,7 +42,7 @@ void loadmodel() {
 	const int device_type = kDLGPU;
 	const int device_id = 0;
 
-	std::string model = "/home/jcmace/modelzoo/resnet50/tesla-m40_batchsize1/tvm-model";
+	std::string model = "/home/jcmace/modelzoo/resnet18/tesla-m40_batchsize1/resnet18v2-batchsize1-optimized";
 
 
     ColdDiskModel* cold = new ColdDiskModel(
@@ -52,9 +52,13 @@ void loadmodel() {
         );
 
     CoolModel* cool = cold->load();
-
+    WarmModel* warm = cool->load();
 
     void* ptr;
+    CUDA_CALL(cudaMalloc(&ptr, warm->size()));
+    HotModel* hot = warm->load(ptr);
+
+
 
     unsigned runs = 1000;
     std::vector<ProfileData> d(runs);
@@ -69,15 +73,15 @@ void loadmodel() {
 
         d[i].cool = std::chrono::high_resolution_clock::now();
 
-        WarmModel* warm = cool->load();
+        // WarmModel* warm = cool->load();
         d[i].warm = std::chrono::high_resolution_clock::now();
 
-        if (i == 0) {
-            CUDA_CALL(cudaMalloc(&ptr, warm->size()));
-        }
+        // if (i == 0) {
+        //     CUDA_CALL(cudaMalloc(&ptr, warm->size()));
+        // }
         d[i].malloced = std::chrono::high_resolution_clock::now();
 
-        HotModel* hot = warm->load(ptr);
+        // HotModel* hot = warm->load(ptr);
         CUDA_CALL(cudaStreamSynchronize(tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream));
         d[i].hot = std::chrono::high_resolution_clock::now();
 
@@ -87,12 +91,12 @@ void loadmodel() {
         CUDA_CALL(cudaStreamSynchronize(tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream));
         d[i].complete = std::chrono::high_resolution_clock::now();
 
-        hot->unload();
+        // hot->unload();
         d[i].warm2 = std::chrono::high_resolution_clock::now();
 
         d[i].warm2freed = std::chrono::high_resolution_clock::now();
 
-        warm->unload();
+        // warm->unload();
         d[i].cool2 = std::chrono::high_resolution_clock::now();
     }
     CUDA_CALL(cudaFree(ptr));

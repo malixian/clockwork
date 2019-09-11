@@ -52,6 +52,7 @@ struct Op {
 struct MinModel {
 	uint64_t total_memory;
 	uint64_t weights_memory;
+  uint64_t workspace_memory;
 	std::vector<std::string> so_functions;
 	std::vector<std::string> cuda_functions;
 	std::vector<Op> ops;
@@ -75,21 +76,23 @@ typedef int (*BackendPackedCFunc)(void* args,
 class WarmOp {
 public:
   Op &op;
+
+  std::vector<uint64_t> workspace_offsets;
+  
   std::vector<uint64_t> offsets;
   std::vector<DLTensor*> input_tensors;
-
   std::vector<TVMValue> op_inputs;
   std::vector<int> op_tcodes;
   int size;
 
   BackendPackedCFunc f;
 
-  WarmOp(Op &op, BackendPackedCFunc f) : op(op), f(f) {
+  WarmOp(Op &op, BackendPackedCFunc f) : op(op), f(f), workspace_offsets(op.workspace_allocs) {
     size = op.inputs.size();
-    offsets.reserve(size);
-    op_inputs.reserve(size);
-    op_tcodes.reserve(size);
-    input_tensors.reserve(size);
+    offsets.resize(size);
+    op_inputs.resize(size);
+    op_tcodes.resize(size);
+    input_tensors.resize(size);
 
     for (unsigned i = 0; i < size; i++) {
       DLTensor* input = new DLTensor();
@@ -117,14 +120,31 @@ public:
 
   void call(void* baseptr) {
     for (unsigned i = 0; i < size; i++) {
-      input_tensors[i]->data = static_cast<char *>(baseptr) + offsets[i];
+      input_tensors[i]->data = static_cast<char*>(baseptr) + offsets[i];
     }
 
+    // std::cout << size << " inputs" << std::endl;
+    // for (unsigned i = 0; i < op_inputs.size(); i++) {
+    //   DLTensor* tensor = static_cast<DLTensor*>(op_inputs[i].v_handle);
+    //   std::cout << "Input " << i << " ndim=" << tensor->ndim << "shape=[";
+    //   for (unsigned j = 0; j < tensor->ndim; j++) {
+    //     std::cout << *(static_cast<int64_t*>(tensor->shape) + j) << " ";
+    //   }
+    //   std::cout << "]" << " datatype=" << tensor->dtype.code << "-" << tensor->dtype.bits << "-" << tensor->dtype.lanes << " stridesnull=" << (tensor->strides==nullptr) << " offset=" << tensor->byte_offset << std::endl;
+    // }
+
+    std::vector<void*> workspace_ptrs(workspace_offsets.size());
+    for (unsigned i = 0; i < workspace_offsets.size(); i++) {
+      workspace_ptrs[i] = static_cast<char*>(baseptr) + workspace_offsets[i];
+    }
+
+    clockwork::so::TVMBackendWorkspaceManager::Set(workspace_ptrs);
     int ret = (*f)(
-      const_cast<TVMValue*>(op_inputs.data()),
-      const_cast<int*>(op_tcodes.data()), 
+      op_inputs.data(),
+      op_tcodes.data(), 
       size
     );
+    clockwork::so::TVMBackendWorkspaceManager::Clear();
     CHECK_EQ(ret, 0) << TVMGetLastError();
   }
 
@@ -158,6 +178,7 @@ public:
 
   void call(void* baseptr) {
     for (unsigned i = 0; i < ops.size(); i++) {
+      // std::cout << "Op " << i << " has ";
       ops[i]->call(baseptr);
     }
   }

@@ -5,8 +5,9 @@ namespace clockwork {
 namespace tvmutil {	
 
 void initializeTVMCudaStream() {
-	cudaStream_t stream;
-	CUDA_CALL(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
+    CUDA_CALL(cudaSetDevice(0));
+	cudaStream_t stream;	
+	CUDA_CALL(cudaStreamCreate(&stream));
 	tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream = stream;
 	tvm::runtime::CUDAThreadEntry::ThreadLocal()->stream = stream;
 }

@@ -104,6 +104,12 @@ void LoadedCUDAFunc::operator()(tvm::runtime::TVMArgs args,
                 void** void_args) const {
   CUstream strm = static_cast<CUstream>(tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream);
   tvm::runtime::ThreadWorkLoad wl = source->thread_axis_cfg_.Extract(args);
+  // std::cout << "cuLaunchKernel " << wl.grid_dim(0) << " "
+  //                                << wl.grid_dim(1) << " "
+  //                                << wl.grid_dim(2) << " "
+  //                                << wl.block_dim(0) << " "
+  //                                << wl.block_dim(1) << " "
+  //                                << wl.block_dim(2) << std::endl;
   CUDA_LOG(
   CUresult result = cuLaunchKernel(
       f,
@@ -127,6 +133,7 @@ void LoadedCUDAFunc::operator()(tvm::runtime::TVMArgs args,
     os << "// func_name=" << source->info.name << "\n";
     LOG(FATAL) << os.str();
   }
+  // CUDA_CALL(cudaStreamSynchronize(static_cast<cudaStream_t>(strm)));
 }
 
 UnloadedCUDAFunc::UnloadedCUDAFunc(const std::string &name, const tvm::runtime::FunctionInfo &info) : name(name), info(info) {

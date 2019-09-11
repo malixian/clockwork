@@ -47,12 +47,14 @@ void* TVMBackendAllocWorkspaceHot(int device_type,
                                 int dtype_bits_hint) {
 	CHECK(device_type == kDLGPU) << "TVM Backend alloc non-GPU workspace";
 
-	// TODO: plug into managed memory
-	CUDA_CALL(cudaSetDevice(device_id));
+	// Previously this would have just been a call to cudaMalloc
+	// CUDA_CALL(cudaSetDevice(device_id));
+    // void* ptr;
+	// CUDA_CALL(cudaMalloc(&ptr, size));
+    // return ptr;
 
-	void* ptr;
-	CUDA_CALL(cudaMalloc(&ptr, size));
-	return ptr;
+    // Now we return explicitly set pointers
+    return TVMBackendWorkspaceManager::Next();
 }
 
 
@@ -60,8 +62,12 @@ int TVMBackendFreeWorkspaceHot(int device_type,
                              int device_id,
                              void* ptr) {
 	CHECK(device_type == kDLGPU) << "TVM Backend alloc non-GPU workspace";
-	CUDA_CALL(cudaSetDevice(device_id));
-	CUDA_CALL(cudaFree(ptr));
+	
+    // Previously this would have freed the associated cudaMalloc
+    // CUDA_CALL(cudaSetDevice(device_id));
+	// CUDA_CALL(cudaFree(ptr));
+
+    // Now it does nothing
 	return 0;
 }
 
@@ -169,6 +175,40 @@ void TVMHotSharedObject::unload() {
 	delete this;
 }
 
+
+struct WorkspaceState {
+    std::vector<void*>* ptrs = nullptr;
+    unsigned next = 0;
+    void Set(std::vector<void*> &newptrs) {
+        ptrs = &newptrs;
+        next = 0;
+    }
+    void Clear() {
+        ptrs = nullptr;
+        next = 0;
+    }
+    void* Next() {
+        if (ptrs == nullptr || next == ptrs->size()) {
+            return nullptr;
+        } else {
+            return (*ptrs)[next++];
+        }
+    }
+};
+
+thread_local WorkspaceState workspace;
+
+void TVMBackendWorkspaceManager::Set(std::vector<void*> &ptrs) {
+    workspace.Set(ptrs);
+}
+
+void TVMBackendWorkspaceManager::Clear() {
+    workspace.Clear();    
+}
+
+void* TVMBackendWorkspaceManager::Next() {
+    return workspace.Next();
+}
 
 }
 }

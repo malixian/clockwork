@@ -84,6 +84,13 @@ public:
   void unload();
 };
 
+class TVMBackendWorkspaceManager {
+public:
+  static void Set(std::vector<void*> &ptrs);
+  static void Clear();
+  static void* Next();
+};
+
 
 }
 }

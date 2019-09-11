@@ -3,6 +3,7 @@
  * \file graph_runtime.cc
  */
 #include "clockwork/tvm/decoupled_graph_runtime.h"
+#include <tvm/runtime/managed_cuda_device_api.h>
 
 #include <tvm/runtime/ndarray.h>
 #include <tvm/runtime/packed_func.h>
@@ -32,6 +33,7 @@ void DecoupledGraphRuntime::Run() {
     if (op_execs_[i]) op_execs_[i]();
   }
 }
+
 /*!
  * \brief Initialize the graph executor with graph and context.
  * \param graph_json The execution graph.
@@ -641,7 +643,7 @@ clockwork::binary::MinModel* DecoupledGraphRuntime::ExtractModelSpec() {
 
 
   clockwork::binary::MinModel* mm = new clockwork::binary::MinModel();
-  mm->total_memory = total_contiguous_size;
+  mm->total_memory = 256 * ((total_contiguous_size+255)/256);
   mm->weights_memory = weights_size;
 
 
@@ -649,6 +651,7 @@ clockwork::binary::MinModel* DecoupledGraphRuntime::ExtractModelSpec() {
   std::unordered_map<std::string, unsigned> cuda_functions;
 
   int skipped = 0;
+  uint64_t max_workspace_memory = 0;
   for (uint32_t nid = 0; nid < this->GetNumOfNodes(); ++nid) {
     const auto& inode = nodes_[nid];
     if (inode.op_type == "null") {
@@ -684,8 +687,30 @@ clockwork::binary::MinModel* DecoupledGraphRuntime::ExtractModelSpec() {
     }
     op.so_function = so_functions[inode.param.func_name];
 
+    // Run the operation to get workspace alloc size
+    ManagedCUDADeviceAPI::Global()->tracker.enabled = true;
+    op_execs_[nid]();
+    std::vector<WorkspaceAlloc> allocs = ManagedCUDADeviceAPI::Global()->tracker.get();
+    std::cout << "Op " << nid << " had " << allocs.size() << "workspace allocs (" << inode.param.func_name << ")" << std::endl;
+
+    int currentAllocOffset = mm->total_memory;
+    for (unsigned i = 0; i < allocs.size(); i++) {
+      if (allocs[i].isalloc) {
+        op.workspace_allocs.push_back(currentAllocOffset);
+        currentAllocOffset += 256 * ((allocs[i].size+255)/256); // Align to 256?
+      }
+    }
+    if (currentAllocOffset > max_workspace_memory) {
+      max_workspace_memory = currentAllocOffset;
+    }
+
+    ManagedCUDADeviceAPI::Global()->tracker.clear();
+    ManagedCUDADeviceAPI::Global()->tracker.enabled = false;
+
     mm->ops.push_back(op);
   }
+  mm->workspace_memory = max_workspace_memory;
+  mm->total_memory += max_workspace_memory;
 
 
   std::cout << "skipped " << skipped << std::endl;

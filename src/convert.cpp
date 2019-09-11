@@ -104,10 +104,6 @@ void convert(std::string model_so, std::string model_json, std::string model_par
 	params_out.write((const char*) ptr, size);
 	params_out.close();
 
-
-
-
-
 	// TODO: don't dump the ndarray, dump the actual bytes, 
 	// bypassing NDarray class
 }
