@@ -7,7 +7,7 @@
 #include <thread>
 #include <fstream>
 #include <istream>
-#include "clockwork/serializedmodel.h"
+#include "clockwork/modeldef.h"
 #include <dlpack/dlpack.h>
 #include <tvm/runtime/module.h>
 #include <tvm/runtime/registry.h>
@@ -74,7 +74,7 @@ void convert(std::string model_so, std::string model_json, std::string model_par
 
 
     tvm::runtime::PackedFunc extract_model = mod.GetFunction("extract_model_spec");
-    clockwork::binary::MinModel* minmodel = static_cast<clockwork::binary::MinModel*>((void*) extract_model());
+    clockwork::model::ModelDef* minmodel = static_cast<clockwork::model::ModelDef*>((void*) extract_model());
 
 
     std::ofstream outfile;

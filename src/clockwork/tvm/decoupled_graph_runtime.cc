@@ -543,7 +543,7 @@ std::function<void()> DecoupledGraphRuntime::CreateTVMOp(
 
 
 
-clockwork::binary::MinModel* DecoupledGraphRuntime::ExtractModelSpec() {
+clockwork::model::ModelDef* DecoupledGraphRuntime::ExtractModelSpec() {
   // First figure out storage offsets
   typedef struct data_entry_spec{
     unsigned id;
@@ -642,7 +642,7 @@ clockwork::binary::MinModel* DecoupledGraphRuntime::ExtractModelSpec() {
   }
 
 
-  clockwork::binary::MinModel* mm = new clockwork::binary::MinModel();
+  clockwork::model::ModelDef* mm = new clockwork::model::ModelDef();
   mm->total_memory = 256 * ((total_contiguous_size+255)/256);
   mm->weights_memory = weights_size;
 
@@ -659,13 +659,13 @@ clockwork::binary::MinModel* DecoupledGraphRuntime::ExtractModelSpec() {
       continue;
     };
 
-    clockwork::binary::Op op;
+    clockwork::model::OpDef op;
 
     // Get the DLTensor sizes for this op
     std::vector<DLTensor> args;
     for (const auto& e : inode.inputs) {
       storage_spec &spec = specs[ds[this->entry_id(e)].storage_id];
-      clockwork::binary::DLTensorDef d;
+      clockwork::model::DLTensorDef d;
       d.offset = spec.offset;
       d.shape = this->attrs_.shape[this->entry_id(e)];
       op.inputs.push_back(d);
@@ -673,7 +673,7 @@ clockwork::binary::MinModel* DecoupledGraphRuntime::ExtractModelSpec() {
     for (uint32_t index = 0; index < inode.param.num_outputs; ++index) {
       uint32_t eid = this->entry_id(nid, index);
       storage_spec &spec = specs[ds[eid].storage_id];
-      clockwork::binary::DLTensorDef d;
+      clockwork::model::DLTensorDef d;
       d.offset = spec.offset;
       d.shape = this->attrs_.shape[eid];
       op.inputs.push_back(d);

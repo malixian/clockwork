@@ -1,4 +1,4 @@
-#include "clockwork/memfile.h"
+#include "clockwork/model/memfile.h"
 #include "dmlc/logging.h"
 #include <unistd.h>
 #include <sys/syscall.h>

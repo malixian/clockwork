@@ -1,4 +1,4 @@
-#include "clockwork/cuda.h"
+#include "clockwork/model/cuda.h"
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include "clockwork/tvm/pack_args.h"

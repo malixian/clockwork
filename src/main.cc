@@ -7,7 +7,6 @@
 #include <thread>
 #include <fstream>
 #include <istream>
-#include "clockwork/serializedmodel.h"
 #include <dlpack/dlpack.h>
 #include <tvm/runtime/module.h>
 #include <tvm/runtime/registry.h>
@@ -22,8 +21,8 @@
 #include <chrono>
 #include "clockwork/util/util.h"
 #include "clockwork/util/tvm_util.h"
+#include <tvm/runtime/cuda_common.h>
 
-using namespace clockwork;
 
 struct ProfileData {
     std::chrono::high_resolution_clock::time_point cool, warm, malloced, hot, submitted, complete, warm2, warm2freed, cool2;
@@ -35,9 +34,9 @@ uint64_t nanos(std::chrono::high_resolution_clock::time_point t) {
 
 
 void loadmodel() {
-    tvmutil::initializeTVMCudaStream();
-    util::setCurrentThreadMaxPriority();
-    util::set_core(7);
+    clockwork::tvmutil::initializeTVMCudaStream();
+    clockwork::util::setCurrentThreadMaxPriority();
+    clockwork::util::set_core(7);
 
 	const int dtype_code = kDLFloat;
 	const int dtype_bits = 32;
@@ -48,12 +47,12 @@ void loadmodel() {
 	std::string model = "/home/jcmace/modelzoo/resnet18/tesla-m40_batchsize1/resnet18v2-batchsize1-optimized";
 
 
-    ColdDiskModel* cold = new ColdDiskModel(
+    clockwork::model::ColdModel* cold = clockwork::model::FromDisk(
             model + ".so",
             model + ".clockwork",
             model + ".clockwork_params"
         );
-    CoolModel* cool = cold->load();
+    clockwork::model::CoolModel* cool = cold->load();
 
 
 
@@ -61,7 +60,7 @@ void loadmodel() {
 
 
 
-    unsigned runs = 900000;
+    unsigned runs = 1000;
     std::vector<ProfileData> d(runs);
     for (unsigned i = 0; i < runs; i++) {
         if (i % 100 == 0) {
@@ -73,7 +72,7 @@ void loadmodel() {
         }
         d[i].cool = std::chrono::high_resolution_clock::now();
 
-        WarmModel* warm = cool->load();
+        clockwork::model::WarmModel* warm = cool->load();
         d[i].warm = std::chrono::high_resolution_clock::now();
 
         if (i == 0) {
@@ -81,7 +80,7 @@ void loadmodel() {
         }
         d[i].malloced = std::chrono::high_resolution_clock::now();
 
-        HotModel* hot = warm->load(ptr);
+        clockwork::model::HotModel* hot = warm->load(ptr);
         CUDA_CALL(cudaStreamSynchronize(tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream));
         d[i].hot = std::chrono::high_resolution_clock::now();
 

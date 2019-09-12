@@ -41,11 +41,10 @@ add_library(clockwork
 	src/clockwork/runtime.cpp
 	src/clockwork/threadpoolruntime.cpp
 	src/clockwork/manager.cc
-	src/clockwork/serializedmodel.cpp
-	src/clockwork/memfile.cpp
-	src/clockwork/model.cpp
-	src/clockwork/cuda.cpp
-	src/clockwork/so.cpp
+	src/clockwork/model/memfile.cpp
+	src/clockwork/model/model_impl.cpp
+	src/clockwork/model/cuda.cpp
+	src/clockwork/model/so.cpp
 	src/clockwork/tvm/decoupled_graph_runtime.cc
 )
 

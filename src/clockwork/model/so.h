@@ -12,7 +12,7 @@
 #include <unistd.h>
 #include <functional>
 #include "clockwork/tvm/runtime_base.h"
-#include "clockwork/cuda.h"
+#include "clockwork/model/cuda.h"
 
 namespace clockwork {
 namespace so {

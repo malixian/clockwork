@@ -1,4 +1,4 @@
-#include "clockwork/so.h"
+#include "clockwork/model/so.h"
 
 #include <cuda.h>
 #include <cuda_runtime.h>

@@ -15,7 +15,7 @@
 #include <dmlc/json.h>
 #include <tvm/runtime/ndarray.h>
 #include <tvm/runtime/packed_func.h>
-#include "clockwork/serializedmodel.h"
+#include "clockwork/modeldef.h"
 
 #include <vector>
 #include <string>
@@ -406,7 +406,7 @@ class DecoupledGraphRuntime : public ModuleNode {
   void SetConstParams(NDArray params);
 
 
-  clockwork::binary::MinModel* ExtractModelSpec();
+  clockwork::model::ModelDef* ExtractModelSpec();
 
   /*!
    * \brief Create a executtion function given input.
