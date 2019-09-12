@@ -7,7 +7,6 @@
 #include <thread>
 #include <fstream>
 #include <istream>
-#include "clockwork/modeldata.h"
 #include "clockwork/serializedmodel.h"
 #include <dlpack/dlpack.h>
 #include <tvm/runtime/module.h>
@@ -62,7 +61,7 @@ void loadmodel() {
 
 
 
-    unsigned runs = 1000;
+    unsigned runs = 900000;
     std::vector<ProfileData> d(runs);
     for (unsigned i = 0; i < runs; i++) {
         if (i % 100 == 0) {

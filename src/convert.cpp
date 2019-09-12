@@ -7,7 +7,6 @@
 #include <thread>
 #include <fstream>
 #include <istream>
-#include "clockwork/modeldata.h"
 #include "clockwork/serializedmodel.h"
 #include <dlpack/dlpack.h>
 #include <tvm/runtime/module.h>
