@@ -14,6 +14,9 @@
 #include <map>
 #include <unistd.h>
 
+#include "tbb/concurrent_hash_map.h"
+#include "tbb/concurrent_unordered_map.h"
+
 namespace clockwork {
 
   enum ModelStatus {
@@ -90,7 +93,7 @@ public:
         std::lock_guard<std::mutex> lock(mem_locks_[it.first]);
         CUDA_CALL(cudaSetDevice(it.first));
         CUDA_CALL(cudaFree(it.second.begin()->start));
-      }     
+      }
     }
 
   /* brief: mark the described block as owned by @param name */
@@ -271,9 +274,7 @@ public:
 
         if (!first->isfree) {
           count++;
-          mapLock_.lock();
           total_time = std::chrono::duration_cast<std::chrono::milliseconds>(evict_time - models_[first->owner].last_use).count();
-          mapLock_.unlock();
         }
 
         auto second = std::next(first);
@@ -282,9 +283,7 @@ public:
             total += second->size;
             if (!second->isfree) {
               count++;
-              mapLock_.lock();
               total_time = std::chrono::duration_cast<std::chrono::milliseconds>(evict_time - models_[second->owner].last_use).count();
-              mapLock_.unlock();
             }
           } else {
             break;
@@ -308,15 +307,11 @@ public:
       for (auto it = ret.first; it != ret.second; it++) {
         count++;
         if (!it->isfree) {
-          mapLock_.lock();
-          std::mutex& mlock = modelLocks_[it->owner];
+          this->modelLocks_.at(it->owner)->lock();
           Model& model = models_[it->owner];
-          mapLock_.unlock();
-
-          mlock.lock();
           model.status = ModelStatus::EVICTED;
           model.GetFunction("evicted")();
-          mlock.unlock();
+          this->modelLocks_.at(it->owner)->unlock();
         }
       }
 
@@ -336,16 +331,9 @@ public:
   private:
 
     // map from name to model and lock
-    std::map<std::string, Model> models_;
-    std::map<std::string, std::mutex> modelLocks_;
-
-    // lock for both models_ and modelLocks_ since we have reads and writes to
-    // both on multiple threads
-    std::mutex mapLock_;
-
-    // temp storage for loading from disk
-    std::mutex sourceLock_;
-    std::map<std::string, std::tuple<std::string*, std::string*, tvm::runtime::Module>> modelSource_;
+    tbb::concurrent_unordered_map<std::string, Model> models_;
+    tbb::concurrent_unordered_map<std::string, std::mutex*> modelLocks_;
+    tbb::concurrent_hash_map<std::string, std::tuple<std::string*, std::string*, tvm::runtime::Module>> modelSource_;
   };
 
 }  // namespace clockwork
