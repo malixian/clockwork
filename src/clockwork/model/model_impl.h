@@ -45,11 +45,17 @@ public:
 
 class ModelExec {
 public:
+	ModelDef &mm;
 	const int size;
 	std::vector<OpExec*> ops;
 
 	ModelExec(ModelDef &mm, clockwork::so::TVMWarmSharedObject* warm);
 	~ModelExec();
+
+	int inputsize();
+	int outputsize();
+	void setinput(void* baseptr, void* ptr);
+	void getoutput(void* baseptr, void* ptr);
 
 	void call(void* baseptr);
 };
@@ -110,6 +116,11 @@ public:
 
 	HotModelImpl(WarmModelImpl* warm, void* params);
 	~HotModelImpl();
+
+	int inputsize();
+	int outputsize();
+	void setinput(void* ptr);
+	void getoutput(void* ptr);
 
 	void call();
 	void unload();

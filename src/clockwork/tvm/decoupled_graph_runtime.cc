@@ -579,6 +579,7 @@ clockwork::model::ModelDef* DecoupledGraphRuntime::ExtractModelSpec() {
   for (uint32_t input_node_id : this->input_nodes_) {
     ds[input_node_id].is_input = true;
   }
+  ds[0].is_input = false; // Assume "data" is first input, exclude it from contiguous
 
   typedef struct storage_spec {
     storage_spec() : is_input(false), size(0) {}
@@ -663,10 +664,12 @@ clockwork::model::ModelDef* DecoupledGraphRuntime::ExtractModelSpec() {
 
     // Get the DLTensor sizes for this op
     std::vector<DLTensor> args;
+
     for (const auto& e : inode.inputs) {
       storage_spec &spec = specs[ds[this->entry_id(e)].storage_id];
       clockwork::model::DLTensorDef d;
       d.offset = spec.offset;
+      d.size = spec.size;
       d.shape = this->attrs_.shape[this->entry_id(e)];
       op.inputs.push_back(d);
     }
@@ -675,6 +678,7 @@ clockwork::model::ModelDef* DecoupledGraphRuntime::ExtractModelSpec() {
       storage_spec &spec = specs[ds[eid].storage_id];
       clockwork::model::DLTensorDef d;
       d.offset = spec.offset;
+      d.size = spec.size;
       d.shape = this->attrs_.shape[eid];
       op.inputs.push_back(d);
     }
@@ -693,10 +697,10 @@ clockwork::model::ModelDef* DecoupledGraphRuntime::ExtractModelSpec() {
     std::vector<WorkspaceAlloc> allocs = ManagedCUDADeviceAPI::Global()->tracker.get();
     std::cout << "Op " << nid << " had " << allocs.size() << "workspace allocs (" << inode.param.func_name << ")" << std::endl;
 
-    int currentAllocOffset = mm->total_memory;
+    int currentAllocOffset = 0;
     for (unsigned i = 0; i < allocs.size(); i++) {
       if (allocs[i].isalloc) {
-        op.workspace_allocs.push_back(currentAllocOffset);
+        op.workspace_allocs.push_back(mm->total_memory + currentAllocOffset);
         currentAllocOffset += 256 * ((allocs[i].size+255)/256); // Align to 256?
       }
     }
@@ -712,16 +716,50 @@ clockwork::model::ModelDef* DecoupledGraphRuntime::ExtractModelSpec() {
   mm->workspace_memory = max_workspace_memory;
   mm->total_memory += max_workspace_memory;
 
+  // Get inputs and outputs data
 
-  std::cout << "skipped " << skipped << std::endl;
-  std::cout << "there are " << op_execs_.size() << " op_execs_" << std::endl;
-  std::cout << "there are " << nodes_.size() << " nodes_" << std::endl;
-  std::cout << "there are " << this->GetNumOfNodes() << " numofnodes" << std::endl;
+  for (unsigned i = 0; i < outputs_.size(); i++) {
+    uint32_t eid = this->entry_id(outputs_[i]);
+    storage_spec &spec = specs[ds[eid].storage_id];
+    clockwork::model::DLTensorDef d;
+    d.offset = spec.offset;
+    d.size = spec.size;
+    d.shape = this->attrs_.shape[eid];
+    mm->outputs.push_back(d);
+  }
+  
+  // Assume the only input is "data" at ds[0]
+  {
+    storage_spec &spec = specs[ds[0].storage_id];
+    clockwork::model::DLTensorDef d;
+    d.offset = spec.offset;
+    d.size = spec.size;
+    d.shape = this->attrs_.shape[0];
+    mm->inputs.push_back(d);
+  }
 
-  std::cout << "mm has " << mm->total_memory << " total memory" << std::endl;
-  std::cout << "mm has " << mm->weights_memory << " weights memory" << std::endl;
-  std::cout << "mm has " << mm->so_functions.size() << " so functions" << std::endl;
-  std::cout << "mm has " << mm->ops.size() << " ops" << std::endl;
+  std::cout << "model has " << mm->total_memory << " total memory" << std::endl;
+  std::cout << "model has " << mm->weights_memory << " weights memory" << std::endl;
+  std::cout << "model has " << mm->workspace_memory << " intra-op memory" << std::endl;
+  std::cout << "model has " << (total_contiguous_size - mm->weights_memory) << " inter-op memory" << std::endl;
+  std::cout << "model has " << mm->so_functions.size() << " so functions" << std::endl;
+  std::cout << "model has " << mm->ops.size() << " ops" << std::endl;
+  std::cout << "model has " << mm->inputs.size() << " inputs" << std::endl;
+  for (unsigned i = 0; i < mm->inputs.size(); i++) {
+    std::cout << "  input " << i << " offset " << mm->inputs[i].offset << " size " << mm->inputs[i].size << " shape [ ";
+    for (unsigned j = 0; j < mm->inputs[i].shape.size(); j++) {
+      std::cout << mm->inputs[i].shape[j] << " ";
+    }
+    std::cout << "]" << std::endl;
+  }
+  std::cout << "model has " << mm->outputs.size() << " outputs" << std::endl;
+  for (unsigned i = 0; i < mm->outputs.size(); i++) {
+    std::cout << "  output " << i << " offset " << mm->outputs[i].offset << " size " << mm->outputs[i].size << " shape [ ";
+    for (unsigned j = 0; j < mm->outputs[i].shape.size(); j++) {
+      std::cout << mm->outputs[i].shape[j] << " ";
+    }
+    std::cout << "]" << std::endl;
+  }
 
   return mm;
 }

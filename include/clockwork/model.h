@@ -8,6 +8,11 @@ namespace model {
 
 class HotModel {
 public:
+	virtual int inputsize() = 0;
+	virtual int outputsize() = 0;
+	virtual void setinput(void* ptr) = 0;
+	virtual void getoutput(void* ptr) = 0;
+
 	virtual void unload() = 0;
 	virtual void call() = 0;
 };

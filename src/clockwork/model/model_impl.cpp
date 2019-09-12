@@ -81,7 +81,7 @@ void OpExec::call(void* baseptr) {
 	CHECK_EQ(ret, 0) << TVMGetLastError();
 }
 
-ModelExec::ModelExec(ModelDef &mm, clockwork::so::TVMWarmSharedObject* warm) : ops(mm.ops.size()), size(mm.total_memory) {
+ModelExec::ModelExec(ModelDef &mm, clockwork::so::TVMWarmSharedObject* warm) : mm(mm), ops(mm.ops.size()), size(mm.total_memory) {
 	// Extract the SO functions
 	std::vector<BackendPackedCFunc> fs(mm.so_functions.size());
 	for (unsigned i = 0; i < mm.so_functions.size(); i++) {
@@ -91,14 +91,55 @@ ModelExec::ModelExec(ModelDef &mm, clockwork::so::TVMWarmSharedObject* warm) : o
 	for (unsigned i = 0; i < mm.ops.size(); i++) {
 		ops[i] = new OpExec(mm.ops[i], fs[mm.ops[i].so_function]);
 
-		// TODO: no need at the moment, but later, eager load cuda functions and workspace allocs
+		// TODO: no need at the moment, but later, eager load cuda functions
 	}
+
+	// TODO: should be able to handle more than one input and output
+	CHECK(mm.inputs.size() == 1) << "Expected model to have 1 input, but found " << mm.inputs.size();
+	CHECK(mm.outputs.size() == 1) << "Expected model to have 1 input, but found " << mm.inputs.size();
 }
 
 ModelExec::~ModelExec() {
 	for (unsigned i = 0; i < ops.size(); i++) {
 		delete ops[i];
 	}
+}
+
+int ModelExec::inputsize() {
+	return mm.inputs[0].size;
+}
+
+int ModelExec::outputsize() {
+	return mm.outputs[0].size;
+}
+
+void ModelExec::setinput(void* baseptr, void* inputptr) {	
+	void* dstptr = static_cast<char*>(baseptr) + mm.inputs[0].offset;
+	cudaStream_t stream = tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream;
+	CUDA_CALL(
+		cudaMemcpyAsync(
+			dstptr,
+			inputptr, 
+			mm.inputs[0].size, 
+			cudaMemcpyHostToDevice,
+			stream
+		)
+	)
+}
+
+void ModelExec::getoutput(void* baseptr, void* outputptr) {
+	void* srcptr = static_cast<char*>(baseptr) + mm.outputs[0].offset;
+	cudaStream_t stream = tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream;
+	CUDA_CALL(
+		cudaMemcpyAsync(
+			srcptr,
+			outputptr, 
+			mm.outputs[0].size, 
+			cudaMemcpyDeviceToHost,
+			stream
+		)
+	)
+
 }
 
 void ModelExec::call(void* baseptr) {
@@ -201,6 +242,22 @@ HotModelImpl::HotModelImpl(WarmModelImpl* warm, void* params) : params(params), 
 
 HotModelImpl::~HotModelImpl() {
 	so->unload();
+}
+
+int HotModelImpl::inputsize() {
+	return clockwork->inputsize();
+}
+
+int HotModelImpl::outputsize() {
+	return clockwork->outputsize();
+}
+
+void HotModelImpl::setinput(void* ptr) {
+	clockwork->setinput(params, ptr);
+}
+
+void HotModelImpl::getoutput(void* ptr) {
+	clockwork->getoutput(params, ptr);
 }
 
 void HotModelImpl::call() {

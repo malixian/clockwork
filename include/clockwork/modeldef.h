@@ -12,6 +12,7 @@ namespace model {
 
 struct DLTensorDef {
 	uint64_t offset;
+    uint64_t size;
 	std::vector<int64_t> shape;
 
     PODS_SERIALIZABLE(1,         
@@ -41,13 +42,17 @@ struct ModelDef {
 	std::vector<std::string> so_functions;
 	std::vector<std::string> cuda_functions;
 	std::vector<OpDef> ops;
+    std::vector<DLTensorDef> inputs;
+    std::vector<DLTensorDef> outputs;
 
     PODS_SERIALIZABLE(1,         
         PODS_MDR(total_memory),
         PODS_MDR(weights_memory),
         PODS_MDR(so_functions),
         PODS_MDR(cuda_functions),
-        PODS_MDR(ops)
+        PODS_MDR(ops),
+        PODS_MDR(inputs),
+        PODS_MDR(outputs)
     )
 
     static void ReadFrom(const std::string &data, ModelDef &def) {

@@ -25,6 +25,7 @@
 
 
 struct ProfileData {
+    float params, input, exec, output;
     std::chrono::high_resolution_clock::time_point cool, warm, malloced, hot, submitted, complete, warm2, warm2freed, cool2;
 };
 
@@ -58,6 +59,17 @@ void loadmodel() {
 
     void* ptr;
 
+    cudaEvent_t prehot, posthot, postinput, postcall, postoutput;
+    CUDA_CALL(cudaEventCreate(&prehot));
+    CUDA_CALL(cudaEventCreate(&posthot));
+    CUDA_CALL(cudaEventCreate(&postinput));
+    CUDA_CALL(cudaEventCreate(&postcall));
+    CUDA_CALL(cudaEventCreate(&postoutput));
+
+    cudaStream_t stream = tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream;
+
+    void* input;
+    void* output;
 
 
     unsigned runs = 1000;
@@ -80,14 +92,28 @@ void loadmodel() {
         }
         d[i].malloced = std::chrono::high_resolution_clock::now();
 
+        CUDA_CALL(cudaEventRecord(prehot, stream));
         clockwork::model::HotModel* hot = warm->load(ptr);
-        CUDA_CALL(cudaStreamSynchronize(tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream));
-        d[i].hot = std::chrono::high_resolution_clock::now();
+        //CUDA_CALL(cudaStreamSynchronize(stream));
+        //d[i].hot = std::chrono::high_resolution_clock::now();
 
+        if (i == 0) {
+            CUDA_CALL(cudaMallocHost(&input, hot->inputsize()));
+            CUDA_CALL(cudaMallocHost(&output, hot->outputsize()));
+        }
+        CUDA_CALL(cudaEventRecord(posthot, stream));
+        hot->setinput(input);
+
+        CUDA_CALL(cudaEventRecord(postinput, stream));
         hot->call();
-        d[i].submitted = std::chrono::high_resolution_clock::now();
+        //d[i].submitted = std::chrono::high_resolution_clock::now();
 
-        CUDA_CALL(cudaStreamSynchronize(tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream));
+        CUDA_CALL(cudaEventRecord(postcall, stream));
+        hot->getoutput(output);
+        CUDA_CALL(cudaEventRecord(postoutput, stream));
+
+
+        CUDA_CALL(cudaStreamSynchronize(stream));
         d[i].complete = std::chrono::high_resolution_clock::now();
 
         hot->unload();
@@ -97,6 +123,11 @@ void loadmodel() {
 
         warm->unload();
         d[i].cool2 = std::chrono::high_resolution_clock::now();
+
+        CUDA_CALL(cudaEventElapsedTime(&(d[i].params), prehot, posthot));
+        CUDA_CALL(cudaEventElapsedTime(&(d[i].input), posthot, postinput));
+        CUDA_CALL(cudaEventElapsedTime(&(d[i].exec), postinput, postcall));
+        CUDA_CALL(cudaEventElapsedTime(&(d[i].output), postcall, postoutput));
     }
     CUDA_CALL(cudaFree(ptr));
 
@@ -105,9 +136,11 @@ void loadmodel() {
         << "t" << "\t"
         << "cool->warm" << "\t"
         << "warm->malloced" << "\t"
-        << "malloced->hot" << "\t"
-        << "hot->submitted" << "\t"
-        << "submitted->complete" << "\t"
+        << "cuda-params" << "\t"
+        << "cuda-input" << "\t"
+        << "cuda-exec" << "\t"
+        << "cuda-output" << "\t"
+        << "malloced->complete" << "\t"
         << "complete->warm2" << "\t"
         << "warm2->freed" << "\t"
         << "freed->cool" << "\n";
@@ -116,9 +149,11 @@ void loadmodel() {
             << nanos(d[i].cool) << "\t"
             << nanos(d[i].warm) - nanos(d[i].cool) << "\t"
             << nanos(d[i].malloced) - nanos(d[i].warm) << "\t"
-            << nanos(d[i].hot) - nanos(d[i].malloced) << "\t"
-            << nanos(d[i].submitted) - nanos(d[i].hot) << "\t"
-            << nanos(d[i].complete) - nanos(d[i].submitted) << "\t"
+            << uint64_t(d[i].params * 1000000) << "\t"
+            << uint64_t(d[i].input * 1000000) << "\t"
+            << uint64_t(d[i].exec * 1000000) << "\t"
+            << uint64_t(d[i].output * 1000000) << "\t"
+            << nanos(d[i].complete) - nanos(d[i].malloced) << "\t"
             << nanos(d[i].warm2) - nanos(d[i].complete) << "\t"
             << nanos(d[i].warm2freed) - nanos(d[i].warm2) << "\t"
             << nanos(d[i].cool2) - nanos(d[i].warm2freed) << "\n";
