@@ -17,7 +17,7 @@
 #include <pods/buffers.h>
 #include <pods/streams.h>
 #include "clockwork/tvm/decoupled_graph_runtime.h"
-#include "clockwork/pagedmodeldef.h"
+#include "clockwork-convert/convert_to_paged.h"
 
 using namespace clockwork;
 

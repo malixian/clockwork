@@ -72,7 +72,8 @@ target_link_libraries(
 )
 
 add_executable (convert
-	src/convert.cpp
+	src/clockwork-convert/convert.cpp
+	src/clockwork-convert/convert_to_paged.h
 )
 
 target_link_libraries(
