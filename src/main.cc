@@ -22,6 +22,7 @@
 #include "clockwork/util/util.h"
 #include "clockwork/util/tvm_util.h"
 #include <tvm/runtime/cuda_common.h>
+#include "clockwork/model/memory.h"
 
 
 struct ProfileData {

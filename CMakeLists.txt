@@ -45,6 +45,7 @@ add_library(clockwork
 	src/clockwork/model/model_impl.cpp
 	src/clockwork/model/cuda.cpp
 	src/clockwork/model/so.cpp
+	src/clockwork/model/memory.cpp
 	src/clockwork/tvm/decoupled_graph_runtime.cc
 )
 
@@ -90,7 +91,7 @@ add_executable (testmemory
 )
 
 target_link_libraries(
-	convert
+	testmemory
 	clockwork
 	Threads::Threads
 	dl
@@ -102,6 +103,7 @@ target_link_libraries(
 
 add_executable (tests
 	test/tests.cpp
+	test/clockwork/model/testmemory.cpp
 )
 
 target_link_libraries(
