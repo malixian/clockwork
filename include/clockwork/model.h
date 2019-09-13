@@ -2,11 +2,13 @@
 #define _CLOCKWORK_MODEL_H_
 
 #include <string>
+#include <vector>
 
 namespace clockwork{
 namespace model {
 
-class HotModel {
+// A model that can be executed
+class ExecModel {
 public:
 	virtual int inputsize() = 0;
 	virtual int outputsize() = 0;
@@ -17,19 +19,32 @@ public:
 	virtual void call() = 0;
 };
 
-class WarmModel {
+// A model that has loaded its GPU code and its params into GPU memory, and is nearly executable
+// To be executable, all that remains is to give the hotmodel the temporary GPU workspace
+// memory that it needs for intermediate calculations
+class HotModel {
 public:
-	virtual int size() = 0;
-	virtual HotModel* load(void* ptr) = 0;
+	virtual int num_workspace_pages(int pagesize) = 0;
+	virtual ExecModel* load(std::vector<char*> &workspace_pages) = 0;
 	virtual void unload() = 0;
 };
 
+// A model that has been deserialized and instantiated into memory, but not to GPU yet
+class WarmModel {
+public:
+	virtual int num_params_pages(int pagesize) = 0;
+	virtual HotModel* load(std::vector<char*> &params_pages) = 0;
+	virtual void unload() = 0;
+};
+
+// A model whose binary data is loaded into memory but not deserialized or instantiated
 class CoolModel {
 public:
 	virtual WarmModel* load() = 0;
 	virtual void unload() = 0;
 };
 
+// A model that is completely unloaded, e.g. just the names of files
 class ColdModel {
 public:
 	virtual CoolModel* load() = 0;

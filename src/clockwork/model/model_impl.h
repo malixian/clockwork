@@ -24,11 +24,8 @@ typedef int (*BackendPackedCFunc)(void* args, int* type_codes, int num_args);
 /** Implementation of TVM op */
 class OpExec {
 public:
-	OpDef &op;
-
-	std::vector<uint64_t> workspace_offsets;
+	PageMappedOpDef &op;
   
-	std::vector<uint64_t> offsets;
 	std::vector<DLTensor*> input_tensors;
 	std::vector<TVMValue> op_inputs;
 	std::vector<int> op_tcodes;
@@ -36,28 +33,30 @@ public:
 
 	BackendPackedCFunc f;
 
-	OpExec(OpDef &op, BackendPackedCFunc f);
+	OpExec(PageMappedOpDef &op, BackendPackedCFunc f);
 	~OpExec();
 
-	void call(void* baseptr);
+	void call(std::vector<char*> &pages);
 
 };
 
 class ModelExec {
 public:
-	ModelDef &mm;
-	const int size;
+	PageMappedModelDef &mm;
 	std::vector<OpExec*> ops;
 
-	ModelExec(ModelDef &mm, clockwork::so::TVMWarmSharedObject* warm);
+	ModelExec(PageMappedModelDef &mm, clockwork::so::TVMWarmSharedObject* warm);
 	~ModelExec();
+
+	int num_params_pages(int pagesize);
+	int num_exec_pages(int pagesize);
 
 	int inputsize();
 	int outputsize();
-	void setinput(void* baseptr, void* ptr);
-	void getoutput(void* baseptr, void* ptr);
+	void setinput(std::vector<char*> &pages, void* ptr);
+	void getoutput(std::vector<char*> &pages, void* ptr);
 
-	void call(void* baseptr);
+	void call(std::vector<char*> &pages);
 };
 
 class ColdDiskModelImpl : public ColdModel {
@@ -73,7 +72,7 @@ class CoolModelImpl : public CoolModel {
 public:
 	const Memfile so;
 	std::string clockwork;
-	void* params; // cuda pinned host memory
+	char* params; // cuda pinned host memory
 	int paramsSize;
 
 	CoolModelImpl(ColdDiskModelImpl* cold);
@@ -90,32 +89,45 @@ public:
 // TODO: pin params in memory as void*
 class WarmModelImpl : public WarmModel {
 public:
-	model::ModelDef clockwork_spec;
+	model::PageMappedModelDef clockwork_spec;
 	ModelExec* clockwork;
 	so::TVMWarmSharedObject* so;
-	void* params;
+	char* params;
 	int paramsSize;
 	
 
 	WarmModelImpl(CoolModelImpl* cool);
 	~WarmModelImpl();
 
-	int size();
-	HotModel* load(void* ptr);
-
+	int num_params_pages(int pagesize);
+	HotModel* load(std::vector<char*> &params_pages);
 	void unload();
 
 };
 
-/** A model that's ready to be inferenced */
+/** A model that's nearly ready to be inferenced */
 class HotModelImpl : public HotModel {
 public:
 	ModelExec* clockwork;
-	void* params;
+	std::vector<char*> params_pages;
 	so::TVMHotSharedObject* so;
 
-	HotModelImpl(WarmModelImpl* warm, void* params);
+	HotModelImpl(WarmModelImpl* warm, std::vector<char*> params_pages);
 	~HotModelImpl();
+
+	int num_workspace_pages(int pagesize);
+	ExecModel* load(std::vector<char*> &workspace_pages);
+	void unload();
+};
+
+/** A model that has been given its scratch workspace and can execute */
+class ExecModelImpl : public ExecModel {
+public:
+	ModelExec* clockwork;
+	std::vector<char*> pages;
+
+	ExecModelImpl(HotModelImpl* hot, std::vector<char*> &workspace_pages);
+	~ExecModelImpl();
 
 	int inputsize();
 	int outputsize();
@@ -124,6 +136,7 @@ public:
 
 	void call();
 	void unload();
+
 };
 
 }

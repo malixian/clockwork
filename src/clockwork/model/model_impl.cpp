@@ -21,9 +21,8 @@ ColdModel* FromDisk(std::string so, std::string clockwork, std::string params) {
 	return new ColdDiskModelImpl(so, clockwork, params);
 }
 
-OpExec::OpExec(OpDef &op, BackendPackedCFunc f) : op(op), f(f) {
+OpExec::OpExec(PageMappedOpDef &op, BackendPackedCFunc f) : op(op), f(f) {
     size = op.inputs.size();
-    offsets.resize(size);
     op_inputs.resize(size);
     op_tcodes.resize(size);
     input_tensors.resize(size);
@@ -37,17 +36,10 @@ OpExec::OpExec(OpDef &op, BackendPackedCFunc f) : op(op), f(f) {
       input->shape = op.inputs[i].shape.data();
       input->strides = nullptr;
       input->byte_offset = 0;
-
-      offsets[i] = op.inputs[i].offset;
       
       input_tensors[i] = input;
       op_inputs[i].v_handle = input;
       op_tcodes[i] = kArrayHandle;
-    }	
-
-    workspace_offsets.resize(op.workspace_allocs.size());
-    for (unsigned i = 0; i < op.workspace_allocs.size(); i++) {
-    	workspace_offsets[i] = op.workspace_allocs[i].offset;
     }
 }
 
@@ -57,9 +49,9 @@ OpExec::~OpExec() {
     }
 }
 
-void OpExec::call(void* baseptr) {
+void OpExec::call(std::vector<char*> &pages) {
 	for (unsigned i = 0; i < size; i++) {
-	  input_tensors[i]->data = static_cast<char*>(baseptr) + offsets[i];
+		input_tensors[i]->data = pages[op.inputs[i].page] + op.inputs[i].page_offset;
 	}
 
 	// std::cout << size << " inputs" << std::endl;
@@ -72,12 +64,12 @@ void OpExec::call(void* baseptr) {
 	//   std::cout << "]" << " datatype=" << tensor->dtype.code << "-" << tensor->dtype.bits << "-" << tensor->dtype.lanes << " stridesnull=" << (tensor->strides==nullptr) << " offset=" << tensor->byte_offset << std::endl;
 	// }
 
-	std::vector<void*> workspace_ptrs(workspace_offsets.size());
-	for (unsigned i = 0; i < workspace_offsets.size(); i++) {
-	  workspace_ptrs[i] = static_cast<char*>(baseptr) + workspace_offsets[i];
+	std::vector<void*> workspace_ptrs(op.workspace_allocs.size());
+	for (unsigned i = 0; i < op.workspace_allocs.size(); i++) {
+		workspace_ptrs[i] = pages[op.workspace_allocs[i].page] + op.workspace_allocs[i].page_offset;
 	}
-
 	clockwork::so::TVMBackendWorkspaceManager::Set(workspace_ptrs);
+
 	int ret = (*f)(
 	  op_inputs.data(),
 	  op_tcodes.data(), 
@@ -87,7 +79,7 @@ void OpExec::call(void* baseptr) {
 	CHECK_EQ(ret, 0) << TVMGetLastError();
 }
 
-ModelExec::ModelExec(ModelDef &mm, clockwork::so::TVMWarmSharedObject* warm) : mm(mm), ops(mm.ops.size()), size(mm.total_memory) {
+ModelExec::ModelExec(PageMappedModelDef &mm, clockwork::so::TVMWarmSharedObject* warm) : mm(mm), ops(mm.ops.size()) {
 	// Extract the SO functions
 	std::vector<BackendPackedCFunc> fs(mm.so_functions.size());
 	for (unsigned i = 0; i < mm.so_functions.size(); i++) {
@@ -111,6 +103,24 @@ ModelExec::~ModelExec() {
 	}
 }
 
+int ModelExec::num_params_pages(int pagesize) {
+	CHECK(pagesize == mm.configured_page_size) 
+		<< "Clockwork model was configured with wrong page size, found " 
+		<< mm.configured_page_size 
+		<< ", expected " 
+		<< pagesize;
+	return mm.weights_pages.size();
+}
+
+int ModelExec::num_exec_pages(int pagesize) {
+	CHECK(pagesize == mm.configured_page_size) 
+		<< "Clockwork model was configured with wrong page size, found " 
+		<< mm.configured_page_size 
+		<< ", expected " 
+		<< pagesize;
+	return mm.total_pages - mm.weights_pages.size();
+}
+
 int ModelExec::inputsize() {
 	return mm.inputs[0].size;
 }
@@ -119,8 +129,8 @@ int ModelExec::outputsize() {
 	return mm.outputs[0].size;
 }
 
-void ModelExec::setinput(void* baseptr, void* inputptr) {	
-	void* dstptr = static_cast<char*>(baseptr) + mm.inputs[0].offset;
+void ModelExec::setinput(std::vector<char*> &pages, void* inputptr) {
+	void* dstptr = pages[mm.inputs[0].page] + mm.inputs[0].page_offset;
 	cudaStream_t stream = tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream;
 	CUDA_CALL(
 		cudaMemcpyAsync(
@@ -133,8 +143,8 @@ void ModelExec::setinput(void* baseptr, void* inputptr) {
 	)
 }
 
-void ModelExec::getoutput(void* baseptr, void* outputptr) {
-	void* srcptr = static_cast<char*>(baseptr) + mm.outputs[0].offset;
+void ModelExec::getoutput(std::vector<char*> &pages, void* outputptr) {
+	void* srcptr = pages[mm.outputs[0].page] + mm.outputs[0].page_offset;
 	cudaStream_t stream = tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream;
 	CUDA_CALL(
 		cudaMemcpyAsync(
@@ -148,10 +158,9 @@ void ModelExec::getoutput(void* baseptr, void* outputptr) {
 
 }
 
-void ModelExec::call(void* baseptr) {
+void ModelExec::call(std::vector<char*> &pages) {
 	for (unsigned i = 0; i < ops.size(); i++) {
-	  // std::cout << "Op " << i << " has ";
-	  ops[i]->call(baseptr);
+	  ops[i]->call(pages);
 	}
 }
 
@@ -197,7 +206,7 @@ WarmModelImpl::WarmModelImpl(CoolModelImpl* cool) {
 	so = new so::TVMWarmSharedObject(cool->so.filename);
 
 	// Deserialize minmodel data structure
-	ModelDef::ReadFrom(cool->clockwork, clockwork_spec);
+	PageMappedModelDef::ReadFrom(cool->clockwork, this->clockwork_spec);
 	this->clockwork = new ModelExec(clockwork_spec, so);
 
 	// Don't do anything with params yet
@@ -210,30 +219,34 @@ WarmModelImpl::~WarmModelImpl() {
 	delete this->clockwork;
 }
 
-int WarmModelImpl::size() {
-	return clockwork->size;
+int WarmModelImpl::num_params_pages(int pagesize) {
+	return clockwork->num_params_pages(pagesize);
 }
 
-HotModel* WarmModelImpl::load(void* ptr) {
-	return new HotModelImpl(this, ptr);
+HotModel* WarmModelImpl::load(std::vector<char*> &params_pages) {
+	return new HotModelImpl(this, params_pages);
 }
 
 void WarmModelImpl::unload() {
 	delete this;
 }
 
-HotModelImpl::HotModelImpl(WarmModelImpl* warm, void* params) : params(params), clockwork(warm->clockwork) {
+HotModelImpl::HotModelImpl(WarmModelImpl* warm, std::vector<char*> params_pages) : params_pages(params_pages), clockwork(warm->clockwork) {
 	// Do the CUDA memcpy
 	cudaStream_t stream = tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream;
-	CUDA_CALL(
-		cudaMemcpyAsync(
-			params, 
-			warm->params, 
-			warm->paramsSize, 
-			cudaMemcpyHostToDevice,
-			stream
+
+	for (unsigned i = 0; i < warm->clockwork_spec.weights_pages.size(); i++) {
+		PageDef &def = warm->clockwork_spec.weights_pages[i];
+		CUDA_CALL(
+			cudaMemcpyAsync(
+				params_pages[i],                // dstptr
+				warm->params + def.base_offset, // srcptr
+				def.size,                       // size 
+				cudaMemcpyHostToDevice,
+				stream
+			)
 		)
-	)
+	}
 
 	so = warm->so->load();  // Loads CUDA code into memory
 }
@@ -242,27 +255,51 @@ HotModelImpl::~HotModelImpl() {
 	so->unload();
 }
 
-int HotModelImpl::inputsize() {
-	return clockwork->inputsize();
+int HotModelImpl::num_workspace_pages(int pagesize) {
+	return clockwork->num_exec_pages(pagesize);
 }
 
-int HotModelImpl::outputsize() {
-	return clockwork->outputsize();
-}
-
-void HotModelImpl::setinput(void* ptr) {
-	clockwork->setinput(params, ptr);
-}
-
-void HotModelImpl::getoutput(void* ptr) {
-	clockwork->getoutput(params, ptr);
-}
-
-void HotModelImpl::call() {
-	clockwork->call(params);
+ExecModel* HotModelImpl::load(std::vector<char*> &workspace_pages) {
+	return new ExecModelImpl(this, workspace_pages);
 }
 
 void HotModelImpl::unload() {
+	delete this;
+}
+
+ExecModelImpl::ExecModelImpl(HotModelImpl* hot, std::vector<char*> &workspace_pages) : clockwork(hot->clockwork) {
+	pages.reserve(hot->params_pages.size() + workspace_pages.size());
+	for (unsigned i = 0; i < hot->params_pages.size(); i++) {
+		pages.push_back(hot->params_pages[i]);
+	}
+	for (unsigned i = 0; i < workspace_pages.size(); i++) {
+		pages.push_back(workspace_pages[i]);
+	}
+}
+
+ExecModelImpl::~ExecModelImpl() {}
+
+int ExecModelImpl::inputsize() {
+	return clockwork->inputsize();
+}
+
+int ExecModelImpl::outputsize() {
+	return clockwork->outputsize();
+}
+
+void ExecModelImpl::setinput(void* ptr) {
+	clockwork->setinput(pages, ptr);
+}
+
+void ExecModelImpl::getoutput(void* ptr) {
+	clockwork->getoutput(pages, ptr);
+}
+
+void ExecModelImpl::call() {
+	clockwork->call(pages);
+}
+
+void ExecModelImpl::unload() {
 	delete this;
 }
 

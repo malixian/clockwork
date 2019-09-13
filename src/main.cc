@@ -27,7 +27,7 @@
 
 struct ProfileData {
     float params, input, exec, output;
-    std::chrono::high_resolution_clock::time_point cool, warm, malloced, hot, submitted, complete, warm2, warm2freed, cool2;
+    std::chrono::high_resolution_clock::time_point cool, warm, hot, submitted, complete, warm2, cool2;
 };
 
 uint64_t nanos(std::chrono::high_resolution_clock::time_point t) {
@@ -46,7 +46,8 @@ void loadmodel() {
 	const int device_type = kDLGPU;
 	const int device_id = 0;
 
-	std::string model = "/home/jcmace/modelzoo/resnet50/tesla-m40_batchsize1/tvm-model";
+	// std::string model = "/home/jcmace/modelzoo/resnet50/tesla-m40_batchsize1/tvm-model";
+    std::string model = "/home/jcmace/modelzoo/resnet18/tesla-m40_batchsize1/resnet18v2-batchsize1-optimized";
 
 
     clockwork::model::ColdModel* cold = clockwork::model::FromDisk(
@@ -57,8 +58,9 @@ void loadmodel() {
     clockwork::model::CoolModel* cool = cold->load();
 
 
-
-    void* ptr;
+    int page_size = 16 * 1024 * 1024;
+    std::vector<char*> params_pages;
+    std::vector<char*> workspace_pages;
 
     cudaEvent_t prehot, posthot, postinput, postcall, postoutput;
     CUDA_CALL(cudaEventCreate(&prehot));
@@ -73,7 +75,7 @@ void loadmodel() {
     void* output;
 
 
-    unsigned runs = 10000;
+    unsigned runs = 1000;
     std::vector<ProfileData> d(runs);
     for (unsigned i = 0; i < runs; i++) {
         if (i % 100 == 0) {
@@ -89,38 +91,49 @@ void loadmodel() {
         d[i].warm = std::chrono::high_resolution_clock::now();
 
         if (i == 0) {
-            CUDA_CALL(cudaMalloc(&ptr, warm->size()));
+            for (unsigned j = 0; j < warm->num_params_pages(page_size); j++) {
+                void* ptr;
+                CUDA_CALL(cudaMalloc(&ptr, page_size));
+                params_pages.push_back(static_cast<char*>(ptr));
+            }
         }
-        d[i].malloced = std::chrono::high_resolution_clock::now();
 
         CUDA_CALL(cudaEventRecord(prehot, stream));
-        clockwork::model::HotModel* hot = warm->load(ptr);
+        clockwork::model::HotModel* hot = warm->load(params_pages);
         //CUDA_CALL(cudaStreamSynchronize(stream));
         //d[i].hot = std::chrono::high_resolution_clock::now();
 
         if (i == 0) {
-            CUDA_CALL(cudaMallocHost(&input, hot->inputsize()));
-            CUDA_CALL(cudaMallocHost(&output, hot->outputsize()));
+            for (unsigned j = 0; j < hot->num_workspace_pages(page_size); j++) {
+                void* ptr;
+                CUDA_CALL(cudaMalloc(&ptr, page_size));
+                workspace_pages.push_back(static_cast<char*>(ptr));
+            }
+        }
+        clockwork::model::ExecModel* exec = hot->load(workspace_pages);
+
+        if (i == 0) {
+            CUDA_CALL(cudaMallocHost(&input, exec->inputsize()));
+            CUDA_CALL(cudaMallocHost(&output, exec->outputsize()));
         }
         CUDA_CALL(cudaEventRecord(posthot, stream));
-        hot->setinput(input);
+        exec->setinput(input);
 
         CUDA_CALL(cudaEventRecord(postinput, stream));
-        hot->call();
+        exec->call();
         //d[i].submitted = std::chrono::high_resolution_clock::now();
 
         CUDA_CALL(cudaEventRecord(postcall, stream));
-        hot->getoutput(output);
+        exec->getoutput(output);
         CUDA_CALL(cudaEventRecord(postoutput, stream));
 
 
         CUDA_CALL(cudaStreamSynchronize(stream));
         d[i].complete = std::chrono::high_resolution_clock::now();
 
+        exec->unload();
         hot->unload();
         d[i].warm2 = std::chrono::high_resolution_clock::now();
-
-        d[i].warm2freed = std::chrono::high_resolution_clock::now();
 
         warm->unload();
         d[i].cool2 = std::chrono::high_resolution_clock::now();
@@ -130,34 +143,36 @@ void loadmodel() {
         CUDA_CALL(cudaEventElapsedTime(&(d[i].exec), postinput, postcall));
         CUDA_CALL(cudaEventElapsedTime(&(d[i].output), postcall, postoutput));
     }
-    CUDA_CALL(cudaFree(ptr));
+
+    for (char* &ptr : params_pages) {
+        CUDA_CALL(cudaFree(ptr));
+    }
+    for (char* &ptr : workspace_pages) {
+        CUDA_CALL(cudaFree(ptr));
+    }
 
     std::ofstream out("times.out");
     out << "i" << "\t"
         << "t" << "\t"
         << "cool->warm" << "\t"
-        << "warm->malloced" << "\t"
-        << "cuda-params" << "\t"
-        << "cuda-input" << "\t"
-        << "cuda-exec" << "\t"
-        << "cuda-output" << "\t"
-        << "malloced->complete" << "\t"
-        << "complete->warm2" << "\t"
-        << "warm2->freed" << "\t"
-        << "freed->cool" << "\n";
+        << "warm:load-model-weights" << "\t"
+        << "hot:load-model-input" << "\t"
+        << "hot:cuda-exec" << "\t"
+        << "hot:retrieve-model-output" << "\t"
+        << "warm->complete" << "\t"
+        << "hot->warm" << "\t"
+        << "warm->cool" << "\n";
     for (unsigned i = 10; i < d.size(); i++) {
         out << i << "\t"
             << nanos(d[i].cool) << "\t"
             << nanos(d[i].warm) - nanos(d[i].cool) << "\t"
-            << nanos(d[i].malloced) - nanos(d[i].warm) << "\t"
             << uint64_t(d[i].params * 1000000) << "\t"
             << uint64_t(d[i].input * 1000000) << "\t"
             << uint64_t(d[i].exec * 1000000) << "\t"
             << uint64_t(d[i].output * 1000000) << "\t"
-            << nanos(d[i].complete) - nanos(d[i].malloced) << "\t"
+            << nanos(d[i].complete) - nanos(d[i].warm) << "\t"
             << nanos(d[i].warm2) - nanos(d[i].complete) << "\t"
-            << nanos(d[i].warm2freed) - nanos(d[i].warm2) << "\t"
-            << nanos(d[i].cool2) - nanos(d[i].warm2freed) << "\n";
+            << nanos(d[i].cool2) - nanos(d[i].warm2) << "\n";
     }
     out.close();
 }
