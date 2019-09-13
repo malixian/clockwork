@@ -30,7 +30,9 @@ void testmemory(int pagesize) {
 
 
     CHECK(weights.size() == modeldef.weights_memory) << "Inconsistent weights size " << weights.size() << " " << modeldef.weights_memory;
-    processModelDef(modeldef, pagesize, weights.c_str());
+
+    char* ptr;
+    processModelDef(modeldef, pagesize, weights.c_str(), &ptr);
 }
 
 int main(int argc, char *argv[]) {

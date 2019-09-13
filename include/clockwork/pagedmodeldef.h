@@ -128,7 +128,7 @@ struct Remap {
 	uint64_t size;
 };
 
-PageMappedModelDef reorder(ModelDef model, int pagesize, const char* weights) {
+PageMappedModelDef reorder(ModelDef model, int pagesize, const char* weights, char** newweights) {
 	std::cout << "model weights memory is " << model.weights_memory << std::endl;
 
 	PageMappedModelDef newmodel;
@@ -187,9 +187,9 @@ PageMappedModelDef reorder(ModelDef model, int pagesize, const char* weights) {
 		newmodel.weights_pages.push_back(page);
 	}
 
-	char* newweights = static_cast<char*>(malloc(model.weights_memory));
+	*newweights = static_cast<char*>(malloc(model.weights_memory));
 	for (auto &remap : remapping) {
-		std::memcpy(newweights+remap.second.new_offset, weights+remap.second.original_offset, remap.second.size);
+		std::memcpy(*newweights+remap.second.new_offset, weights+remap.second.original_offset, remap.second.size);
 	}
 	std::cout << "Did " << remapping.size() << " remappings" << std::endl;
 
@@ -407,9 +407,9 @@ void printNewModel(PageMappedModelDef model) {
 
 }
 
-PageMappedModelDef processModelDef(ModelDef def, int pagesize, const char* weights) {
+PageMappedModelDef processModelDef(ModelDef def, int pagesize, const char* weights, char** newweights) {
 	check(def, pagesize);
-	PageMappedModelDef newmodel = reorder(def, pagesize, weights);
+	PageMappedModelDef newmodel = reorder(def, pagesize, weights, newweights);
 	printNewModel(newmodel);
 	return newmodel;
 }

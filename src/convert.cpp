@@ -17,6 +17,7 @@
 #include <pods/buffers.h>
 #include <pods/streams.h>
 #include "clockwork/tvm/decoupled_graph_runtime.h"
+#include "clockwork/pagedmodeldef.h"
 
 using namespace clockwork;
 
@@ -27,7 +28,7 @@ but a different params file, and a more efficient alternative to the json.
 
 */
 
-void convert(std::string model_so, std::string model_json, std::string model_params, std::string clockwork_meta_out, std::string clockwork_params_out) {
+void convert(int pagesize, std::string model_so, std::string model_json, std::string model_params, std::string clockwork_meta_out, std::string clockwork_params_out) {
 
 	const int dtype_code = kDLFloat;
 	const int dtype_bits = 32;
@@ -77,12 +78,24 @@ void convert(std::string model_so, std::string model_json, std::string model_par
     clockwork::model::ModelDef* minmodel = static_cast<clockwork::model::ModelDef*>((void*) extract_model());
 
 
+
+
+
+	tvm::runtime::PackedFunc get_const_params = mod.GetFunction("get_const_params");
+	tvm::runtime::NDArray params = get_const_params();
+
+	void* ptr = params.dataptr();
+	uint64_t size = params.Size();
+
+	char* newweights;
+	clockwork::model::PageMappedModelDef pagemappedmodel = processModelDef(*minmodel, pagesize, static_cast<const char*>(ptr), &newweights);
+
     std::ofstream outfile;
     outfile.open(clockwork_meta_out);
 
     pods::OutputStream out(outfile);
     pods::BinarySerializer<decltype(out)> serializer(out);
-    if (serializer.save(*minmodel) != pods::Error::NoError)
+    if (serializer.save(pagemappedmodel) != pods::Error::NoError)
     {
         std::cerr << "serialization error\n";
     } else {
@@ -93,14 +106,7 @@ void convert(std::string model_so, std::string model_json, std::string model_par
 
 
 	std::ofstream params_out(clockwork_params_out, std::ofstream::binary);
-
-	tvm::runtime::PackedFunc get_const_params = mod.GetFunction("get_const_params");
-	tvm::runtime::NDArray params = get_const_params();
-
-	void* ptr = params.dataptr();
-	uint64_t size = params.Size();
-
-	params_out.write((const char*) ptr, size);
+	params_out.write(newweights, pagemappedmodel.weights_memory);
 	params_out.close();
 
 	// TODO: don't dump the ndarray, dump the actual bytes, 
@@ -109,16 +115,20 @@ void convert(std::string model_so, std::string model_json, std::string model_par
 
 void show_usage() {
 	std::cout << "Provide the name of a model, to convert it" << std::endl;
+	std::cout << "Specify page size with -p flag" << std::endl;
 }
 
 int main(int argc, char *argv[]) {
 	std::vector<std::string> non_argument_strings;
 
+	int pagesize = 16 * 1024 * 1024;
 	for (int i = 1; i < argc; ++i) {
 		std::string arg = argv[i];
 		if ((arg == "-h") || (arg == "--help")) {
 		    show_usage();
 		    return 0;
+		} else if ((arg == "-p") || (arg == "--pagesize")) {
+		    pagesize = atoi(argv[++i]);
 		} else {
 		  non_argument_strings.push_back(arg);
 		}
@@ -137,7 +147,10 @@ int main(int argc, char *argv[]) {
 	std::string clockwork = model + ".clockwork";
 	std::string clockwork_params = model + ".clockwork_params";
 
-	convert(so, json, params, clockwork, clockwork_params);
+	std::cout << "Processing " << model << std::endl;
+	std::cout << "  pagesize=" << pagesize << std::endl;
+
+	convert(pagesize, so, json, params, clockwork, clockwork_params);
 
 	return 0;
 }
