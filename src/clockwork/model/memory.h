@@ -21,18 +21,21 @@ public:
 };
 
 template<typename T> class LinkedList {
-private:
+public:
 	LinkedListElement<T>* head = nullptr;
 	LinkedListElement<T>* tail = nullptr;
-public:
 
 	bool isEmpty() {
 		return head==nullptr;
 	}
 
 	T popHead() {
+		if (isEmpty()) return nullptr;
 		LinkedListElement<T>* elem = head;
-		if (elem != nullptr) head = head->next;
+		if (elem != nullptr) {
+			head = head->next;
+			if (head != nullptr) head->prev = nullptr;
+		}
 		if (head == nullptr && tail == elem) tail = nullptr;
 		T data = elem->data;
 		delete elem;
@@ -40,8 +43,12 @@ public:
 	}
 
 	T popTail() {
+		if (isEmpty()) return nullptr;
 		LinkedListElement<T>* elem = tail;
-		if (elem != nullptr) tail = tail->prev;
+		if (elem != nullptr) {
+			tail = tail->prev;
+			if (tail != nullptr) tail->next = nullptr;
+		}
 		if (tail == nullptr && head == elem) head = nullptr;
 		T data = elem->data;
 		delete elem;
@@ -49,7 +56,7 @@ public:
 	}
 
 	bool remove(LinkedListElement<T>* element) {
-		if (element->container != this) return false;
+		if (element == nullptr || element->container != this) return false;
 		if (element->next != nullptr) element->next->prev = element->prev;
 		else if (tail == element) tail = element->prev;
 		if (element->prev != nullptr) element->prev->next = element->next;

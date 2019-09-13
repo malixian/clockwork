@@ -62,12 +62,10 @@ std::shared_ptr<Allocation> PageCache::alloc(unsigned n_pages, EvictionCallback*
 	std::lock_guard<std::mutex> lock(mutex);
 
 	// Use up free pages
-	while(alloc->pages.size() < n_pages) {
-		if (!freePages.isEmpty()) {
-			Page* p = freePages.popHead();
-			p->current_allocation = alloc;
-			alloc->pages.push_back(p);
-		}
+	while(alloc->pages.size() < n_pages && !freePages.isEmpty()) {
+		Page* p = freePages.popHead();
+		p->current_allocation = alloc;
+		alloc->pages.push_back(p);
 	}
 
 	// Start evicting allocations
@@ -106,11 +104,11 @@ std::shared_ptr<Allocation> PageCache::alloc(unsigned n_pages, EvictionCallback*
 			freePages.pushBack(p);
 		}
 		alloc = nullptr;
+	} else {
+		// Allocation successful; lock it
+		alloc->usage_count++;
+		alloc->list_position = lockedAllocations.pushBack(alloc);
 	}
-
-	// Lock the allocation
-	alloc->usage_count++;
-	alloc->list_position = lockedAllocations.pushBack(alloc);
 
 	// Notify eviction handlers
 	for (unsigned i = 0; i < callbacks.size(); i++) {
@@ -137,6 +135,9 @@ void PageCache::free(std::shared_ptr<Allocation> allocation) {
 		p->current_allocation = nullptr;
 		freePages.pushBack(p);
 	}
+
+	// Mark as evicted but don't call eviction callback since it was explicitly freed
+	allocation->evicted = true;
 }
 
 }

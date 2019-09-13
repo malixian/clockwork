@@ -16,11 +16,17 @@ using namespace clockwork::model;
 
 void testmemory() {
     size_t total_size = 100;
-    size_t page_size = 11;
+    size_t page_size = 100;
     void* baseptr = malloc(total_size);
-
+    
     PageCache* cache = new PageCache(static_cast<char*>(baseptr), total_size, page_size);
 
+    std::cout << "alloc 1" << std::endl;
+    auto alloc1 = cache->alloc(1, nullptr);
+    std::cout << "alloc 2" << std::endl;
+    auto alloc2 = cache->alloc(1, nullptr);
+
+    std::cout << "alloc 3" << std::endl;
 }
 
 int main(int argc, char *argv[]) {
