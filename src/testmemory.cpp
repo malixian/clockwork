@@ -11,28 +11,33 @@
 #include "clockwork/util/tvm_util.h"
 #include <tvm/runtime/cuda_common.h>
 #include "clockwork/model/memory.h"
+#include "clockwork/pagedmodeldef.h"
+#include <dmlc/logging.h>
 
 using namespace clockwork::model;
 
-void testmemory() {
-    size_t total_size = 100;
-    size_t page_size = 100;
-    void* baseptr = malloc(total_size);
-    
-    PageCache* cache = new PageCache(static_cast<char*>(baseptr), total_size, page_size);
+void testmemory(int pagesize) {
 
-    std::cout << "alloc 1" << std::endl;
-    auto alloc1 = cache->alloc(1, nullptr);
-    std::cout << "alloc 2" << std::endl;
-    auto alloc2 = cache->alloc(1, nullptr);
+    std::string model = "/home/jcmace/modelzoo/resnet50/tesla-m40_batchsize1/tvm-model";
+    std::string data;
+    clockwork::util::readFileAsString(model+".clockwork", data);
 
-    std::cout << "alloc 3" << std::endl;
+    std::string weights;
+    clockwork::util::readFileAsString(model+".clockwork_params", weights);
+
+    ModelDef modeldef;
+    ModelDef::ReadFrom(data, modeldef);
+
+
+    CHECK(weights.size() == modeldef.weights_memory) << "Inconsistent weights size " << weights.size() << " " << modeldef.weights_memory;
+    processModelDef(modeldef, pagesize, weights.c_str());
 }
 
 int main(int argc, char *argv[]) {
 	std::cout << "begin" << std::endl;
 
-	testmemory();
+    int pagesize = 16 * 1024 * 1024;
+	testmemory(pagesize);
 
 	std::cout << "end" << std::endl;
 }

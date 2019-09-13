@@ -23,6 +23,9 @@ extern "C" char* getGPUModelToBuffer(int deviceNumber, char* buf);
 
 void setCurrentThreadMaxPriority();
 
+
+void readFileAsString(const std::string &filename, std::string &dst);
+
 }
 }
 

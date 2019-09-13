@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <pthread.h>
+#include <istream>
 
 
 namespace clockwork {
@@ -94,6 +95,15 @@ void setCurrentThreadMaxPriority() {
 
     pthread_setschedprio(thId, max_prio_for_policy);
     pthread_attr_destroy(&thAttr);
+}
+
+
+void readFileAsString(const std::string &filename, std::string &dst) {
+  std::ifstream in(filename, std::ios::binary);
+  dst = std::string(
+      std::istreambuf_iterator<char>(in), 
+      std::istreambuf_iterator<char>());
+  in.close();
 }
 
 }

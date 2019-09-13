@@ -12,6 +12,7 @@
 #include <pods/binary.h>
 #include <pods/buffers.h>
 #include <cstring>
+#include "clockwork/util/util.h"
 
 namespace clockwork {
 namespace model {
@@ -20,7 +21,7 @@ ColdModel* FromDisk(std::string so, std::string clockwork, std::string params) {
 	return new ColdDiskModelImpl(so, clockwork, params);
 }
 
-OpExec::OpExec(OpDef &op, BackendPackedCFunc f) : op(op), f(f), workspace_offsets(op.workspace_allocs) {
+OpExec::OpExec(OpDef &op, BackendPackedCFunc f) : op(op), f(f) {
     size = op.inputs.size();
     offsets.resize(size);
     op_inputs.resize(size);
@@ -43,6 +44,11 @@ OpExec::OpExec(OpDef &op, BackendPackedCFunc f) : op(op), f(f), workspace_offset
       op_inputs[i].v_handle = input;
       op_tcodes[i] = kArrayHandle;
     }	
+
+    workspace_offsets.resize(op.workspace_allocs.size());
+    for (unsigned i = 0; i < op.workspace_allocs.size(); i++) {
+    	workspace_offsets[i] = op.workspace_allocs[i].offset;
+    }
 }
 
 OpExec::~OpExec() {
@@ -149,14 +155,6 @@ void ModelExec::call(void* baseptr) {
 	}
 }
 
-void readFileAsString(const std::string &filename, std::string &dst) {
-	std::ifstream in(filename, std::ios::binary);
-	dst = std::string(
-    	std::istreambuf_iterator<char>(in), 
-    	std::istreambuf_iterator<char>());
-	in.close();
-}
-
 ColdDiskModelImpl::ColdDiskModelImpl(
 		std::string so, 
 		std::string clockwork, 
@@ -170,10 +168,10 @@ CoolModel* ColdDiskModelImpl::load() {
 
 CoolModelImpl::CoolModelImpl(ColdDiskModelImpl* cold) :
 	so(Memfile::readFrom(cold->so)) {
-	readFileAsString(cold->clockwork, clockwork);
+	clockwork::util::readFileAsString(cold->clockwork, clockwork);
 
 	std::string params;
-	readFileAsString(cold->params, params);
+	clockwork::util::readFileAsString(cold->params, params);
 
 	// malloc cuda pinned memory
 	paramsSize = params.size();

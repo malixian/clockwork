@@ -700,8 +700,11 @@ clockwork::model::ModelDef* DecoupledGraphRuntime::ExtractModelSpec() {
     int currentAllocOffset = 0;
     for (unsigned i = 0; i < allocs.size(); i++) {
       if (allocs[i].isalloc) {
-        op.workspace_allocs.push_back(mm->total_memory + currentAllocOffset);
-        currentAllocOffset += 256 * ((allocs[i].size+255)/256); // Align to 256?
+        clockwork::model::WorkspaceAllocDef d;
+        d.offset = mm->total_memory + currentAllocOffset;
+        d.size = 256 * ((allocs[i].size+255)/256);
+        op.workspace_allocs.push_back(d);
+        currentAllocOffset += d.size; // Align to 256?
       }
     }
     if (currentAllocOffset > max_workspace_memory) {
