@@ -84,3 +84,33 @@ target_link_libraries(
 	tvm_runtime
 	tbb
 )
+
+add_executable (testmemory
+	src/testmemory.cpp
+)
+
+target_link_libraries(
+	convert
+	clockwork
+	Threads::Threads
+	dl
+	cuda
+	cudart
+	tvm_runtime
+	tbb
+)
+
+add_executable (tests
+	test/tests.cpp
+)
+
+target_link_libraries(
+	tests
+	clockwork
+	Threads::Threads
+	dl
+	cuda
+	cudart
+	tvm_runtime
+	tbb
+)
