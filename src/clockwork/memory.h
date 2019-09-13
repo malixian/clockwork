@@ -7,7 +7,6 @@
 #include <vector>
 
 namespace clockwork {
-namespace model {
 
 template<typename T> class LinkedList;
 
@@ -135,10 +134,6 @@ public:
 
 };
 
-
-
-
-}
 }
 
 #endif

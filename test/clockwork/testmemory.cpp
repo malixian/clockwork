@@ -2,9 +2,9 @@
 
 #include <cstdlib>
 
-#include "clockwork/model/memory.h"
+#include "clockwork/memory.h"
 
-class TestEvictionCallback : public clockwork::model::EvictionCallback {
+class TestEvictionCallback : public clockwork::EvictionCallback {
 public:
     int evictionCount = 0;
     void evicted() {
@@ -14,7 +14,7 @@ public:
 
 TEST_CASE("Create Page Cache with bad sizes", "[memory]") {
 
-    using namespace clockwork::model;
+    using namespace clockwork;
     
     size_t total_size = 100;
     size_t page_size = 11;
@@ -26,7 +26,7 @@ TEST_CASE("Create Page Cache with bad sizes", "[memory]") {
 
 TEST_CASE("Cache lock and unlock", "[memory]") {
 
-    using namespace clockwork::model;
+    using namespace clockwork;
     
     size_t total_size = 100;
     size_t page_size = 100;
@@ -84,7 +84,7 @@ TEST_CASE("Cache lock and unlock", "[memory]") {
 
 TEST_CASE("Simple Page alloc", "[memory]") {
 
-    using namespace clockwork::model;
+    using namespace clockwork;
     
     size_t total_size = 100;
     size_t page_size = 100;
@@ -122,7 +122,7 @@ TEST_CASE("Simple Page alloc", "[memory]") {
 
 TEST_CASE("Alloc too much", "[memory]") {
 
-    using namespace clockwork::model;
+    using namespace clockwork;
     
     size_t total_size = 100;
     size_t page_size = 100;
@@ -145,7 +145,7 @@ TEST_CASE("Alloc too much", "[memory]") {
 
 TEST_CASE("Simple Page eviction", "[memory]") {
 
-    using namespace clockwork::model;
+    using namespace clockwork;
     
     size_t total_size = 100;
     size_t page_size = 100;
@@ -181,7 +181,7 @@ TEST_CASE("Simple Page eviction", "[memory]") {
 
 TEST_CASE("Simple Page free", "[memory]") {
 
-    using namespace clockwork::model;
+    using namespace clockwork;
     
     size_t total_size = 100;
     size_t page_size = 100;
@@ -219,7 +219,7 @@ TEST_CASE("Simple Page free", "[memory]") {
 
 TEST_CASE("LRU page eviction", "[memory]") {
 
-    using namespace clockwork::model;
+    using namespace clockwork;
     
     size_t total_size = 100;
     size_t page_size = 10;
@@ -273,7 +273,7 @@ TEST_CASE("LRU page eviction", "[memory]") {
 
 TEST_CASE("Linked List AddRemove", "[linkedlist]") {
 
-    using namespace clockwork::model;
+    using namespace clockwork;
 
     LinkedList<int*> list;
 
@@ -300,7 +300,7 @@ TEST_CASE("Linked List AddRemove", "[linkedlist]") {
 
 TEST_CASE("Linked List MultiAdd", "[linkedlist]") {
 
-    using namespace clockwork::model;
+    using namespace clockwork;
 
     LinkedList<int*> list;
     LinkedListElement<int*>* e1 = list.pushBack(nullptr);
@@ -331,7 +331,7 @@ TEST_CASE("Linked List MultiAdd", "[linkedlist]") {
 
 TEST_CASE("Linked List PopHead", "[linkedlist]") {
 
-    using namespace clockwork::model;
+    using namespace clockwork;
 
     LinkedList<int*> list;
 
@@ -351,7 +351,7 @@ TEST_CASE("Linked List PopHead", "[linkedlist]") {
 
 TEST_CASE("Linked List PopHead2", "[linkedlist]") {
 
-    using namespace clockwork::model;
+    using namespace clockwork;
 
     LinkedList<int*> list;
 
@@ -376,7 +376,7 @@ TEST_CASE("Linked List PopHead2", "[linkedlist]") {
 
 TEST_CASE("Linked List PopTail", "[linkedlist]") {
 
-    using namespace clockwork::model;
+    using namespace clockwork;
 
     LinkedList<int*> list;
 
@@ -396,7 +396,7 @@ TEST_CASE("Linked List PopTail", "[linkedlist]") {
 
 TEST_CASE("Linked List PopTail2", "[linkedlist]") {
 
-    using namespace clockwork::model;
+    using namespace clockwork;
 
     LinkedList<int*> list;
 
@@ -421,7 +421,7 @@ TEST_CASE("Linked List PopTail2", "[linkedlist]") {
 
 TEST_CASE("Linked List RemoveMiddle", "[linkedlist]") {
 
-    using namespace clockwork::model;
+    using namespace clockwork;
 
     LinkedList<int*> list;
     LinkedListElement<int*>* e1 = list.pushBack(nullptr);
