@@ -20,15 +20,19 @@ namespace model {
 typedef int (*BackendPackedCFunc)(void* args, int* type_codes, int num_args);
 
 
+struct Offset {
+	unsigned page_number;
+	uint64_t page_offset;
+};
 
 /** Implementation of TVM op */
 class OpExec {
 public:
 	OpDef &op;
 
-	std::vector<uint64_t> workspace_offsets;
+	std::vector<Offset> workspace_offsets;
   
-	std::vector<uint64_t> offsets;
+	std::vector<Offset> input_offsets;
 	std::vector<DLTensor*> input_tensors;
 	std::vector<TVMValue> op_inputs;
 	std::vector<int> op_tcodes;
@@ -39,7 +43,7 @@ public:
 	OpExec(OpDef &op, BackendPackedCFunc f);
 	~OpExec();
 
-	void call(void* baseptr);
+	void call(std::vector<char*> page_ptrs);
 
 };
 
@@ -49,15 +53,15 @@ public:
 	const int size;
 	std::vector<OpExec*> ops;
 
-	ModelExec(ModelDef &mm, clockwork::so::TVMWarmSharedObject* warm);
+	ModelExec(ModelDef &mm, clockwork::so::TVMWarmSharedObject* warm, page_size);
 	~ModelExec();
 
 	int inputsize();
 	int outputsize();
-	void setinput(void* baseptr, void* ptr);
-	void getoutput(void* baseptr, void* ptr);
+	void setinput(std::vector<char*> page_ptrs, void* ptr);
+	void getoutput(std::vector<char*> page_ptrs, void* ptr);
 
-	void call(void* baseptr);
+	void call(std::vector<char*> page_ptrs);
 };
 
 class ColdDiskModelImpl : public ColdModel {
@@ -79,7 +83,7 @@ public:
 	CoolModelImpl(ColdDiskModelImpl* cold);
 	~CoolModelImpl();
 
-	WarmModel* load();
+	WarmModel* load(size_t page_size);
 
 	void unload();
 
@@ -97,7 +101,7 @@ public:
 	int paramsSize;
 	
 
-	WarmModelImpl(CoolModelImpl* cool);
+	WarmModelImpl(CoolModelImpl* cool, size_t page_size);
 	~WarmModelImpl();
 
 	int size();

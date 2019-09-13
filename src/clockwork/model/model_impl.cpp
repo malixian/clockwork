@@ -20,12 +20,12 @@ ColdModel* FromDisk(std::string so, std::string clockwork, std::string params) {
 	return new ColdDiskModelImpl(so, clockwork, params);
 }
 
-OpExec::OpExec(OpDef &op, BackendPackedCFunc f) : op(op), f(f), workspace_offsets(op.workspace_allocs) {
+OpExec::OpExec(OpDef &op, BackendPackedCFunc f) : op(op), f(f) {
     size = op.inputs.size();
-    offsets.resize(size);
     op_inputs.resize(size);
     op_tcodes.resize(size);
     input_tensors.resize(size);
+    input_offsets.resize(size);
 
     for (unsigned i = 0; i < size; i++) {
       DLTensor* input = new DLTensor();
@@ -37,12 +37,19 @@ OpExec::OpExec(OpDef &op, BackendPackedCFunc f) : op(op), f(f), workspace_offset
       input->strides = nullptr;
       input->byte_offset = 0;
 
-      offsets[i] = op.inputs[i].offset;
-      
+      input_offsets[i] = Offset{op.inputs[i].page_number, op.inputs[i].offset_in_page};
       input_tensors[i] = input;
       op_inputs[i].v_handle = input;
       op_tcodes[i] = kArrayHandle;
     }	
+
+    workspace_offsets.resize(op.workspace_allocs.size());
+    for (unsigned i = 0; i < op.workspace_allocs.size(); i++) {
+    	workspace_offsets[i] = Offset{
+    		op.workspace_allocs[i].page_number,
+    		op.workspace_allocs[i].offset_in_page;
+    	};
+    }
 }
 
 OpExec::~OpExec() {
@@ -51,9 +58,10 @@ OpExec::~OpExec() {
     }
 }
 
-void OpExec::call(void* baseptr) {
+void OpExec::call(std::vector<char*> page_ptrs) {
 	for (unsigned i = 0; i < size; i++) {
-	  input_tensors[i]->data = static_cast<char*>(baseptr) + offsets[i];
+		char* page_ptr = page_ptrs[input_offsets[i].page_number];
+	  	input_tensors[i]->data = page_ptr + input_offsets[i].page_offset;
 	}
 
 	// std::cout << size << " inputs" << std::endl;
@@ -68,7 +76,8 @@ void OpExec::call(void* baseptr) {
 
 	std::vector<void*> workspace_ptrs(workspace_offsets.size());
 	for (unsigned i = 0; i < workspace_offsets.size(); i++) {
-	  workspace_ptrs[i] = static_cast<char*>(baseptr) + workspace_offsets[i];
+		char* page_ptr = page_ptrs[workspace_offsets[i].page_number]
+		workspace_ptrs[i] = page_ptr + workspace_offsets[i].page_offset;
 	}
 
 	clockwork::so::TVMBackendWorkspaceManager::Set(workspace_ptrs);
@@ -113,7 +122,7 @@ int ModelExec::outputsize() {
 	return mm.outputs[0].size;
 }
 
-void ModelExec::setinput(void* baseptr, void* inputptr) {	
+void ModelExec::setinput(std::vector<char*> page_ptrs, void* inputptr) {	
 	void* dstptr = static_cast<char*>(baseptr) + mm.inputs[0].offset;
 	cudaStream_t stream = tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream;
 	CUDA_CALL(
@@ -127,7 +136,7 @@ void ModelExec::setinput(void* baseptr, void* inputptr) {
 	)
 }
 
-void ModelExec::getoutput(void* baseptr, void* outputptr) {
+void ModelExec::getoutput(std::vector<char*> page_ptrs, void* outputptr) {
 	void* srcptr = static_cast<char*>(baseptr) + mm.outputs[0].offset;
 	cudaStream_t stream = tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream;
 	CUDA_CALL(
@@ -142,10 +151,10 @@ void ModelExec::getoutput(void* baseptr, void* outputptr) {
 
 }
 
-void ModelExec::call(void* baseptr) {
+void ModelExec::call(std::vector<char*> page_ptrs) {
 	for (unsigned i = 0; i < ops.size(); i++) {
 	  // std::cout << "Op " << i << " has ";
-	  ops[i]->call(baseptr);
+	  ops[i]->call(page_ptrs);
 	}
 }
 

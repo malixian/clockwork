@@ -543,7 +543,7 @@ std::function<void()> DecoupledGraphRuntime::CreateTVMOp(
 
 
 
-clockwork::model::ModelDef* DecoupledGraphRuntime::ExtractModelSpec() {
+clockwork::model::ModelDef* DecoupledGraphRuntime::ExtractModelSpec(unsigned page_size) {
   // First figure out storage offsets
   typedef struct data_entry_spec{
     unsigned id;
@@ -590,6 +590,8 @@ clockwork::model::ModelDef* DecoupledGraphRuntime::ExtractModelSpec() {
     int device_type;
     TVMContext ctx;
     size_t offset;
+    unsigned page_number;
+    size_t page_offset;
   } storage_spec;
 
   std::unordered_map<int, storage_spec> specs;
@@ -611,6 +613,8 @@ clockwork::model::ModelDef* DecoupledGraphRuntime::ExtractModelSpec() {
     s.device_type = d.device_type;
     s.ctx = d.ctx;
     s.offset = 0;
+    s.page_number = 0;
+    s.page_offset = 0;
   }
 
 
@@ -628,31 +632,79 @@ clockwork::model::ModelDef* DecoupledGraphRuntime::ExtractModelSpec() {
 
   // Calculate offsets
   uint64_t total_contiguous_size = 0;
+  std::vector<storage_spec> storage_order;
   for (storage_spec &s : gpu_contiguous_inputs) {
     specs[s.storage_id].offset = total_contiguous_size;
-    total_contiguous_size += 4 * ((s.size + 3) / 4);
+    s.size = 4 * ((s.size + 3) / 4);
+    total_contiguous_size += s.size;
+    storage_order.push_back(s);
   }
   uint64_t weights_size = total_contiguous_size;
   for (storage_spec &s : gpu_contiguous_other) {
     specs[s.storage_id].offset = total_contiguous_size;
-    total_contiguous_size += 4 * ((s.size + 3) / 4);
+    s.size = 4 * ((s.size + 3) / 4);
+    total_contiguous_size += s.size;
+    storage_order.push_back(s);
   }
+  uint64_t non_weights_size = total_contiguous_size - weights_size;
 
   if (non_gpu.size() > 0) {
     std::cout << "ERROR THERE IS A NON-GPU STORAGE SPEC" << std::endl;
   }
 
-
+  // Start putting together the modeldef
   clockwork::model::ModelDef* mm = new clockwork::model::ModelDef();
-  mm->total_memory = 256 * ((total_contiguous_size+255)/256);
-  mm->weights_memory = weights_size;
+
+  mm->weights_size = weights_size;
+  mm->non_weights_size = non_weights_size;
+
+  // TODO: this is basically a bin-packing algorithm and could be way better
+  // For now we just pack them into pages in the order they occur
+
+  // First calculate explicit page mapping for weights portion
+  clockwork::model::WeightsPageDef currentPage;
+  currentPage.base_offset = 0;
+  currentPage.size = 0;
+  for (storage_spec &s : gpu_contiguous_inputs) {
+    CHECK(s.size < page_size) << "Unable to compile with page_size " << page_size << ", unable to accommodate storage spec with size " << s.size;
+    if (currentPage.size + s.size > page_size) {
+      mm.weights_pages.push_back(currentPage);
+      clockwork::model::PageDef nextPage;
+      nextPage.base_offset = currentPage.base_offset + currentPage.size;
+      nextPage.size = 0;
+      currentPage = nextPage;
+    }
+    currentPage.size += s.size;
+  }
+  if (currentPage.size > 0) {
+    mm.weights_pages.push_back(currentPage);
+  }
+
+  // Now simply calculate offsets into pages for all execs, not just weights
+  mm->configured_page_size = page_size;
+  mm->num_pages = 0;
+  int currentPageSize = 0;
+  for (storage_spec &s : storage_order) {
+    CHECK(s.size < page_size) << "Unable to compile with page_size " << page_size << ", unable to accommodate storage spec with size " << s.size;
+    if (currentPageSize + s.size > page_size) {
+      mm->num_pages++;
+      currentPageSize = 0;
+    }
+    s.page_number = mm->num_pages;
+    s.page_offset = currentPageSize;
+    currentPageSize += s.size;
+  }
+  if (currentPageSize > 0) {
+    mm->num_pages++;
+  }
 
 
   std::unordered_map<std::string, unsigned> so_functions;
   std::unordered_map<std::string, unsigned> cuda_functions;
 
   int skipped = 0;
-  uint64_t max_workspace_memory = 0;
+  unsigned max_workspace_pages = 0;
+  unsigned max_workspace_size = 0;
   for (uint32_t nid = 0; nid < this->GetNumOfNodes(); ++nid) {
     const auto& inode = nodes_[nid];
     if (inode.op_type == "null") {
@@ -668,7 +720,8 @@ clockwork::model::ModelDef* DecoupledGraphRuntime::ExtractModelSpec() {
     for (const auto& e : inode.inputs) {
       storage_spec &spec = specs[ds[this->entry_id(e)].storage_id];
       clockwork::model::DLTensorDef d;
-      d.offset = spec.offset;
+      d.page_number = spec.page_number;
+      d.offset_in_page = spec.page_offset;
       d.size = spec.size;
       d.shape = this->attrs_.shape[this->entry_id(e)];
       op.inputs.push_back(d);
@@ -677,7 +730,8 @@ clockwork::model::ModelDef* DecoupledGraphRuntime::ExtractModelSpec() {
       uint32_t eid = this->entry_id(nid, index);
       storage_spec &spec = specs[ds[eid].storage_id];
       clockwork::model::DLTensorDef d;
-      d.offset = spec.offset;
+      d.page_number = spec.page_number;
+      d.offset_in_page = spec.page_offset;
       d.size = spec.size;
       d.shape = this->attrs_.shape[eid];
       op.inputs.push_back(d);
@@ -697,15 +751,37 @@ clockwork::model::ModelDef* DecoupledGraphRuntime::ExtractModelSpec() {
     std::vector<WorkspaceAlloc> allocs = ManagedCUDADeviceAPI::Global()->tracker.get();
     std::cout << "Op " << nid << " had " << allocs.size() << "workspace allocs (" << inode.param.func_name << ")" << std::endl;
 
-    int currentAllocOffset = 0;
+
+    // Figure out how many pages are needed for workspace storage
+    unsigned num_workspace_pages = 0;
+    unsigned workspace_size = 0;
+    unsigned current_workspace_page_size = 0;
+
     for (unsigned i = 0; i < allocs.size(); i++) {
       if (allocs[i].isalloc) {
-        op.workspace_allocs.push_back(mm->total_memory + currentAllocOffset);
-        currentAllocOffset += 256 * ((allocs[i].size+255)/256); // Align to 256?
+        int allocSize = 256 * ((allocs[i].size+255)/256);
+        CHECK(allocSize < page_size) << "Unable to compile with page_size " << page_size << ", unable to accommodate workspace alloc with size " << allocSize;
+        if (current_workspace_page_size + allocSize > page_size) {
+          num_workspace_pages++;
+          current_workspace_page_size = 0;
+        }
+        op.workspace_allocs.push_back(WorkspaceAllocDef{
+          mm.weights_pages.size()+num_workspace_pages,
+          current_workspace_page_size,
+          allocSize
+        });
+        current_workspace_page_size += allocSize;
+        workspace_size += allocSize;
       }
     }
-    if (currentAllocOffset > max_workspace_memory) {
-      max_workspace_memory = currentAllocOffset;
+    if (current_workspace_page_size > 0) {
+      num_workspace_pages++;
+    }
+    if (num_workspace_pages > max_workspace_pages) {
+      max_workspace_pages = num_workspace_pages;
+    }
+    if (workspace_size > max_workspace_size) {
+      max_workspace_size = workspace_size;
     }
 
     ManagedCUDADeviceAPI::Global()->tracker.clear();
@@ -713,8 +789,8 @@ clockwork::model::ModelDef* DecoupledGraphRuntime::ExtractModelSpec() {
 
     mm->ops.push_back(op);
   }
-  mm->workspace_memory = max_workspace_memory;
-  mm->total_memory += max_workspace_memory;
+  mm->num_pages += max_workspace_pages;
+  mm->workspace_size = max_workspace_size;
 
   // Get inputs and outputs data
 
@@ -722,7 +798,8 @@ clockwork::model::ModelDef* DecoupledGraphRuntime::ExtractModelSpec() {
     uint32_t eid = this->entry_id(outputs_[i]);
     storage_spec &spec = specs[ds[eid].storage_id];
     clockwork::model::DLTensorDef d;
-    d.offset = spec.offset;
+    d.page_number = spec.page_number;
+    d.offset_in_page = spec.page_offset;
     d.size = spec.size;
     d.shape = this->attrs_.shape[eid];
     mm->outputs.push_back(d);
@@ -732,33 +809,33 @@ clockwork::model::ModelDef* DecoupledGraphRuntime::ExtractModelSpec() {
   {
     storage_spec &spec = specs[ds[0].storage_id];
     clockwork::model::DLTensorDef d;
-    d.offset = spec.offset;
+    d.page_number = spec.page_number;
+    d.offset_in_page = spec.page_offset;
     d.size = spec.size;
     d.shape = this->attrs_.shape[0];
     mm->inputs.push_back(d);
   }
 
-  std::cout << "model has " << mm->total_memory << " total memory" << std::endl;
-  std::cout << "model has " << mm->weights_memory << " weights memory" << std::endl;
-  std::cout << "model has " << mm->workspace_memory << " intra-op memory" << std::endl;
-  std::cout << "model has " << (total_contiguous_size - mm->weights_memory) << " inter-op memory" << std::endl;
+  std::cout << "model has " << (mm->weights_size + mm->non_weights_size + mm->workspace_size) << " size" << std::endl;
+  std::cout << "model uses " << mm->num_pages << " pages of size " << mm->configured_page_size << " for total memory usage " << (mm->configured_page_size*mm->num_pages) << std::endl;
+  std::cout << "  " << mm->weights_pages.size() << " pages contain weights" << std::endl;
   std::cout << "model has " << mm->so_functions.size() << " so functions" << std::endl;
   std::cout << "model has " << mm->ops.size() << " ops" << std::endl;
   std::cout << "model has " << mm->inputs.size() << " inputs" << std::endl;
   for (unsigned i = 0; i < mm->inputs.size(); i++) {
-    std::cout << "  input " << i << " offset " << mm->inputs[i].offset << " size " << mm->inputs[i].size << " shape [ ";
+    std::cout << "  input " << i << " size " << mm->inputs[i].size << " shape [ ";
     for (unsigned j = 0; j < mm->inputs[i].shape.size(); j++) {
       std::cout << mm->inputs[i].shape[j] << " ";
     }
-    std::cout << "]" << std::endl;
+    std::cout << "] on page <" << mm->inputs[i].page_number << ", " << mm->inputs[i].offset_in_page << ">" << std::endl;
   }
   std::cout << "model has " << mm->outputs.size() << " outputs" << std::endl;
   for (unsigned i = 0; i < mm->outputs.size(); i++) {
-    std::cout << "  output " << i << " offset " << mm->outputs[i].offset << " size " << mm->outputs[i].size << " shape [ ";
+    std::cout << "  input " << i << " size " << mm->outputs[i].size << " shape [ ";
     for (unsigned j = 0; j < mm->outputs[i].shape.size(); j++) {
       std::cout << mm->outputs[i].shape[j] << " ";
     }
-    std::cout << "]" << std::endl;
+    std::cout << "] on page <" << mm->outputs[i].page_number << ", " << mm->outputs[i].offset_in_page << ">" << std::endl;
   }
 
   return mm;
@@ -861,7 +938,7 @@ PackedFunc DecoupledGraphRuntime::GetFunction(
       });
   } else if (name == "extract_model_spec") {
     return PackedFunc([sptr_to_self, this](TVMArgs args, TVMRetValue* rv) {
-        *rv = this->ExtractModelSpec();
+        *rv = this->ExtractModelSpec(args[0]);
       });
   } else if (name == "load_to_device") {
     return PackedFunc([sptr_to_self, this, name](TVMArgs args, TVMRetValue* rv) {
