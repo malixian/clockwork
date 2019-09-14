@@ -12,13 +12,13 @@ namespace clockwork{
 namespace model {
 
 struct Item {
-	int id;
-	unsigned size;
+	uint64_t id;
+	uint64_t size;
 };
 
 class Bucket {
 public:
-	int id;
+	uint64_t id;
 	std::vector<Item> items;
 
 	static int size(const Bucket &b) {
