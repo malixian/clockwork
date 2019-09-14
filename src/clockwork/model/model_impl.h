@@ -99,6 +99,8 @@ public:
 	WarmModelImpl(CoolModelImpl* cool);
 	~WarmModelImpl();
 
+	int inputsize();
+	int outputsize();
 	int num_params_pages(int pagesize);
 	HotModel* load(std::vector<char*> &params_pages);
 	void unload();
