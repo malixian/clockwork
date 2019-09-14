@@ -13,12 +13,11 @@
 #include "clockwork/model.h"
 
 
+const int clockworkSuccess = 0;
+const int clockworkError = 1;
 
 namespace clockwork {
 namespace alternatives {
-
-const int clockworkSuccess = 0;
-const int clockworkError = 1;
 
 struct RequestHeader {
 	// Placeholder
@@ -41,6 +40,7 @@ struct LoadModelFromDiskRequest {
 struct LoadModelFromDiskResponse {
 	ResponseHeader header;
 	int model_id;
+	int input_size;
 };
 
 struct InferenceRequest {
@@ -61,11 +61,13 @@ struct InferenceResponse {
 class ModelManager {
 public:
 	struct Request {
+		unsigned id;
 		char* input;
 		char* output;
 		std::promise<InferenceResponse> promise;
 	};
 
+	const int id;
 	Runtime* runtime;
 
 	// The model being managed
@@ -73,10 +75,10 @@ public:
 
 	std::mutex queue_mutex;
 	std::deque<Request*> pending_requests;
-	std::atomic_flag in_use;	// Only one request can execute at a time for a model
+	std::atomic_flag in_use = ATOMIC_FLAG_INIT;	// Only one request can execute at a time for a model
 
-	ModelManager(Runtime* runtime, PageCache* cache, model::ColdModel* cold);
-	std::future<InferenceResponse> add_request(InferenceRequest &request);
+	ModelManager(const int id, Runtime* runtime, PageCache* cache, model::ColdModel* cold);
+	std::shared_future<InferenceResponse> add_request(InferenceRequest &request);
 
 private:
 
@@ -88,18 +90,17 @@ private:
 /** The opposite of clockwork; manages everything itself */
 class Worker {
 private:
-	int model_id_seed = 0;
 	Runtime* runtime;
 	PageCache* cache;
 
-	std::mutex models_mutex;
-	std::unordered_map<int, ModelManager*> models;
+	std::mutex managers_mutex;
+	std::vector<ModelManager*> managers;
 
 public:
 
 	Worker(Runtime* runtime, PageCache* cache);
-	std::future<LoadModelFromDiskResponse> loadModelFromDisk(LoadModelFromDiskRequest &request);
-	std::future<InferenceResponse> infer(InferenceRequest &request);
+	std::shared_future<LoadModelFromDiskResponse> loadModelFromDisk(LoadModelFromDiskRequest &request);
+	std::shared_future<InferenceResponse> infer(InferenceRequest &request);
 };
 
 }

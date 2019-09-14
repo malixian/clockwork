@@ -108,12 +108,12 @@ private:
 	char* baseptr;
 
 public:
-	const size_t size, page_size;
+	const uint64_t size, page_size;
 	const unsigned n_pages;
 	LinkedList<Page*> freePages;
 	LinkedList<std::shared_ptr<Allocation>> lockedAllocations, unlockedAllocations;
 
-	PageCache(char* baseptr, size_t total_size, size_t page_size);
+	PageCache(char* baseptr, uint64_t total_size, uint64_t page_size);
 
 	/* 
 	Locks the allocation if it hasn't been evicted

@@ -148,8 +148,8 @@ void ModelExec::getoutput(std::vector<char*> &pages, void* outputptr) {
 	cudaStream_t stream = tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream;
 	CUDA_CALL(
 		cudaMemcpyAsync(
-			srcptr,
 			outputptr, 
+			srcptr,
 			mm.outputs[0].size, 
 			cudaMemcpyDeviceToHost,
 			stream

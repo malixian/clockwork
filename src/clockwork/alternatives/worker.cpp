@@ -1,25 +1,31 @@
 #include "clockwork/alternatives/worker.h"
+#include <iostream>
+#include <atomic>
 
 using namespace clockwork::alternatives;
 
-ModelManager::ModelManager(Runtime* runtime, PageCache* cache, model::ColdModel* cold) : runtime(runtime), model(cache, cold) {
+ModelManager::ModelManager(const int id, Runtime* runtime, PageCache* cache, model::ColdModel* cold) : id(id), runtime(runtime), model(cache, cold) {
 	model.coldToCool();
 	model.coolToWarm();
 }
 
-std::future<InferenceResponse> ModelManager::add_request(InferenceRequest &request) {
+std::atomic_int request_id_seed = 0;
+
+std::shared_future<InferenceResponse> ModelManager::add_request(InferenceRequest &request) {
+
 	if (request.input_size != model.inputsize()) {
 		std::stringstream errorMsg;
 		errorMsg << "Mismatched input size, expected " << model.inputsize() << ", got " << request.input_size;
 
 		std::promise<InferenceResponse> response;
 		response.set_value(InferenceResponse{ResponseHeader{clockworkError, errorMsg.str()}});
-		return response.get_future();
+		return std::shared_future<InferenceResponse>(response.get_future());
 	}
 
 	Request* r = new Request();
+	r->id = request_id_seed++;
 	r->input = request.input;
-	r->output = static_cast<char*>(malloc(model.outputsize()));
+	r->output = static_cast<char*>(malloc(model.outputsize())); // Later don't use malloc?
 
 	queue_mutex.lock();
 	pending_requests.push_back(r);
@@ -32,7 +38,7 @@ std::future<InferenceResponse> ModelManager::add_request(InferenceRequest &reque
 		queue_mutex.unlock();
 	}
 
-	return r->promise.get_future();
+	return std::shared_future<InferenceResponse>(r->promise.get_future());
 }
 
 
@@ -61,6 +67,7 @@ void ModelManager::handle_response(Request* request) {
 void ModelManager::submit(Request* request) {
 	RuntimeModel::State state = model.lock();
 
+
 	RequestBuilder* builder = runtime->newRequest();
 
 	if (state == RuntimeModel::State::Warm) {
@@ -87,43 +94,46 @@ void ModelManager::submit(Request* request) {
 	builder->addTask(TaskType::Sync, [this, request] {
 		this->handle_response(request);
 	});
+
+	builder->submit();
 }
 
 Worker::Worker(Runtime* runtime, PageCache* cache) : runtime(runtime), cache(cache) {}
 
-std::future<LoadModelFromDiskResponse> Worker::loadModelFromDisk(LoadModelFromDiskRequest &request) {
+std::shared_future<LoadModelFromDiskResponse> Worker::loadModelFromDisk(LoadModelFromDiskRequest &request) {
 	// Synchronous for now since this is not on critical path
-	std::lock_guard<std::mutex> lock(models_mutex);
+	std::lock_guard<std::mutex> lock(managers_mutex);
 
 	clockwork::model::ColdModel* cold = clockwork::model::FromDisk(
 		request.model_path + ".so",
 		request.model_path + ".clockwork",
 		request.model_path + ".clockwork_params"
 	);
-	ModelManager* manager = new ModelManager(runtime, cache, cold);
-	int model_id = model_id_seed++;
-	models[model_id] = manager;
+	int id = managers.size();
+	ModelManager* manager = new ModelManager(id, runtime, cache, cold);
+	managers.push_back(manager);
 
 
 	std::promise<LoadModelFromDiskResponse> response;
 	response.set_value(
 		LoadModelFromDiskResponse{
 			ResponseHeader{clockworkSuccess, ""},
-			model_id
+			id,
+			manager->model.inputsize()
 		});
-	return response.get_future();
+	return std::shared_future<LoadModelFromDiskResponse>(response.get_future());
 }
 
-std::future<InferenceResponse> Worker::infer(InferenceRequest &request) {
-	auto it = models.find(request.model_id);
-	ModelManager* manager;
-	if (it == models.end() || (manager = it->second) == nullptr) {
+std::shared_future<InferenceResponse> Worker::infer(InferenceRequest &request) {
+	std::lock_guard<std::mutex> lock(managers_mutex);
+
+	if (request.model_id < 0 || request.model_id >= managers.size()) {
 		std::stringstream errorMsg;
 		errorMsg << "No model exists with ID " << request.model_id;
 
 		std::promise<InferenceResponse> response;
 		response.set_value(InferenceResponse{ResponseHeader{clockworkError, errorMsg.str()}});
-		return response.get_future();
+		return std::shared_future<InferenceResponse>(response.get_future());
 	}
-	return manager->add_request(request);
+	return managers[request.model_id]->add_request(request);
 }

@@ -3,7 +3,7 @@
 
 namespace clockwork {
 
-PageCache::PageCache(char* baseptr, size_t total_size, size_t page_size) : size(total_size), baseptr(baseptr), page_size(page_size), n_pages(total_size/page_size) {
+PageCache::PageCache(char* baseptr, uint64_t total_size, uint64_t page_size) : size(total_size), baseptr(baseptr), page_size(page_size), n_pages(total_size/page_size) {
 	CHECK(total_size % page_size == 0) << "Cannot create page cache -- page_size " << page_size << " does not equally divide total_size " << total_size;
 
 	// Construct and link pages
