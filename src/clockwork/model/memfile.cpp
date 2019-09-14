@@ -34,7 +34,7 @@ Memfile Memfile::readFrom(const std::string &filename) {
     src.close();
     dst.close();
 
-    return Memfile(memfd, filename);
+    return Memfile(memfd, memfilename);
 }
 
 MemfileReader::MemfileReader(const Memfile &memfile) : 
