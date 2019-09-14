@@ -1,7 +1,7 @@
 #include "clockwork/alternatives/greedyruntime.h"
 #include "tvm/runtime/cuda_common.h"
 #include "clockwork/runtime.h"
-#include "clockwork/util/tvm_util.h"
+#include "clockwork/util.h"
 #include <array>
 
 namespace clockwork {
@@ -34,13 +34,9 @@ bool Task::isAsyncComplete() {
 }
 
 void Task::run() {
-	if (prev != nullptr) {
-		prev->awaitCompletion();
-	}
-
 	f();
 
-	CUDA_CALL(cudaEventRecord(asyncComplete, tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream));
+	CUDA_CALL(cudaEventRecord(asyncComplete, clockwork::util::Stream()));
 	syncComplete.store(true);
 }
 
@@ -61,7 +57,7 @@ void Executor::join() {
 }
 
 void Executor::executorMain(int executorId) {
-	tvmutil::initializeTVMCudaStream();
+	util::initializeCudaStream();
 	std::vector<Task*> pending;
 	while (runtime->isAlive()) {
 		// Finish any pending tasks that are complete

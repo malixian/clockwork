@@ -1,6 +1,6 @@
 
 #include "clockwork/alternatives/threadpoolruntime.h"
-#include "clockwork/util/tvm_util.h"
+#include "clockwork/util.h"
 
 namespace clockwork {
 
@@ -41,7 +41,7 @@ ThreadpoolRuntime::~ThreadpoolRuntime() {
 }
 
 void ThreadpoolRuntime::threadpoolMain(int threadNumber) {
-	tvmutil::initializeTVMCudaStream();
+	util::initializeCudaStream();
 	Request* request;
 	while (alive.load()) { // TODO: graceful shutdown
 		if (queue->try_dequeue(request)) {

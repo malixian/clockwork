@@ -7,8 +7,7 @@
 #include <cstdlib>
 #include <cuda_runtime.h>
 #include <chrono>
-#include "clockwork/util/util.h"
-#include "clockwork/util/tvm_util.h"
+#include "clockwork/util.h"
 #include <tvm/runtime/cuda_common.h>
 #include "clockwork/cache.h"
 #include <dmlc/logging.h>
@@ -76,14 +75,14 @@ public:
 
 	void checkResponse(clockwork::alternatives::InferenceResponse rsp) {
 		CHECK(rsp.header.status == clockworkSuccess) << "Error inferring model: " << rsp.header.message;
-		// std::cout << "Got response of size " << rsp.output_size << std::endl;
+		std::cout << "Got response of size " << rsp.output_size << std::endl;
 		free(rsp.output);
 	}
 };
 
 void testmemory(uint64_t totalsize, uint64_t pagesize) {
 	
-	Runtime* runtime = clockwork::newFIFOThreadpoolRuntime(1);
+	Runtime* runtime = clockwork::newGreedyRuntime(1, 1);
 
 	void* baseptr;
 	CUDA_CALL(cudaMalloc(&baseptr, totalsize));
@@ -100,15 +99,16 @@ void testmemory(uint64_t totalsize, uint64_t pagesize) {
 
 	std::cout << "Loaded " << num_models << " models" << std::endl;
 
-	int num_per_model = 20;
+	int num_per_model = 20000;
+	int max_outstanding = 20;
 	for (unsigned i = 0; i < num_per_model; i++) {
 		for (unsigned j = 0; j < models.model_ids.size(); j++) {
 			models.infer(j);
-		}
-	}
 
-	while (models.pending.size() > 0) {
-		models.checkResponse(models.awaitOne().get());		
+			while (models.pending.size() > max_outstanding) {
+				models.checkResponse(models.awaitOne().get());						
+			}
+		}
 	}
 
 }

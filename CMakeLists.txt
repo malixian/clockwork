@@ -36,8 +36,7 @@ add_library(clockwork
 	src/clockwork/clockworkruntime.cpp
 	src/clockwork/cache.cpp
 	src/clockwork/runtime_model.cpp
-	src/clockwork/util/util.cpp
-	src/clockwork/util/tvm_util.cpp
+	src/clockwork/util.cpp
 	src/clockwork/model/memfile.cpp
 	src/clockwork/model/model_impl.cpp
 	src/clockwork/model/cuda.cpp
@@ -56,6 +55,7 @@ target_link_libraries(clockwork PUBLIC
 
 add_executable (main
 	src/main.cc
+	src/clockwork/util.cpp
 )
 
 target_link_libraries(

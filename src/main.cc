@@ -19,10 +19,9 @@
 #include "clockwork/model.h"
 #include <cuda_runtime.h>
 #include <chrono>
-#include "clockwork/util/util.h"
-#include "clockwork/util/tvm_util.h"
 #include <tvm/runtime/cuda_common.h>
 #include "clockwork/cache.h"
+#include "clockwork/util.h"
 
 
 struct ProfileData {
@@ -36,7 +35,7 @@ uint64_t nanos(std::chrono::high_resolution_clock::time_point t) {
 
 
 void loadmodel() {
-    clockwork::tvmutil::initializeTVMCudaStream();
+    clockwork::util::initializeCudaStream();
     clockwork::util::setCurrentThreadMaxPriority();
     clockwork::util::set_core(7);
 

@@ -1,8 +1,7 @@
 #include "clockwork/clockworkruntime.h"
 #include "tvm/runtime/cuda_common.h"
 #include "clockwork/runtime.h"
-#include "clockwork/util/util.h"
-#include "clockwork/util/tvm_util.h"
+#include "clockwork/util.h"
 #include <array>
 
 namespace clockwork {
@@ -132,7 +131,7 @@ void Executor::join() {
 }
 
 void Executor::executorMain(int executorId) {
-	tvmutil::initializeTVMCudaStream();
+	util::initializeCudaStream();
 
 	std::vector<Task*> pending;
 	while (alive.load()) {

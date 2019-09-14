@@ -12,7 +12,7 @@
 #include <pods/binary.h>
 #include <pods/buffers.h>
 #include <cstring>
-#include "clockwork/util/util.h"
+#include "clockwork/util.h"
 
 namespace clockwork {
 namespace model {

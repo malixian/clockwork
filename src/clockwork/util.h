@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <string>
+#include <cuda_runtime.h>
 
 
 namespace clockwork {
@@ -25,6 +26,10 @@ void setCurrentThreadMaxPriority();
 
 
 void readFileAsString(const std::string &filename, std::string &dst);
+
+
+void initializeCudaStream();
+cudaStream_t Stream();
 
 }
 }

@@ -1,4 +1,4 @@
-#include "clockwork/util/util.h"
+#include "clockwork/util.h"
 #include <chrono>
 #include <iostream>
 #include <fstream>
@@ -7,7 +7,6 @@
 #include <chrono>
 #include <sstream>
 #include <string.h>
-#include <cuda_runtime.h>
 #include <pthread.h>
 #include <thread>
 #include <atomic>
@@ -15,6 +14,9 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <istream>
+#include "tvm/runtime/cuda_common.h"
+#include <cuda_runtime.h>
+#include <dmlc/logging.h>
 
 
 namespace clockwork {
@@ -84,17 +86,17 @@ char* getGPUModelToBuffer(int deviceNumber, char* buf) {
 }
 
 void setCurrentThreadMaxPriority() {
-	pthread_t thId = pthread_self();
-    pthread_attr_t thAttr;
-    int policy = 0;
-    int max_prio_for_policy = 0;
+  pthread_t thId = pthread_self();
+  pthread_attr_t thAttr;
+  int policy = 0;
+  int max_prio_for_policy = 0;
 
-    pthread_attr_init(&thAttr);
-    pthread_attr_getschedpolicy(&thAttr, &policy);
-    max_prio_for_policy = sched_get_priority_max(policy);
+  pthread_attr_init(&thAttr);
+  pthread_attr_getschedpolicy(&thAttr, &policy);
+  max_prio_for_policy = sched_get_priority_max(policy);
 
-    pthread_setschedprio(thId, max_prio_for_policy);
-    pthread_attr_destroy(&thAttr);
+  pthread_setschedprio(thId, max_prio_for_policy);
+  pthread_attr_destroy(&thAttr);
 }
 
 
@@ -104,6 +106,19 @@ void readFileAsString(const std::string &filename, std::string &dst) {
       std::istreambuf_iterator<char>(in), 
       std::istreambuf_iterator<char>());
   in.close();
+}
+
+
+void initializeCudaStream() {
+  CUDA_CALL(cudaSetDevice(0));
+  cudaStream_t stream;  
+  CUDA_CALL(cudaStreamCreate(&stream));
+  tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream = stream;
+  tvm::runtime::CUDAThreadEntry::ThreadLocal()->stream = stream;
+}
+
+cudaStream_t Stream() {
+  return tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream;
 }
 
 }
