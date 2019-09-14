@@ -12,6 +12,8 @@ enum TaskType {
 };
 extern std::array<TaskType, 7> TaskTypes;
 
+std::string TaskTypeName(TaskType type);
+
 class RequestBuilder {
 public:
 	virtual RequestBuilder* addTask(TaskType type, std::function<void(void)> operation, TaskTelemetry &telemetry) = 0;

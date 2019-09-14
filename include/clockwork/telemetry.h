@@ -30,7 +30,7 @@ struct RequestTelemetry {
 struct SerializedTaskTelemetry {
 	int task_type, executor_id;
 	uint64_t created, enqueued, eligible_for_dequeue, dequeued, exec_complete, async_complete;
-	float async_wait, async_duration;
+	uint64_t async_wait, async_duration;
 
 	PODS_SERIALIZABLE(1,
 		PODS_MDR(task_type),
@@ -49,7 +49,7 @@ struct SerializedTaskTelemetry {
 struct SerializedExecutorTelemetry {
 	int task_type, executor_id;
 	uint64_t next_task_begin, slot_available, task_dequeued, task_complete;
-	float async_wait, async_duration;
+	uint64_t async_wait, async_duration;
 
 	PODS_SERIALIZABLE(1,
 		PODS_MDR(task_type),

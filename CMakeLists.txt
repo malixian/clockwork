@@ -86,6 +86,21 @@ target_link_libraries(
 	tbb
 )
 
+add_executable (inflate
+	src/inflate.cpp
+)
+
+target_link_libraries(
+	inflate
+	clockwork
+	Threads::Threads
+	dl
+	cuda
+	cudart
+	tvm_runtime
+	tbb
+)
+
 add_executable (testmemory
 	src/testmemory.cpp
 )
