@@ -32,21 +32,17 @@ link_directories(
 )
 
 add_library(clockwork
-	src/clockwork/decoupledruntime.cpp
-	src/clockwork/greedyruntime.cpp
-	src/clockwork/clockworkruntime.cpp
-	src/clockwork/util/util.cpp
-	src/clockwork/util/tvm_util.cpp
-	src/clockwork/model_manager.cc
 	src/clockwork/runtime.cpp
 	src/clockwork/threadpoolruntime.cpp
-	src/clockwork/manager.cc
+	src/clockwork/greedyruntime.cpp
+	src/clockwork/clockworkruntime.cpp
+	src/clockwork/memory.cpp
+	src/clockwork/util/util.cpp
+	src/clockwork/util/tvm_util.cpp
 	src/clockwork/model/memfile.cpp
 	src/clockwork/model/model_impl.cpp
 	src/clockwork/model/cuda.cpp
 	src/clockwork/model/so.cpp
-	src/clockwork/memory.cpp
-	src/clockwork/tvm/decoupled_graph_runtime.cc
 )
 
 target_link_libraries(clockwork PUBLIC
@@ -72,6 +68,7 @@ target_link_libraries(
 )
 
 add_executable (convert
+	src/clockwork/tvm/decoupled_graph_runtime.cc
 	src/clockwork-convert/convert.cpp
 	src/clockwork-convert/convert_to_paged.h
 )

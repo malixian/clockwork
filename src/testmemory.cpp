@@ -12,12 +12,11 @@
 #include <tvm/runtime/cuda_common.h>
 #include "clockwork/memory.h"
 #include <dmlc/logging.h>
-#include "clockwork/manager2.h"
 
 using namespace clockwork;
 
 void testmemory(int pagesize) {
-	Manager manager(pagesize);
+	// Manager manager(pagesize);
 }
 
 int main(int argc, char *argv[]) {
