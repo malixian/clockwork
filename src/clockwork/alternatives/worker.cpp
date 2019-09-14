@@ -1,6 +1,9 @@
 #include "clockwork/alternatives/worker.h"
 #include <iostream>
 #include <atomic>
+#include "clockwork/util.h"
+#include <cuda_runtime.h>
+#include "tvm/runtime/cuda_common.h"
 
 using namespace clockwork::alternatives;
 
@@ -92,6 +95,10 @@ void ModelManager::submit(Request* request) {
 		this->model.getOutput(request->output);
 	});
 	builder->addTask(TaskType::Sync, [this, request] {
+		// cudaStreamSynchronize might not be necessary -- it waits for the PCIe_D2H_Output to complete,
+		// but some executor types might already guarantee it's completed.  Some, however, will not
+		// provide this guarantee, and only do a cudaStreamWaitEvent on the current stream.
+		CUDA_CALL(cudaStreamSynchronize(util::Stream()));
 		this->handle_response(request);
 	});
 
