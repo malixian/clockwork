@@ -1,4 +1,4 @@
-#include "clockwork/greedyruntime.h"
+#include "clockwork/alternatives/greedyruntime.h"
 #include "tvm/runtime/cuda_common.h"
 #include "clockwork/runtime.h"
 #include "clockwork/util/tvm_util.h"

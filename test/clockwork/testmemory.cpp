@@ -2,7 +2,7 @@
 
 #include <cstdlib>
 
-#include "clockwork/memory.h"
+#include "clockwork/cache.h"
 
 class TestEvictionCallback : public clockwork::EvictionCallback {
 public:

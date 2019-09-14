@@ -10,7 +10,7 @@
 #include "clockwork/util/util.h"
 #include "clockwork/util/tvm_util.h"
 #include <tvm/runtime/cuda_common.h>
-#include "clockwork/memory.h"
+#include "clockwork/cache.h"
 #include <dmlc/logging.h>
 
 using namespace clockwork;

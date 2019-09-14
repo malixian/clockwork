@@ -1,5 +1,5 @@
 
-#include "clockwork/threadpoolruntime.h"
+#include "clockwork/alternatives/threadpoolruntime.h"
 #include "clockwork/util/tvm_util.h"
 
 namespace clockwork {

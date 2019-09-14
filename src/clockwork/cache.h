@@ -1,5 +1,5 @@
-#ifndef _CLOCKWORK_MODEL_MEMORY_H_
-#define _CLOCKWORK_MODEL_MEMORY_H_
+#ifndef _CLOCKWORK_CACHE_H_
+#define _CLOCKWORK_CACHE_H_
 
 #include <mutex>
 #include <memory>
