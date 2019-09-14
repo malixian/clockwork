@@ -7,6 +7,7 @@
 #include <atomic>
 #include "clockwork/runtime.h"
 #include "tbb/concurrent_queue.h"
+#include "clockwork/telemetry.h"
 
 namespace clockwork {
 	
@@ -21,12 +22,13 @@ public:
 	cudaEvent_t asyncComplete;
 	Task* prev = nullptr;
 	Task* next = nullptr;
+	TaskTelemetry &telemetry;
 
-	Task(TaskType type, std::function<void(void)> f);
+	Task(TaskType type, std::function<void(void)> f, TaskTelemetry &telemetry);
 
 	void awaitCompletion();
 	bool isAsyncComplete();
-	void run();
+	void run(cudaStream_t stream);
 };
 
 class GreedyRuntime;
@@ -74,7 +76,7 @@ private:
 public:
 	RequestBuilder(GreedyRuntime *runtime);
 
-	virtual RequestBuilder* addTask(TaskType type, std::function<void(void)> operation);
+	virtual RequestBuilder* addTask(TaskType type, std::function<void(void)> operation, TaskTelemetry &telemetry);
 
 	virtual void submit();
 };

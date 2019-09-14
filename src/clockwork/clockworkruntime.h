@@ -25,9 +25,10 @@ public:
 	uint64_t eligible;
 	Task* prev = nullptr;
 	Task* next = nullptr;
+	TaskTelemetry &telemetry;
 
-	Task(TaskType type, std::function<void(void)> f);
-	Task(TaskType type, std::function<void(void)> f, uint64_t eligible);
+	Task(TaskType type, std::function<void(void)> f, TaskTelemetry &telemetry);
+	Task(TaskType type, std::function<void(void)> f, uint64_t eligible, TaskTelemetry &telemetry);
 
 	void awaitCompletion();
 	bool isSyncComplete();
@@ -106,8 +107,8 @@ private:
 public:
 	RequestBuilder(ClockworkRuntime *runtime);
 
-	virtual RequestBuilder* addTask(TaskType type, std::function<void(void)> operation);
-	RequestBuilder* addTask(TaskType type, std::function<void(void)> operation, uint64_t eligible);
+	virtual RequestBuilder* addTask(TaskType type, std::function<void(void)> operation, TaskTelemetry &telemetry);
+	RequestBuilder* addTask(TaskType type, std::function<void(void)> operation, uint64_t eligible, TaskTelemetry &telemetry);
 
 	virtual void submit();
 };

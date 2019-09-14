@@ -11,6 +11,7 @@
 #include "clockwork/runtime_model.h"
 #include "clockwork/cache.h"
 #include "clockwork/model.h"
+#include "clockwork/telemetry.h"
 
 
 const int clockworkSuccess = 0;
@@ -65,6 +66,7 @@ public:
 		char* input;
 		char* output;
 		std::promise<InferenceResponse> promise;
+		RequestTelemetry telemetry;
 	};
 
 	const int id;

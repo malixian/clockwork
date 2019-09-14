@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 #include <cuda_runtime.h>
+#include <chrono>
 
 
 namespace clockwork {
@@ -11,6 +12,8 @@ namespace util {
 
 // High-resolution timer, current time in nanoseconds
 std::uint64_t now();
+
+std::chrono::high_resolution_clock::time_point hrt();
 
 std::string nowString();
 

@@ -27,6 +27,10 @@ std::uint64_t now() {
 	return std::chrono::duration_cast<std::chrono::nanoseconds>(t.time_since_epoch()).count();
 }
 
+std::chrono::high_resolution_clock::time_point hrt() {
+  return std::chrono::high_resolution_clock::now();
+}
+
 std::string nowString() {
   std::chrono::time_point<std::chrono::system_clock> now = std::chrono::system_clock::now();
   auto duration = now.time_since_epoch();

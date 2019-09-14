@@ -10,8 +10,8 @@ Runtime* newFIFOThreadpoolRuntime(const unsigned numThreads) {
 
 namespace threadpoolruntime {
 
-RequestBuilder* RequestBuilder::addTask(TaskType type, std::function<void(void)> operation) {
-	tasks.push_back(Task{type, operation});
+RequestBuilder* RequestBuilder::addTask(TaskType type, std::function<void(void)> operation, TaskTelemetry &telemetry) {
+	tasks.push_back(Task{type, operation, telemetry});
 	return this;
 }
 

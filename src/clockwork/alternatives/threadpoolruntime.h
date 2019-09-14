@@ -14,6 +14,7 @@ namespace threadpoolruntime {
 struct Task {
 	TaskType type;
 	std::function<void(void)> f;
+	TaskTelemetry &telemetry;
 };
 
 struct Request {
@@ -61,7 +62,7 @@ private:
 	std::vector<Task> tasks;
 public:
 	RequestBuilder(ThreadpoolRuntime *runtime) : runtime(runtime) {}
-	virtual RequestBuilder* addTask(TaskType type, std::function<void(void)> operation);
+	virtual RequestBuilder* addTask(TaskType type, std::function<void(void)> operation, TaskTelemetry &telemetry);
 	virtual void submit();
 };
 

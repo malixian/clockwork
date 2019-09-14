@@ -16,6 +16,7 @@
 #include <future>
 #include <unordered_map>
 #include <chrono>
+#include "clockwork/telemetry.h"
 
 using namespace clockwork;
 

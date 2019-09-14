@@ -4,6 +4,8 @@
 #include "clockwork/util.h"
 #include <cuda_runtime.h>
 #include "tvm/runtime/cuda_common.h"
+#include "clockwork/util.h"
+#include "clockwork/telemetry.h"
 
 using namespace clockwork::alternatives;
 
@@ -30,6 +32,9 @@ std::shared_future<InferenceResponse> ModelManager::add_request(InferenceRequest
 	r->input = request.input;
 	r->output = static_cast<char*>(malloc(model.outputsize())); // Later don't use malloc?
 
+	r->telemetry.model_id = id;
+	r->telemetry.arrived = clockwork::util::hrt();
+
 	queue_mutex.lock();
 	pending_requests.push_back(r);
 	if (!in_use.test_and_set()) {
@@ -46,6 +51,8 @@ std::shared_future<InferenceResponse> ModelManager::add_request(InferenceRequest
 
 
 void ModelManager::handle_response(Request* request) {
+	request->telemetry.complete = clockwork::util::hrt();
+
 	request->promise.set_value(
 		InferenceResponse{
 			ResponseHeader{clockworkSuccess, ""}, 
@@ -70,37 +77,49 @@ void ModelManager::handle_response(Request* request) {
 void ModelManager::submit(Request* request) {
 	RuntimeModel::State state = model.lock();
 
-
 	RequestBuilder* builder = runtime->newRequest();
 
+	request->telemetry.tasks.resize(5);
+	int telemetry_ix = 0;
+	
 	if (state == RuntimeModel::State::Warm) {
-		builder->addTask(TaskType::PCIe_H2D_Weights, [this] {
+		builder->addTask(TaskType::PCIe_H2D_Weights, [this, request] {
 			this->model.warmToHot();
-	    });
+	    }, request->telemetry.tasks[telemetry_ix]);
 	}
+	telemetry_ix++;
+
 	if (state == RuntimeModel::State::Exec) {
     	builder->addTask(TaskType::PCIe_H2D_Inputs, [this, request] {
     		this->model.setInput(request->input);
-    	});
+    	}, request->telemetry.tasks[telemetry_ix]);
 	} else {
     	builder->addTask(TaskType::PCIe_H2D_Inputs, [this, request] {
     		this->model.hotToExec();
     		this->model.setInput(request->input);
-    	});
+    	}, request->telemetry.tasks[telemetry_ix]);
 	}
+	telemetry_ix++;
+
 	builder->addTask(TaskType::GPU, [this] {
 		this->model.call();
-	});
+	}, request->telemetry.tasks[telemetry_ix]);
+	telemetry_ix++;
+
 	builder->addTask(TaskType::PCIe_D2H_Output, [this, request] {
 		this->model.getOutput(request->output);
-	});
+	}, request->telemetry.tasks[telemetry_ix]);
+	telemetry_ix++;
+
 	builder->addTask(TaskType::Sync, [this, request] {
 		// cudaStreamSynchronize might not be necessary -- it waits for the PCIe_D2H_Output to complete,
 		// but some executor types might already guarantee it's completed.  Some, however, will not
 		// provide this guarantee, and only do a cudaStreamWaitEvent on the current stream.
 		CUDA_CALL(cudaStreamSynchronize(util::Stream()));
 		this->handle_response(request);
-	});
+	}, request->telemetry.tasks[telemetry_ix]);
+
+	request->telemetry.submitted = clockwork::util::hrt();
 
 	builder->submit();
 }

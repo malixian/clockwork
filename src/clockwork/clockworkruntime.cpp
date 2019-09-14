@@ -12,11 +12,11 @@ Runtime* newClockworkRuntime(const unsigned numThreadsPerExecutor, const unsigne
 
 namespace clockworkruntime {
 
-Task::Task(TaskType type, std::function<void(void)> f) : type(type), f(f), syncComplete(false), eligible(0) {
+Task::Task(TaskType type, std::function<void(void)> f, TaskTelemetry &telemetry) : type(type), f(f), syncComplete(false), eligible(0), telemetry(telemetry) {
 	CUDA_CALL(cudaEventCreate(&asyncComplete));
 }
 
-Task::Task(TaskType type, std::function<void(void)> f, uint64_t eligible) : type(type), f(f), syncComplete(false), eligible(eligible) {
+Task::Task(TaskType type, std::function<void(void)> f, uint64_t eligible, TaskTelemetry &telemetry) : type(type), f(f), syncComplete(false), eligible(eligible), telemetry(telemetry) {
 	CUDA_CALL(cudaEventCreate(&asyncComplete));
 }
 
@@ -200,13 +200,13 @@ clockwork::RequestBuilder* ClockworkRuntime::newRequest() {
 
 RequestBuilder::RequestBuilder(ClockworkRuntime *runtime) : runtime(runtime) {}
 
-RequestBuilder* RequestBuilder::addTask(TaskType type, std::function<void(void)> operation) {
-	tasks.push_back(new Task(type, operation));
+RequestBuilder* RequestBuilder::addTask(TaskType type, std::function<void(void)> operation, TaskTelemetry &telemetry) {
+	tasks.push_back(new Task(type, operation, telemetry));
 	return this;
 }
 
-RequestBuilder* RequestBuilder::addTask(TaskType type, std::function<void(void)> operation, uint64_t eligible) {
-	tasks.push_back(new Task(type, operation, eligible));
+RequestBuilder* RequestBuilder::addTask(TaskType type, std::function<void(void)> operation, uint64_t eligible, TaskTelemetry &telemetry) {
+	tasks.push_back(new Task(type, operation, eligible, telemetry));
 	return this;
 }
 

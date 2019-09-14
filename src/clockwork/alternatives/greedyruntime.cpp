@@ -12,7 +12,7 @@ Runtime* newGreedyRuntime(const unsigned numThreadsPerExecutor, const unsigned m
 
 namespace greedyruntime {
 
-Task::Task(TaskType type, std::function<void(void)> f) : type(type), f(f) {
+Task::Task(TaskType type, std::function<void(void)> f, TaskTelemetry &telemetry) : type(type), f(f), telemetry(telemetry) {
 	CUDA_CALL(cudaEventCreate(&asyncComplete));
 }
 
@@ -33,11 +33,21 @@ bool Task::isAsyncComplete() {
 	return true;
 }
 
-void Task::run() {
+void Task::run(cudaStream_t stream) {
+
+	CUDA_CALL(cudaEventRecord(asyncComplete, stream));
 	f();
 
-	CUDA_CALL(cudaEventRecord(asyncComplete, clockwork::util::Stream()));
+	CUDA_CALL(cudaEventRecord(asyncComplete, stream));
 	syncComplete.store(true);
+}
+
+void deleteTaskAndPredecessors(Task* task) {
+	while (task != nullptr) {
+		Task* prev = task->prev;
+		delete task;
+		task = prev;
+	}
 }
 
 Executor::Executor(GreedyRuntime* runtime, TaskType type, const unsigned numThreads, const unsigned maxOutstanding) : runtime(runtime), type(type), maxOutstanding(maxOutstanding) {
@@ -58,6 +68,7 @@ void Executor::join() {
 
 void Executor::executorMain(int executorId) {
 	util::initializeCudaStream();
+	cudaStream_t stream = clockwork::util::Stream();
 	std::vector<Task*> pending;
 	while (runtime->isAlive()) {
 		// Finish any pending tasks that are complete
@@ -65,7 +76,9 @@ void Executor::executorMain(int executorId) {
 			if (pending[i]->isAsyncComplete()) {
 				if (pending[i]->next != nullptr) {
 					runtime->enqueue(pending[i]->next);
-				} // TODO: final task cleanup / notification
+				} else {
+					deleteTaskAndPredecessors(pending[i]);
+				}
 				pending.erase(pending.begin()+i);
 				i--;
 			}
@@ -75,7 +88,7 @@ void Executor::executorMain(int executorId) {
 		if (pending.size() < maxOutstanding) {
 			Task* next;
 			if (queue.try_pop(next)) {
-				next->run();
+				next->run(stream);
 				pending.push_back(next);
 			}
 		}
@@ -115,8 +128,8 @@ clockwork::RequestBuilder* GreedyRuntime::newRequest() {
 
 RequestBuilder::RequestBuilder(GreedyRuntime *runtime) : runtime(runtime) {}
 
-RequestBuilder* RequestBuilder::addTask(TaskType type, std::function<void(void)> operation) {
-	tasks.push_back(new Task(type, operation));
+RequestBuilder* RequestBuilder::addTask(TaskType type, std::function<void(void)> operation, TaskTelemetry &telemetry) {
+	tasks.push_back(new Task(type, operation, telemetry));
 	return this;
 }
 
@@ -132,7 +145,8 @@ void RequestBuilder::submit() {
 	// Enqueue the first task
 	if (tasks.size() > 0) {
 		runtime->enqueue(tasks[0]);
-	} // TODO: notify if final task
+	}
+	delete this;
 }
 
 }

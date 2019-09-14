@@ -3,6 +3,7 @@
 
 #include <functional>
 #include <array>
+#include "clockwork/telemetry.h"
 
 namespace clockwork {
 
@@ -13,7 +14,7 @@ extern std::array<TaskType, 7> TaskTypes;
 
 class RequestBuilder {
 public:
-	virtual RequestBuilder* addTask(TaskType type, std::function<void(void)> operation) = 0;
+	virtual RequestBuilder* addTask(TaskType type, std::function<void(void)> operation, TaskTelemetry &telemetry) = 0;
 	virtual void submit() = 0;
 };
 
