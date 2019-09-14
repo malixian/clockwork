@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <sstream>
 #include <iostream>
+#include <fstream>
 #include "clockwork/util.h"
 
 
@@ -14,12 +15,13 @@ namespace clockwork {
 
 class TelemetryLogger {
 private:
+	const std::string output_filename;
 	std::atomic_bool alive = true;
 	std::thread thread;
 	tbb::concurrent_queue<RequestTelemetry*> queue;
 
 public:	
-	TelemetryLogger() {
+	TelemetryLogger(std::string output_filename) : output_filename(output_filename) {
 		thread = std::thread(&TelemetryLogger::main, this);
 	}
 
@@ -43,6 +45,7 @@ public:
 	}
 
 	void main() {
+		std::ofstream out(output_filename);
 		while (alive) {
 			RequestTelemetry* srcTelemetry;
 			if (!queue.try_pop(srcTelemetry)) {
@@ -61,9 +64,8 @@ public:
 			    << " totallatency=" << (telemetry.complete - telemetry.arrived)
 			    << std::endl;
 			std::cout << msg.str();
-
 		}
-
+		out.close();
 	}
 
 };

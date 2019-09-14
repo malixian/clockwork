@@ -127,7 +127,7 @@ void ModelManager::submit(Request* request) {
 	});
 }
 
-Worker::Worker(Runtime* runtime, PageCache* cache) : runtime(runtime), cache(cache), logger(new TelemetryLogger()) {}
+Worker::Worker(Runtime* runtime, PageCache* cache, TelemetryLogger *logger) : runtime(runtime), cache(cache), logger(logger) {}
 
 std::shared_future<LoadModelFromDiskResponse> Worker::loadModelFromDisk(LoadModelFromDiskRequest &request) {
 	// Synchronous for now since this is not on critical path

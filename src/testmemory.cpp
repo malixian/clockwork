@@ -89,7 +89,9 @@ void testmemory(uint64_t totalsize, uint64_t pagesize) {
 	CUDA_CALL(cudaMalloc(&baseptr, totalsize));
 	PageCache* cache = new PageCache(static_cast<char*>(baseptr), totalsize, pagesize);
 
-	clockwork::alternatives::Worker* worker = new clockwork::alternatives::Worker(runtime, cache);
+	TelemetryLogger* logger = new TelemetryLogger("telemetry.out");
+
+	clockwork::alternatives::Worker* worker = new clockwork::alternatives::Worker(runtime, cache, logger);
 
 	LoadedModels models(worker);
 

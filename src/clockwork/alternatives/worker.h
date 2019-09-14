@@ -103,7 +103,7 @@ private:
 
 public:
 
-	Worker(Runtime* runtime, PageCache* cache);
+	Worker(Runtime* runtime, PageCache* cache, TelemetryLogger* logger);
 	std::shared_future<LoadModelFromDiskResponse> loadModelFromDisk(LoadModelFromDiskRequest &request);
 	std::shared_future<InferenceResponse> infer(InferenceRequest &request);
 };
