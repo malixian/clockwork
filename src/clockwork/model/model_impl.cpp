@@ -219,6 +219,14 @@ WarmModelImpl::~WarmModelImpl() {
 	delete this->clockwork;
 }
 
+int WarmModelImpl::inputsize() {
+	return clockwork->inputsize();
+}
+
+int WarmModelImpl::outputsize() {
+	return clockwork->outputsize();
+}
+
 int WarmModelImpl::num_params_pages(int pagesize) {
 	return clockwork->num_params_pages(pagesize);
 }
