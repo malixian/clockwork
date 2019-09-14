@@ -35,6 +35,7 @@ public:
 	virtual int inputsize() = 0;
 	virtual int outputsize() = 0;
 	virtual int num_params_pages(int pagesize) = 0;
+	virtual int num_workspace_pages(int pagesize) = 0;
 	virtual HotModel* load(std::vector<char*> &params_pages) = 0;
 	virtual void unload() = 0;
 };
