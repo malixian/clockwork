@@ -19,6 +19,7 @@ struct Task {
 
 struct Request {
 	std::vector<Task> tasks;
+	std::function<void(void)> onComplete;
 };
 
 class Queue {
@@ -64,6 +65,7 @@ public:
 	RequestBuilder(ThreadpoolRuntime *runtime) : runtime(runtime) {}
 	virtual RequestBuilder* addTask(TaskType type, std::function<void(void)> operation, TaskTelemetry &telemetry);
 	virtual void submit();
+	virtual void submit(std::function<void(void)> onComplete);
 };
 
 }

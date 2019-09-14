@@ -55,6 +55,12 @@ void Task::processAsyncCompleteTelemetry() {
 	CUDA_CALL(cudaEventElapsedTime(&telemetry.async_duration, asyncStart, asyncComplete));
 }
 
+void Task::complete() {
+	if (onComplete != nullptr) {
+		onComplete();
+	}
+}
+
 void deleteTaskAndPredecessors(Task* task) {
 	while (task != nullptr) {
 		Task* prev = task->prev;
@@ -93,6 +99,7 @@ void Executor::executorMain(int executorId) {
 				if (pending[i]->next != nullptr) {
 					runtime->enqueue(pending[i]->next);
 				} else {
+					pending[i]->complete();
 					deleteTaskAndPredecessors(pending[i]);
 				}
 				pending.erase(pending.begin()+i);
@@ -154,6 +161,10 @@ RequestBuilder* RequestBuilder::addTask(TaskType type, std::function<void(void)>
 }
 
 void RequestBuilder::submit() {
+	submit(nullptr);
+}
+
+void RequestBuilder::submit(std::function<void(void)> onComplete) {
 	// Initialize and link the tasks
 	for (unsigned i = 0; i < tasks.size(); i++) {
 		if (i > 0) {
@@ -164,6 +175,7 @@ void RequestBuilder::submit() {
 
 	// Enqueue the first task
 	if (tasks.size() > 0) {
+		tasks[tasks.size()-1]->onComplete = onComplete;
 		runtime->enqueue(tasks[0]);
 	}
 	delete this;

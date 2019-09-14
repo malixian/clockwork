@@ -26,6 +26,7 @@ public:
 	Task* prev = nullptr;
 	Task* next = nullptr;
 	TaskTelemetry &telemetry;
+	std::function<void(void)> onComplete;
 
 	Task(TaskType type, std::function<void(void)> f, TaskTelemetry &telemetry);
 	Task(TaskType type, std::function<void(void)> f, uint64_t eligible, TaskTelemetry &telemetry);
@@ -111,6 +112,7 @@ public:
 	RequestBuilder* addTask(TaskType type, std::function<void(void)> operation, uint64_t eligible, TaskTelemetry &telemetry);
 
 	virtual void submit();
+	virtual void submit(std::function<void(void)> onComplete);
 };
 
 }

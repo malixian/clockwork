@@ -118,12 +118,13 @@ void ModelManager::submit(Request* request) {
 		// but some executor types might already guarantee it's completed.  Some, however, will not
 		// provide this guarantee, and only do a cudaStreamWaitEvent on the current stream.
 		CUDA_CALL(cudaStreamSynchronize(util::Stream()));
-		this->handle_response(request);
 	}, request->telemetry->tasks[telemetry_ix]);
 
 	request->telemetry->submitted = clockwork::util::hrt();
 
-	builder->submit();
+	builder->submit([this, request] {
+		this->handle_response(request);
+	});
 }
 
 Worker::Worker(Runtime* runtime, PageCache* cache) : runtime(runtime), cache(cache), logger(new TelemetryLogger()) {}

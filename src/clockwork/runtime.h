@@ -16,6 +16,7 @@ class RequestBuilder {
 public:
 	virtual RequestBuilder* addTask(TaskType type, std::function<void(void)> operation, TaskTelemetry &telemetry) = 0;
 	virtual void submit() = 0;
+	virtual void submit(std::function<void(void)> onComplete) = 0;
 };
 
 class Runtime {

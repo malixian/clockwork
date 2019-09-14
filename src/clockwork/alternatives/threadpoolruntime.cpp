@@ -16,7 +16,11 @@ RequestBuilder* RequestBuilder::addTask(TaskType type, std::function<void(void)>
 }
 
 void RequestBuilder::submit() {
-	runtime->submit(new Request{tasks});
+	submit(nullptr);
+}
+
+void RequestBuilder::submit(std::function<void(void)> onComplete) {
+	runtime->submit(new Request{tasks, onComplete});
 }
 
 
@@ -47,6 +51,9 @@ void ThreadpoolRuntime::threadpoolMain(int threadNumber) {
 		if (queue->try_dequeue(request)) {
 			for (unsigned i = 0; i < request->tasks.size(); i++) {
 				request->tasks[i].f();
+			}
+			if (request->onComplete != nullptr) {
+				request->onComplete();
 			}
 			delete request;
 		}

@@ -23,6 +23,7 @@ public:
 	Task* prev = nullptr;
 	Task* next = nullptr;
 	TaskTelemetry &telemetry;
+	std::function<void(void)> onComplete;
 
 	Task(TaskType type, std::function<void(void)> f, TaskTelemetry &telemetry);
 
@@ -30,6 +31,7 @@ public:
 	bool isAsyncComplete();
 	void run(cudaStream_t execStream, cudaStream_t telemetryStream);
 	void processAsyncCompleteTelemetry();
+	void complete();
 };
 
 class GreedyRuntime;
@@ -80,6 +82,7 @@ public:
 	virtual RequestBuilder* addTask(TaskType type, std::function<void(void)> operation, TaskTelemetry &telemetry);
 
 	virtual void submit();
+	virtual void submit(std::function<void(void)> onComplete);
 };
 
 }

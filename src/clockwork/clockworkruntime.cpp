@@ -138,6 +138,9 @@ void Executor::executorMain(int executorId) {
 		// Finish any pending tasks that are complete
 		for (unsigned i = 0; i < pending.size(); i++) {
 			if (pending[i]->isAsyncComplete()) {
+				if (pending[i]->onComplete != nullptr) {
+					pending[i]->onComplete();
+				}
 				pending.erase(pending.begin()+i);
 				i--;
 			}
@@ -211,6 +214,10 @@ RequestBuilder* RequestBuilder::addTask(TaskType type, std::function<void(void)>
 }
 
 void RequestBuilder::submit() {
+	submit(nullptr);
+}
+
+void RequestBuilder::submit(std::function<void(void)> onComplete) {
 	// Initialize and link the tasks
 	for (unsigned i = 1; i < tasks.size(); i++) {
 		tasks[i-1]->next = tasks[i];
@@ -220,6 +227,10 @@ void RequestBuilder::submit() {
 	// Enqueue all tasks
 	for (unsigned i = 0; i < tasks.size(); i++) {
 		runtime->enqueue(tasks[i]);
+	}
+
+	if (tasks.size() > 0) {
+		tasks[tasks.size()-1]->onComplete = onComplete;
 	}
 }
 
