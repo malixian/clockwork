@@ -76,7 +76,7 @@ public:
 
 	void checkResponse(clockwork::alternatives::InferenceResponse rsp) {
 		CHECK(rsp.header.status == clockworkSuccess) << "Error inferring model: " << rsp.header.message;
-		std::cout << "Got response of size " << rsp.output_size << std::endl;
+		// std::cout << "Got response of size " << rsp.output_size << std::endl;
 		free(rsp.output);
 	}
 };
@@ -93,7 +93,7 @@ void testmemory(uint64_t totalsize, uint64_t pagesize) {
 
 	LoadedModels models(worker);
 
-	int num_models = 50;
+	int num_models = 4;
 	for (unsigned i = 0; i < num_models; i++) {
 		models.load("/home/jcmace/modelzoo/resnet50/tesla-m40_batchsize1/tvm-model");
 	}

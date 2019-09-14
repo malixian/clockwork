@@ -9,7 +9,7 @@
 
 using namespace clockwork::alternatives;
 
-ModelManager::ModelManager(const int id, Runtime* runtime, PageCache* cache, model::ColdModel* cold) : id(id), runtime(runtime), model(cache, cold) {
+ModelManager::ModelManager(const int id, Runtime* runtime, PageCache* cache, model::ColdModel* cold, TelemetryLogger* logger) : id(id), runtime(runtime), model(cache, cold), logger(logger) {
 	model.coldToCool();
 	model.coolToWarm();
 }
@@ -32,8 +32,9 @@ std::shared_future<InferenceResponse> ModelManager::add_request(InferenceRequest
 	r->input = request.input;
 	r->output = static_cast<char*>(malloc(model.outputsize())); // Later don't use malloc?
 
-	r->telemetry.model_id = id;
-	r->telemetry.arrived = clockwork::util::hrt();
+	r->telemetry = new RequestTelemetry();
+	r->telemetry->model_id = id;
+	r->telemetry->arrived = clockwork::util::hrt();
 
 	queue_mutex.lock();
 	pending_requests.push_back(r);
@@ -51,7 +52,8 @@ std::shared_future<InferenceResponse> ModelManager::add_request(InferenceRequest
 
 
 void ModelManager::handle_response(Request* request) {
-	request->telemetry.complete = clockwork::util::hrt();
+	request->telemetry->complete = clockwork::util::hrt();
+	this->logger->log(request->telemetry);
 
 	request->promise.set_value(
 		InferenceResponse{
@@ -79,36 +81,36 @@ void ModelManager::submit(Request* request) {
 
 	RequestBuilder* builder = runtime->newRequest();
 
-	request->telemetry.tasks.resize(5);
+	request->telemetry->tasks.resize(5);
 	int telemetry_ix = 0;
 	
 	if (state == RuntimeModel::State::Warm) {
 		builder->addTask(TaskType::PCIe_H2D_Weights, [this, request] {
 			this->model.warmToHot();
-	    }, request->telemetry.tasks[telemetry_ix]);
+	    }, request->telemetry->tasks[telemetry_ix]);
 	}
 	telemetry_ix++;
 
 	if (state == RuntimeModel::State::Exec) {
     	builder->addTask(TaskType::PCIe_H2D_Inputs, [this, request] {
     		this->model.setInput(request->input);
-    	}, request->telemetry.tasks[telemetry_ix]);
+    	}, request->telemetry->tasks[telemetry_ix]);
 	} else {
     	builder->addTask(TaskType::PCIe_H2D_Inputs, [this, request] {
     		this->model.hotToExec();
     		this->model.setInput(request->input);
-    	}, request->telemetry.tasks[telemetry_ix]);
+    	}, request->telemetry->tasks[telemetry_ix]);
 	}
 	telemetry_ix++;
 
 	builder->addTask(TaskType::GPU, [this] {
 		this->model.call();
-	}, request->telemetry.tasks[telemetry_ix]);
+	}, request->telemetry->tasks[telemetry_ix]);
 	telemetry_ix++;
 
 	builder->addTask(TaskType::PCIe_D2H_Output, [this, request] {
 		this->model.getOutput(request->output);
-	}, request->telemetry.tasks[telemetry_ix]);
+	}, request->telemetry->tasks[telemetry_ix]);
 	telemetry_ix++;
 
 	builder->addTask(TaskType::Sync, [this, request] {
@@ -117,14 +119,14 @@ void ModelManager::submit(Request* request) {
 		// provide this guarantee, and only do a cudaStreamWaitEvent on the current stream.
 		CUDA_CALL(cudaStreamSynchronize(util::Stream()));
 		this->handle_response(request);
-	}, request->telemetry.tasks[telemetry_ix]);
+	}, request->telemetry->tasks[telemetry_ix]);
 
-	request->telemetry.submitted = clockwork::util::hrt();
+	request->telemetry->submitted = clockwork::util::hrt();
 
 	builder->submit();
 }
 
-Worker::Worker(Runtime* runtime, PageCache* cache) : runtime(runtime), cache(cache) {}
+Worker::Worker(Runtime* runtime, PageCache* cache) : runtime(runtime), cache(cache), logger(new TelemetryLogger()) {}
 
 std::shared_future<LoadModelFromDiskResponse> Worker::loadModelFromDisk(LoadModelFromDiskRequest &request) {
 	// Synchronous for now since this is not on critical path
@@ -136,7 +138,7 @@ std::shared_future<LoadModelFromDiskResponse> Worker::loadModelFromDisk(LoadMode
 		request.model_path + ".clockwork_params"
 	);
 	int id = managers.size();
-	ModelManager* manager = new ModelManager(id, runtime, cache, cold);
+	ModelManager* manager = new ModelManager(id, runtime, cache, cold, logger);
 	managers.push_back(manager);
 
 

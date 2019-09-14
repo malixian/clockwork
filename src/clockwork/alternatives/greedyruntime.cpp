@@ -13,6 +13,8 @@ Runtime* newGreedyRuntime(const unsigned numThreadsPerExecutor, const unsigned m
 namespace greedyruntime {
 
 Task::Task(TaskType type, std::function<void(void)> f, TaskTelemetry &telemetry) : type(type), f(f), telemetry(telemetry) {
+	CUDA_CALL(cudaEventCreate(&asyncSubmit));
+	CUDA_CALL(cudaEventCreate(&asyncStart));
 	CUDA_CALL(cudaEventCreate(&asyncComplete));
 }
 
@@ -33,13 +35,24 @@ bool Task::isAsyncComplete() {
 	return true;
 }
 
-void Task::run(cudaStream_t stream) {
+void Task::run(cudaStream_t execStream, cudaStream_t telemetryStream) {
+	telemetry.dequeued = clockwork::util::hrt();
 
-	CUDA_CALL(cudaEventRecord(asyncComplete, stream));
+	CUDA_CALL(cudaEventRecord(asyncSubmit, telemetryStream))
+	CUDA_CALL(cudaEventRecord(asyncStart, execStream));
+
 	f();
 
-	CUDA_CALL(cudaEventRecord(asyncComplete, stream));
+	telemetry.exec_complete = clockwork::util::hrt();
+
+	CUDA_CALL(cudaEventRecord(asyncComplete, execStream));
 	syncComplete.store(true);
+}
+
+void Task::processAsyncCompleteTelemetry() {
+	telemetry.async_complete = clockwork::util::hrt();
+	CUDA_CALL(cudaEventElapsedTime(&telemetry.async_wait, asyncSubmit, asyncStart));
+	CUDA_CALL(cudaEventElapsedTime(&telemetry.async_duration, asyncStart, asyncComplete));
 }
 
 void deleteTaskAndPredecessors(Task* task) {
@@ -68,12 +81,15 @@ void Executor::join() {
 
 void Executor::executorMain(int executorId) {
 	util::initializeCudaStream();
-	cudaStream_t stream = clockwork::util::Stream();
+	cudaStream_t execStream = clockwork::util::Stream();
+	cudaStream_t telemetryStream;
+	CUDA_CALL(cudaStreamCreate(&telemetryStream));
 	std::vector<Task*> pending;
 	while (runtime->isAlive()) {
 		// Finish any pending tasks that are complete
 		for (unsigned i = 0; i < pending.size(); i++) {
 			if (pending[i]->isAsyncComplete()) {
+				pending[i]->processAsyncCompleteTelemetry();
 				if (pending[i]->next != nullptr) {
 					runtime->enqueue(pending[i]->next);
 				} else {
@@ -88,7 +104,7 @@ void Executor::executorMain(int executorId) {
 		if (pending.size() < maxOutstanding) {
 			Task* next;
 			if (queue.try_pop(next)) {
-				next->run(stream);
+				next->run(execStream, telemetryStream);
 				pending.push_back(next);
 			}
 		}
@@ -106,6 +122,9 @@ GreedyRuntime::~GreedyRuntime() {
 }
 
 void GreedyRuntime::enqueue(Task* task) {
+	task->telemetry.task_type = task->type;
+	task->telemetry.enqueued = clockwork::util::hrt();
+	task->telemetry.eligible_for_dequeue = task->telemetry.enqueued; // Not used in greedy
 	executors[task->type]->enqueue(task);
 }
 
@@ -129,6 +148,7 @@ clockwork::RequestBuilder* GreedyRuntime::newRequest() {
 RequestBuilder::RequestBuilder(GreedyRuntime *runtime) : runtime(runtime) {}
 
 RequestBuilder* RequestBuilder::addTask(TaskType type, std::function<void(void)> operation, TaskTelemetry &telemetry) {
+	telemetry.created = clockwork::util::hrt();
 	tasks.push_back(new Task(type, operation, telemetry));
 	return this;
 }

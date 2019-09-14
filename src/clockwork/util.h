@@ -15,6 +15,8 @@ std::uint64_t now();
 
 std::chrono::high_resolution_clock::time_point hrt();
 
+std::uint64_t nanos(std::chrono::high_resolution_clock::time_point t);
+
 std::string nowString();
 
 void set_core(unsigned core);

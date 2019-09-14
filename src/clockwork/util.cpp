@@ -23,12 +23,15 @@ namespace clockwork {
 namespace util {	
 
 std::uint64_t now() {
-	auto t = std::chrono::high_resolution_clock::now();
-	return std::chrono::duration_cast<std::chrono::nanoseconds>(t.time_since_epoch()).count();
+  return nanos(hrt());
 }
 
 std::chrono::high_resolution_clock::time_point hrt() {
   return std::chrono::high_resolution_clock::now();
+}
+
+std::uint64_t nanos(std::chrono::high_resolution_clock::time_point t) {
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(t.time_since_epoch()).count();
 }
 
 std::string nowString() {

@@ -12,6 +12,7 @@
 #include "clockwork/cache.h"
 #include "clockwork/model.h"
 #include "clockwork/telemetry.h"
+#include "clockwork/telemetry_logger.h"
 
 
 const int clockworkSuccess = 0;
@@ -66,11 +67,12 @@ public:
 		char* input;
 		char* output;
 		std::promise<InferenceResponse> promise;
-		RequestTelemetry telemetry;
+		RequestTelemetry* telemetry;
 	};
 
 	const int id;
 	Runtime* runtime;
+	TelemetryLogger* logger;
 
 	// The model being managed
 	RuntimeModel model;
@@ -79,7 +81,7 @@ public:
 	std::deque<Request*> pending_requests;
 	std::atomic_flag in_use = ATOMIC_FLAG_INIT;	// Only one request can execute at a time for a model
 
-	ModelManager(const int id, Runtime* runtime, PageCache* cache, model::ColdModel* cold);
+	ModelManager(const int id, Runtime* runtime, PageCache* cache, model::ColdModel* cold, TelemetryLogger* logger);
 	std::shared_future<InferenceResponse> add_request(InferenceRequest &request);
 
 private:
@@ -94,6 +96,7 @@ class Worker {
 private:
 	Runtime* runtime;
 	PageCache* cache;
+	TelemetryLogger* logger;
 
 	std::mutex managers_mutex;
 	std::vector<ModelManager*> managers;

@@ -19,7 +19,7 @@ public:
 	TaskType type;
 	std::function<void(void)> f;
 	std::atomic_bool syncComplete;
-	cudaEvent_t asyncComplete;
+	cudaEvent_t asyncSubmit, asyncStart, asyncComplete;
 	Task* prev = nullptr;
 	Task* next = nullptr;
 	TaskTelemetry &telemetry;
@@ -28,7 +28,8 @@ public:
 
 	void awaitCompletion();
 	bool isAsyncComplete();
-	void run(cudaStream_t stream);
+	void run(cudaStream_t execStream, cudaStream_t telemetryStream);
+	void processAsyncCompleteTelemetry();
 };
 
 class GreedyRuntime;

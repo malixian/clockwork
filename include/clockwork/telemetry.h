@@ -11,7 +11,7 @@ namespace clockwork {
 struct TaskTelemetry {
 	int task_type, executor_id;
 	std::chrono::high_resolution_clock::time_point created, enqueued, 
-		eligible_for_dequeue, dequeued, exec_start, exec_complete, async_complete;
+		eligible_for_dequeue, dequeued, exec_complete, async_complete;
 	float async_wait, async_duration;
 };
 
@@ -22,14 +22,14 @@ struct ExecutorTelemetry {
 };
 
 struct RequestTelemetry {
-	int model_id;
+	int model_id, request_id;
 	std::chrono::high_resolution_clock::time_point arrived, submitted, complete;
 	std::vector<TaskTelemetry> tasks;
 };
 
 struct SerializedTaskTelemetry {
 	int task_type, executor_id;
-	uint64_t created, enqueued, eligible_for_dequeue, dequeued, exec_start, exec_complete, async_complete;
+	uint64_t created, enqueued, eligible_for_dequeue, dequeued, exec_complete, async_complete;
 	float async_wait, async_duration;
 
 	PODS_SERIALIZABLE(1,
@@ -39,7 +39,6 @@ struct SerializedTaskTelemetry {
 		PODS_MDR(enqueued),
 		PODS_MDR(eligible_for_dequeue),
 		PODS_MDR(dequeued),
-		PODS_MDR(exec_start),
 		PODS_MDR(exec_complete),
 		PODS_MDR(async_complete),
 		PODS_MDR(async_wait),
@@ -64,12 +63,13 @@ struct SerializedExecutorTelemetry {
 };
 
 struct SerializedRequestTelemetry {
-	int model_id;
+	int model_id, request_id;
 	uint64_t arrived, submitted, complete;
 	std::vector<SerializedTaskTelemetry> tasks;
 
 	PODS_SERIALIZABLE(1,
 		PODS_MDR(model_id),
+		PODS_MDR(request_id),
 		PODS_MDR(arrived),
 		PODS_MDR(submitted),
 		PODS_MDR(complete),
