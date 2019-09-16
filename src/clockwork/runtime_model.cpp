@@ -45,7 +45,6 @@ void RuntimeModel::coolToWarm() {
 }
 
 void RuntimeModel::warmToHot() {
-	std::cout << "warmToHot" << std::endl;
 	CHECK(warm != nullptr) << "Cannot transition warm -> hot, warm == nullptr";
 	CHECK(hot == nullptr) << "Cannot transition warm -> hot, hot != nullptr";
 	CHECK(params_alloc == nullptr) << "Cannot transition warm -> hot, params_alloc already allocated";
@@ -58,7 +57,6 @@ void RuntimeModel::warmToHot() {
 }
 
 void RuntimeModel::hotToExec() {
-	std::cout << "hotToExec" << std::endl;
 	CHECK(hot != nullptr) << "Cannot transition hot -> exec, hot == nullptr";
 	CHECK(exec == nullptr) << "Cannot transition hot -> exec, exec != nullptr";
 	CHECK(workspace_alloc == nullptr) << "Cannot transition hot -> exec, workspace_alloc already allocated";
@@ -86,30 +84,33 @@ void RuntimeModel::getOutput(void* output) {
 }
 
 void RuntimeModel::execToHot() {
-	std::cout << "execToHot" << std::endl;
 	CHECK(exec != nullptr) << "Cannot transition exec -> hot, exec == nullptr";
 	CHECK(workspace_alloc != nullptr) << "Cannot transition exec -> hot, workspace_alloc == nullptr";
+	cache->free(workspace_alloc);
 	workspace_alloc = nullptr;
 	exec->unload();
 	exec = nullptr;
 }
 
 void RuntimeModel::hotToWarm() {
-	std::cout << "hotToWarm" << std::endl;
+	if (exec != nullptr) execToHot();
 	CHECK(hot != nullptr) << "Cannot transition hot -> warm, hot == nullptr";
 	CHECK(params_alloc != nullptr) << "Cannot transition hot -> warm, params_alloc == nullptr";
+	cache->free(params_alloc);
 	params_alloc = nullptr;
 	hot->unload();
 	hot = nullptr;
 }
 
 void RuntimeModel::warmToCool() {
+	if (hot != nullptr) hotToWarm();
 	CHECK(warm != nullptr) << "Cannot transition warm -> cool, warm == nullptr";
 	warm->unload();
 	warm = nullptr;
 }
 
 void RuntimeModel::coolToCold() {
+	if (warm != nullptr) warmToCool();
 	CHECK(cool != nullptr) << "Cannot transition cool -> cold, cool == nullptr";
 	cool->unload();
 	cool = nullptr;

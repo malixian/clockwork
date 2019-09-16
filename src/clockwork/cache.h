@@ -28,6 +28,16 @@ public:
 		return head==nullptr;
 	}
 
+	int size() {
+		LinkedListElement<T>* next = head;
+		int count = 0;
+		while (next != nullptr) {
+			next = next->next;
+			count++;
+		}
+		return count;
+	}
+
 	T popHead() {
 		if (isEmpty()) return nullptr;
 		LinkedListElement<T>* elem = head;
@@ -104,7 +114,7 @@ struct Page {
 
 class PageCache {
 private:
-	std::mutex mutex;
+	std::recursive_mutex mutex;
 	char* baseptr;
 
 public:

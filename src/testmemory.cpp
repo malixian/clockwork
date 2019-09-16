@@ -116,7 +116,7 @@ void testmemory(uint64_t totalsize, uint64_t pagesize) {
 	std::cout << "Loaded " << num_models << " models" << std::endl;
 
 	int iterations = 10000;
-	int max_outstanding = 1;
+	int max_outstanding = 4;
 	for (unsigned i = 0; i < iterations; i++) {
 		// Do a hot model
 		{
@@ -128,7 +128,7 @@ void testmemory(uint64_t totalsize, uint64_t pagesize) {
 		}
 		// Do a random one
 		{
-			int next = rand() % num_models;
+			int next = hot_models + (rand() % (num_models - hot_models));
 			models.infer(next);
 			while (models.pending.size() >= max_outstanding) {
 				models.checkResponse(models.awaitOne().get());						
@@ -143,7 +143,7 @@ int main(int argc, char *argv[]) {
 	std::cout << "begin" << std::endl;
 
     uint64_t pagesize = 16L * 1024 * 1024;
-    uint64_t totalsize = 200 * 1024 * 1024;
+    uint64_t totalsize = 16L * 50 * 1024 * 1024;
 	testmemory(totalsize, pagesize);
 
 	std::cout << "end" << std::endl;

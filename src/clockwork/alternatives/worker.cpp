@@ -51,16 +51,21 @@ std::shared_future<InferenceResponse> ModelManager::add_request(InferenceRequest
 	r->telemetry->model_id = id;
 	r->telemetry->arrived = clockwork::util::hrt();
 
-	queue_mutex.lock();
-	pending_requests.push_back(r);
-	if (!in_use.test_and_set()) {
-		Request* toSubmit = pending_requests.front();
-		pending_requests.pop_front();
-		queue_mutex.unlock();
-		submit(toSubmit);
-	} else {
-		queue_mutex.unlock();
+	Request* toSubmit = nullptr;
+	{
+		std::lock_guard<std::mutex> lock(queue_mutex);
+
+		pending_requests.push_back(r);
+		if (!in_use.test_and_set()) {
+			toSubmit = pending_requests.front();
+			pending_requests.pop_front();
+		}
 	}
+
+	if (toSubmit != nullptr) {
+		submit(toSubmit);
+	}
+	
 
 	return std::shared_future<InferenceResponse>(r->promise.get_future());
 }
@@ -68,7 +73,24 @@ std::shared_future<InferenceResponse> ModelManager::add_request(InferenceRequest
 
 void ModelManager::handle_response(Request* request) {
 	request->telemetry->complete = clockwork::util::hrt();
-	this->logger->log(request->telemetry);
+
+	model.unlock();
+
+	Request* toSubmit = nullptr;
+	{
+		std::lock_guard<std::mutex> lock(queue_mutex);
+
+		if (pending_requests.size() > 0) {
+			toSubmit = pending_requests.front();
+			pending_requests.pop_front();
+		} else {
+			in_use.clear();
+		}
+	}
+
+	if (toSubmit != nullptr) {
+		submit(toSubmit);
+	}
 
 	request->promise.set_value(
 		InferenceResponse{
@@ -76,19 +98,8 @@ void ModelManager::handle_response(Request* request) {
 			model.outputsize(), 
 			request->output
 		});
+	this->logger->log(request->telemetry);
 	delete request;
-
-	queue_mutex.lock();
-	if (pending_requests.size() > 0) {
-		Request* toSubmit = pending_requests.front();
-		pending_requests.pop_front();
-		queue_mutex.unlock();
-		submit(toSubmit);
-	} else {
-		model.unlock();
-		in_use.clear();
-		queue_mutex.unlock();
-	}
 }
 
 void ModelManager::submit(Request* request) {

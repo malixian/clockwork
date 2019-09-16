@@ -19,7 +19,7 @@ PageCache::PageCache(char* baseptr, uint64_t total_size, uint64_t page_size) : s
 Locks the allocation if it hasn't been evicted
 */
 bool PageCache::trylock(std::shared_ptr<Allocation> allocation) {
-	std::lock_guard<std::mutex> lock(mutex);
+	std::lock_guard<std::recursive_mutex> lock(mutex);
 
 	if (allocation == nullptr || allocation->evicted) {
 		return false;
@@ -42,7 +42,7 @@ void PageCache::lock(std::shared_ptr<Allocation> allocation) {
 }
 
 void PageCache::unlock(std::shared_ptr<Allocation> allocation) {
-	std::lock_guard<std::mutex> lock(mutex);
+	std::lock_guard<std::recursive_mutex> lock(mutex);
 
 	CHECK(!(allocation->evicted)) << "Tried unlocking an allocation that's already been evicted";
 
@@ -60,7 +60,7 @@ std::shared_ptr<Allocation> PageCache::alloc(unsigned n_pages, EvictionCallback*
 
 
 	std::vector<EvictionCallback*> callbacks;
-	std::lock_guard<std::mutex> lock(mutex);
+	std::lock_guard<std::recursive_mutex> lock(mutex);
 
 	// Use up free pages
 	while(alloc->pages.size() < n_pages && !freePages.isEmpty()) {
@@ -103,6 +103,9 @@ std::shared_ptr<Allocation> PageCache::alloc(unsigned n_pages, EvictionCallback*
 			p->current_allocation = nullptr;
 			freePages.pushBack(p);
 		}
+		// TODO: handle this case gracefully, rather than an error
+		CHECK(false) << "Only " << alloc->pages.size() << "/" << n_pages << " free pages" << std::endl;
+
 		alloc = nullptr;
 	} else {
 		// Allocation successful; lock it
@@ -123,7 +126,7 @@ std::shared_ptr<Allocation> PageCache::alloc(unsigned n_pages, EvictionCallback*
 void PageCache::free(std::shared_ptr<Allocation> allocation) {
 	if (allocation == nullptr) return;
 
-	std::lock_guard<std::mutex> lock(mutex);
+	std::lock_guard<std::recursive_mutex> lock(mutex);
 
 	if (allocation->evicted) return;
 	CHECK(allocation->usage_count == 0) << "Tried freeing an allocation that's currently in use";
