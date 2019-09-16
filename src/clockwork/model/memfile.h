@@ -27,6 +27,8 @@ public:
 	// Copy another file into a memfile
 	static Memfile readFrom(const std::string &filename);
 
+	// Copy memory buffer into a memfile
+	static Memfile fromBuffer(const void *buf, size_t len);
 };
 
 /** Used for reading data from a stream into a memfile */
