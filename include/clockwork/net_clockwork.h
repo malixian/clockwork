@@ -322,10 +322,30 @@ class msg_inference_res_tx :
 {
 public:
   msg_inference_res_tx(uint64_t req_id, int32_t status) :
-    msg_protobuf_tx(req_id)
+    msg_protobuf_tx(req_id), outputs_(0), outputs_size_(0)
   {
     msg_.set_status(status);
   }
+
+  void set_outputs(const void *outputs, size_t outputs_size)
+  {
+    outputs_ = outputs;
+    outputs_size_ = outputs_size;
+  }
+
+  virtual uint64_t get_tx_body_len() const
+  {
+    return outputs_size_;
+  }
+
+  virtual std::pair<const void *,size_t> next_tx_body_buf()
+  {
+    return std::make_pair(outputs_, outputs_size_);
+  }
+
+private:
+  const void *outputs_;
+  size_t outputs_size_;
 };
 
 class msg_inference_res_rx :
