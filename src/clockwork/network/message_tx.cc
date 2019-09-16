@@ -3,11 +3,29 @@
 #include <clockwork/network.h>
 
 message_sender::message_sender(message_connection *conn, message_handler &handler)
-  : socket_(conn->get_socket()), conn_(conn), handler_(handler)
+  : socket_(conn->get_socket()), conn_(conn), handler_(handler), req_(0)
 {
 }
 
 void message_sender::send_request(message_tx &req)
+{
+  if (!req_) {
+    start_send(req);
+  } else {
+    tx_queue_.push_back(&req);
+  }
+}
+
+void message_sender::send_next_message()
+{
+  if (tx_queue_.empty())
+    return;
+  message_tx *req = tx_queue_.front();
+  tx_queue_.pop_front();
+  start_send(*req);
+}
+
+void message_sender::start_send(message_tx &req)
 {
   /* header length,  body length, message type, message id */
   pre_header[0] = req.get_tx_header_len();
@@ -79,8 +97,9 @@ void message_sender::next_body_seg()
   } else {
     req_->message_sent();
     handler_.completed_transmit(conn_, req_);
+    req_ = 0;
 
-    //send_next_message();
+    send_next_message();
   }
 }
 

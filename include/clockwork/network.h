@@ -2,6 +2,7 @@
 #define CLOCKWORK_NETWORK_H_
 
 #include <utility>
+#include <queue>
 #include <boost/bind.hpp>
 #include <asio.hpp>
 
@@ -52,6 +53,11 @@ class message_sender {
 public:
   message_sender(message_connection *conn, message_handler &handler);
   void send_request(message_tx &req);
+
+private:
+  void start_send(message_tx &req);
+  void send_next_message();
+
   void handle_prehdr_sent(const asio::error_code& error,
       size_t bytes_transferred);
   void handle_hdr_sent(const asio::error_code& error,
@@ -74,6 +80,7 @@ public:
   message_handler &handler_;
   size_t body_left;
   size_t body_seg_sent_;
+  std::deque<message_tx*> tx_queue_;
 };
 
 

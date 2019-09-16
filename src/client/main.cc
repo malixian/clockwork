@@ -66,16 +66,15 @@ public:
 protected:
   virtual void ready()
   {
-    /*msg_load_model_req_tx *txmsg = new msg_load_model_req_tx(42, testmodel_a, 1, 1);
-    Request<msg_load_model_req_tx, msg_load_model_res_rx> *req =
-      new Request<msg_load_model_req_tx, msg_load_model_res_rx>(*txmsg);*/
+    msg_load_model_req_tx *ltxmsg = new msg_load_model_req_tx(42, testmodel_a, 1, 1);
+    Request<msg_load_model_req_tx, msg_load_model_res_rx> *lreq =
+      new Request<msg_load_model_req_tx, msg_load_model_res_rx>(*ltxmsg);
+    send_request(*lreq);
 
     void *inputs = new uint8_t[1024];
-
-    msg_inference_req_tx *txmsg = new msg_inference_req_tx(42, 1, inputs, 1024);
+    msg_inference_req_tx *txmsg = new msg_inference_req_tx(43, 1, inputs, 1024);
     Request<msg_inference_req_tx, msg_inference_res_rx> *req =
       new Request<msg_inference_req_tx, msg_inference_res_rx>(*txmsg);
-
     send_request(*req);
   }
 
