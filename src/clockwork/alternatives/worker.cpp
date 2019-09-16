@@ -81,50 +81,48 @@ void ModelManager::submit(Request* request) {
 
 	RequestBuilder* builder = runtime->newRequest();
 
-	request->telemetry->tasks.resize(5);
-	int telemetry_ix = 0;
+	builder->setTelemetry(request->telemetry);
 	
 	if (state == RuntimeModel::State::Warm) {
 		builder->addTask(TaskType::PCIe_H2D_Weights, [this, request] {
 			this->model.warmToHot();
-	    }, request->telemetry->tasks[telemetry_ix]);
+	    });
 	}
-	telemetry_ix++;
 
 	if (state == RuntimeModel::State::Exec) {
     	builder->addTask(TaskType::PCIe_H2D_Inputs, [this, request] {
     		this->model.setInput(request->input);
-    	}, request->telemetry->tasks[telemetry_ix]);
+    	});
 	} else {
     	builder->addTask(TaskType::PCIe_H2D_Inputs, [this, request] {
     		this->model.hotToExec();
     		this->model.setInput(request->input);
-    	}, request->telemetry->tasks[telemetry_ix]);
+    	});
 	}
-	telemetry_ix++;
 
 	builder->addTask(TaskType::GPU, [this] {
 		this->model.call();
-	}, request->telemetry->tasks[telemetry_ix]);
-	telemetry_ix++;
+	});
 
 	builder->addTask(TaskType::PCIe_D2H_Output, [this, request] {
 		this->model.getOutput(request->output);
-	}, request->telemetry->tasks[telemetry_ix]);
-	telemetry_ix++;
+	});
 
-	builder->addTask(TaskType::Sync, [this, request] {
-		// cudaStreamSynchronize might not be necessary -- it waits for the PCIe_D2H_Output to complete,
-		// but some executor types might already guarantee it's completed.  Some, however, will not
-		// provide this guarantee, and only do a cudaStreamWaitEvent on the current stream.
-		CUDA_CALL(cudaStreamSynchronize(util::Stream()));
-	}, request->telemetry->tasks[telemetry_ix]);
+	// Task is unnecessary since onComplete callback won't run until async part of previous task is completed
+	// builder->addTask(TaskType::Sync, [this, request] {
+	// 	// cudaStreamSynchronize might not be necessary -- it waits for the PCIe_D2H_Output to complete,
+	// 	// but some executor types might already guarantee it's completed.  Some, however, will not
+	// 	// provide this guarantee, and only do a cudaStreamWaitEvent on the current stream.
+	// 	CUDA_CALL(cudaStreamSynchronize(util::Stream()));
+	// });
+
+	builder->setCompletionCallback([this, request] {
+		this->handle_response(request);
+	});
 
 	request->telemetry->submitted = clockwork::util::hrt();
 
-	builder->submit([this, request] {
-		this->handle_response(request);
-	});
+	builder->submit();
 }
 
 Worker::Worker(Runtime* runtime, PageCache* cache, TelemetryLogger *logger) : runtime(runtime), cache(cache), logger(logger) {}

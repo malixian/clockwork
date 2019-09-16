@@ -63,7 +63,7 @@ public:
 		converted.complete = util::nanos(telemetry->complete);
 		converted.tasks.resize(telemetry->tasks.size());
 		for (unsigned i = 0; i < telemetry->tasks.size(); i++) {
-			convert(telemetry->tasks[i], converted.tasks[i]);
+			convert(*telemetry->tasks[i], converted.tasks[i]);
 		}
 	}
 

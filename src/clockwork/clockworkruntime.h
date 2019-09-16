@@ -25,11 +25,11 @@ public:
 	uint64_t eligible;
 	Task* prev = nullptr;
 	Task* next = nullptr;
-	TaskTelemetry &telemetry;
+	TaskTelemetry* telemetry;
 	std::function<void(void)> onComplete;
 
-	Task(TaskType type, std::function<void(void)> f, TaskTelemetry &telemetry);
-	Task(TaskType type, std::function<void(void)> f, uint64_t eligible, TaskTelemetry &telemetry);
+	Task(TaskType type, std::function<void(void)> f);
+	Task(TaskType type, std::function<void(void)> f, uint64_t eligible);
 
 	void awaitCompletion();
 	bool isSyncComplete();
@@ -103,16 +103,19 @@ public:
 
 class RequestBuilder : public clockwork::RequestBuilder {
 private:
+	RequestTelemetry* telemetry = nullptr;
+	std::function<void(void)> onComplete = nullptr;
 	ClockworkRuntime* runtime;
 	std::vector<Task*> tasks;
 public:
 	RequestBuilder(ClockworkRuntime *runtime);
 
-	virtual RequestBuilder* addTask(TaskType type, std::function<void(void)> operation, TaskTelemetry &telemetry);
-	RequestBuilder* addTask(TaskType type, std::function<void(void)> operation, uint64_t eligible, TaskTelemetry &telemetry);
+	RequestBuilder* setTelemetry(RequestTelemetry* telemetry);
+	RequestBuilder* addTask(TaskType type, std::function<void(void)> operation);
+	RequestBuilder* addTask(TaskType type, std::function<void(void)> operation, uint64_t eligible);
+	RequestBuilder* setCompletionCallback(std::function<void(void)> onComplete);
 
-	virtual void submit();
-	virtual void submit(std::function<void(void)> onComplete);
+	void submit();
 };
 
 }

@@ -21,6 +21,8 @@ std::string nowString();
 
 void set_core(unsigned core);
 
+unsigned get_num_cores();
+
 void setCudaFlags();
 
 std::string getGPUmodel(int deviceNumber);

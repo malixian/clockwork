@@ -16,9 +16,10 @@ std::string TaskTypeName(TaskType type);
 
 class RequestBuilder {
 public:
-	virtual RequestBuilder* addTask(TaskType type, std::function<void(void)> operation, TaskTelemetry &telemetry) = 0;
+	virtual RequestBuilder* setTelemetry(RequestTelemetry* telemetry) = 0;;
+	virtual RequestBuilder* addTask(TaskType type, std::function<void(void)> operation) = 0;
+	virtual RequestBuilder* setCompletionCallback(std::function<void(void)> onComplete) = 0;
 	virtual void submit() = 0;
-	virtual void submit(std::function<void(void)> onComplete) = 0;
 };
 
 class Runtime {

@@ -14,7 +14,7 @@ namespace threadpoolruntime {
 struct Task {
 	TaskType type;
 	std::function<void(void)> f;
-	TaskTelemetry &telemetry;
+	TaskTelemetry* telemetry;
 };
 
 struct Request {
@@ -59,13 +59,17 @@ public:
 
 class RequestBuilder : public clockwork::RequestBuilder {
 private:
+	RequestTelemetry* telemetry = nullptr;
+	std::function<void(void)> onComplete = nullptr;
 	ThreadpoolRuntime* runtime;
 	std::vector<Task> tasks;
 public:
 	RequestBuilder(ThreadpoolRuntime *runtime) : runtime(runtime) {}
-	virtual RequestBuilder* addTask(TaskType type, std::function<void(void)> operation, TaskTelemetry &telemetry);
-	virtual void submit();
-	virtual void submit(std::function<void(void)> onComplete);
+
+	RequestBuilder* setTelemetry(RequestTelemetry* telemetry);
+	RequestBuilder* addTask(TaskType type, std::function<void(void)> operation);
+	RequestBuilder* setCompletionCallback(std::function<void(void)> onComplete);
+	void submit();
 };
 
 }

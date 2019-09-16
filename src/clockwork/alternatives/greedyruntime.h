@@ -22,10 +22,10 @@ public:
 	cudaEvent_t asyncSubmit, asyncStart, asyncComplete;
 	Task* prev = nullptr;
 	Task* next = nullptr;
-	TaskTelemetry &telemetry;
+	TaskTelemetry* telemetry;
 	std::function<void(void)> onComplete;
 
-	Task(TaskType type, std::function<void(void)> f, TaskTelemetry &telemetry);
+	Task(TaskType type, std::function<void(void)> f);
 
 	void awaitCompletion();
 	bool isAsyncComplete();
@@ -57,6 +57,7 @@ public:
 class GreedyRuntime : public clockwork::Runtime {
 private:
 	std::atomic_bool alive;
+	std::atomic_uint coreCount = 0;
 	std::vector<Executor*> executors;
 	const unsigned numThreads;
 	const unsigned maxOutstanding;
@@ -64,6 +65,8 @@ private:
 public:
 	GreedyRuntime(const unsigned numThreads, const unsigned maxOutstanding);
 	~GreedyRuntime();
+
+	unsigned assignCore(TaskType type, int executorId);
 
 	void enqueue(Task* task);
 	void shutdown(bool awaitShutdown);
@@ -75,14 +78,17 @@ public:
 class RequestBuilder : public clockwork::RequestBuilder {
 private:
 	GreedyRuntime* runtime;
+	RequestTelemetry* telemetry = nullptr;
 	std::vector<Task*> tasks;
+	std::function<void(void)> onComplete = nullptr;
 public:
 	RequestBuilder(GreedyRuntime *runtime);
 
-	virtual RequestBuilder* addTask(TaskType type, std::function<void(void)> operation, TaskTelemetry &telemetry);
+	RequestBuilder* setTelemetry(RequestTelemetry* telemetry);
+	RequestBuilder* addTask(TaskType type, std::function<void(void)> operation);
+	RequestBuilder* setCompletionCallback(std::function<void(void)> onComplete);
 
-	virtual void submit();
-	virtual void submit(std::function<void(void)> onComplete);
+	void submit();
 };
 
 }

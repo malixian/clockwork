@@ -24,7 +24,7 @@ struct ExecutorTelemetry {
 struct RequestTelemetry {
 	int model_id, request_id;
 	std::chrono::high_resolution_clock::time_point arrived, submitted, complete;
-	std::vector<TaskTelemetry> tasks;
+	std::vector<TaskTelemetry*> tasks;
 };
 
 struct SerializedTaskTelemetry {

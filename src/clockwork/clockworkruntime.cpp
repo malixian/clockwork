@@ -2,6 +2,7 @@
 #include "tvm/runtime/cuda_common.h"
 #include "clockwork/runtime.h"
 #include "clockwork/util.h"
+#include <dmlc/logging.h>
 #include <array>
 
 namespace clockwork {
@@ -12,12 +13,14 @@ Runtime* newClockworkRuntime(const unsigned numThreadsPerExecutor, const unsigne
 
 namespace clockworkruntime {
 
-Task::Task(TaskType type, std::function<void(void)> f, TaskTelemetry &telemetry) : type(type), f(f), syncComplete(false), eligible(0), telemetry(telemetry) {
+Task::Task(TaskType type, std::function<void(void)> f) : type(type), f(f), syncComplete(false), eligible(0) {
 	CUDA_CALL(cudaEventCreate(&asyncComplete));
+	this->telemetry = new TaskTelemetry();
 }
 
-Task::Task(TaskType type, std::function<void(void)> f, uint64_t eligible, TaskTelemetry &telemetry) : type(type), f(f), syncComplete(false), eligible(eligible), telemetry(telemetry) {
+Task::Task(TaskType type, std::function<void(void)> f, uint64_t eligible) : type(type), f(f), syncComplete(false), eligible(eligible) {
 	CUDA_CALL(cudaEventCreate(&asyncComplete));
+	this->telemetry = new TaskTelemetry();
 }
 
 void Task::awaitCompletion() {
@@ -203,25 +206,36 @@ clockwork::RequestBuilder* ClockworkRuntime::newRequest() {
 
 RequestBuilder::RequestBuilder(ClockworkRuntime *runtime) : runtime(runtime) {}
 
-RequestBuilder* RequestBuilder::addTask(TaskType type, std::function<void(void)> operation, TaskTelemetry &telemetry) {
-	tasks.push_back(new Task(type, operation, telemetry));
+RequestBuilder* RequestBuilder::setTelemetry(RequestTelemetry* telemetry) {
+	this->telemetry = telemetry;
+}
+
+RequestBuilder* RequestBuilder::addTask(TaskType type, std::function<void(void)> operation) {
+	tasks.push_back(new Task(type, operation));
 	return this;
 }
 
-RequestBuilder* RequestBuilder::addTask(TaskType type, std::function<void(void)> operation, uint64_t eligible, TaskTelemetry &telemetry) {
-	tasks.push_back(new Task(type, operation, eligible, telemetry));
+RequestBuilder* RequestBuilder::addTask(TaskType type, std::function<void(void)> operation, uint64_t eligible) {
+	tasks.push_back(new Task(type, operation, eligible));
 	return this;
+}
+
+RequestBuilder* RequestBuilder::setCompletionCallback(std::function<void(void)> onComplete) {
+	this->onComplete = onComplete;
 }
 
 void RequestBuilder::submit() {
-	submit(nullptr);
-}
-
-void RequestBuilder::submit(std::function<void(void)> onComplete) {
-	// Initialize and link the tasks
+	CHECK(telemetry != nullptr) << "RequestBuilder requires a RequestTelemetry to be set using setTelemetry";
+	
+	// Link the tasks
 	for (unsigned i = 1; i < tasks.size(); i++) {
 		tasks[i-1]->next = tasks[i];
 		tasks[i]->prev = tasks[i-1];
+	}
+
+	// Add the telemetry
+	for (auto &task : tasks) {
+		this->telemetry->tasks.push_back(task->telemetry);
 	}
 
 	// Enqueue all tasks

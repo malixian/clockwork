@@ -83,7 +83,7 @@ public:
 
 void testmemory(uint64_t totalsize, uint64_t pagesize) {
 	
-	Runtime* runtime = clockwork::newGreedyRuntime(1, 1);
+	Runtime* runtime = clockwork::newGreedyRuntime(1, 2);
 
 	void* baseptr;
 	CUDA_CALL(cudaMalloc(&baseptr, totalsize));
@@ -95,7 +95,7 @@ void testmemory(uint64_t totalsize, uint64_t pagesize) {
 
 	LoadedModels models(worker);
 
-	int num_models = 4;
+	int num_models = 1;
 	for (unsigned i = 0; i < num_models; i++) {
 		models.load("/home/jcmace/modelzoo/resnet50/tesla-m40_batchsize1/tvm-model");
 	}
@@ -103,7 +103,7 @@ void testmemory(uint64_t totalsize, uint64_t pagesize) {
 	std::cout << "Loaded " << num_models << " models" << std::endl;
 
 	int num_per_model = 20000;
-	int max_outstanding = 20;
+	int max_outstanding = 4;
 	for (unsigned i = 0; i < num_per_model; i++) {
 		for (unsigned j = 0; j < models.model_ids.size(); j++) {
 			models.infer(j);

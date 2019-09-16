@@ -11,41 +11,6 @@
 #include <pods/buffers.h>
 #include <pods/streams.h>
 
-std::unordered_map<std::string, std::string> processTask(clockwork::SerializedTaskTelemetry &t) {
-	std::unordered_map<std::string, std::string> o;
-
-	o["queue"] = std::to_string(t.dequeued - t.eligible_for_dequeue);
-	o["cpu"] = std::to_string(t.exec_complete - t.dequeued);
-	o["cuda"] = std::to_string(t.async_duration);
-	o["hostside_e2e"] = std::to_string(t.async_complete - t.dequeued);
-
-	return o;
-}
-
-std::unordered_map<std::string, std::string> process(clockwork::SerializedRequestTelemetry &t) {
-	std::unordered_map<std::string, std::string> o;
-	o["request_id"] = std::to_string(t.request_id);
-	o["model_id"] = std::to_string(t.model_id);
-	o["arrived"] = std::to_string(t.arrived);
-	o["submitted"] = std::to_string(t.submitted);
-	o["complete"] = std::to_string(t.complete);
-	o["execution_latency"] = std::to_string(t.complete - t.submitted);
-	o["total_latency"] = std::to_string(t.complete - t.arrived);
-
-	for (unsigned i = 0; i < t.tasks.size(); i++) {
-		clockwork::SerializedTaskTelemetry task = t.tasks[i];
-		std::string task_type = clockwork::TaskTypeName(clockwork::TaskTypes[task.task_type]);
-
-		std::unordered_map<std::string, std::string> task_data = processTask(task);
-
-		for (auto e : task_data) {
-			o[task_type + "_" + e.first] = e.second;
-		}
-	}
-
-	return o;
-}
-
 /** Inflates output clockwork telemetry to TSV file */
 void inflate(std::string input_filename, std::string output_filename) {
 	std::ifstream infile;
@@ -56,7 +21,7 @@ void inflate(std::string input_filename, std::string output_filename) {
 
     uint64_t start_time = 0;
 
-    clockwork::SerializedRequestTelemetry telemetry;
+    clockwork::SerializedRequestTelemetry t;
     int count = 0;
 
     std::vector<std::string> headers = {{
@@ -71,15 +36,38 @@ void inflate(std::string input_filename, std::string output_filename) {
 
     for (unsigned i = 0; i < clockwork::TaskTypes.size(); i++) {
 		std::string task_type = clockwork::TaskTypeName(clockwork::TaskTypes[i]);
+		headers.push_back(task_type);
 		headers.push_back(task_type + "_queue");
-		headers.push_back(task_type + "_cpu");
-		headers.push_back(task_type + "_cuda");
-		headers.push_back(task_type + "_hostside_e2e");
+		headers.push_back(task_type + "_sync");
+		headers.push_back(task_type + "_async");
     }
 
     std::vector<std::unordered_map<std::string, std::string>> rows;
-    while (deserializer.load(telemetry) == pods::Error::NoError) {	
-		std::unordered_map<std::string, std::string> row = process(telemetry);
+    while (deserializer.load(t) == pods::Error::NoError) {	
+		std::unordered_map<std::string, std::string> row;
+
+		row["request_id"] = std::to_string(t.request_id);
+		row["model_id"] = std::to_string(t.model_id);
+		row["arrived"] = std::to_string(t.arrived);
+		row["submitted"] = std::to_string(t.submitted);
+		row["complete"] = std::to_string(t.complete);
+		row["execution_latency"] = std::to_string(t.complete - t.submitted);
+		row["total_latency"] = std::to_string(t.complete - t.arrived);
+
+		for (unsigned i = 0; i < t.tasks.size(); i++) {
+			clockwork::SerializedTaskTelemetry task = t.tasks[i];
+			std::string task_type = clockwork::TaskTypeName(clockwork::TaskTypes[task.task_type]);
+
+			if (i < t.tasks.size() - 1) {
+				row[task_type] = std::to_string(t.tasks[i+1].enqueued - task.dequeued);
+			} else {
+				row[task_type] = std::to_string(t.complete - task.dequeued);
+			}
+			row[task_type + "_queue"] = std::to_string(task.dequeued - task.eligible_for_dequeue);
+			row[task_type + "_sync"] = std::to_string(task.exec_complete - task.dequeued);
+			row[task_type + "_async"] = std::to_string(task.async_duration);
+		}
+
 		rows.push_back(row);
     }
     std::cout << "Processed " << rows.size() << " records" << std::endl;
@@ -100,7 +88,7 @@ void inflate(std::string input_filename, std::string output_filename) {
     	i = 0;
     	for (auto header : headers) {
     		if (i++ > 0) outfile << "\t";
-    		outfile << row[header];
+    		if (row.find(header) != row.end()) outfile << row[header];
     	}
     	outfile << "\n";
     }

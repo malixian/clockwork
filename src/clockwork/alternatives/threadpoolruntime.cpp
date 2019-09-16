@@ -1,6 +1,7 @@
 
 #include "clockwork/alternatives/threadpoolruntime.h"
 #include "clockwork/util.h"
+#include <dmlc/logging.h>
 
 namespace clockwork {
 
@@ -10,19 +11,29 @@ Runtime* newFIFOThreadpoolRuntime(const unsigned numThreads) {
 
 namespace threadpoolruntime {
 
-RequestBuilder* RequestBuilder::addTask(TaskType type, std::function<void(void)> operation, TaskTelemetry &telemetry) {
-	tasks.push_back(Task{type, operation, telemetry});
+RequestBuilder* RequestBuilder::setTelemetry(RequestTelemetry* telemetry) {
+	this->telemetry = telemetry;
+}
+
+RequestBuilder* RequestBuilder::addTask(TaskType type, std::function<void(void)> operation) {
+	tasks.push_back(Task{type, operation, new TaskTelemetry()});
 	return this;
 }
 
+RequestBuilder* RequestBuilder::setCompletionCallback(std::function<void(void)> onComplete) {
+	this->onComplete = onComplete;
+}
+
 void RequestBuilder::submit() {
-	submit(nullptr);
-}
+	CHECK(telemetry != nullptr) << "RequestBuilder requires a RequestTelemetry to be set using setTelemetry";
 
-void RequestBuilder::submit(std::function<void(void)> onComplete) {
-	runtime->submit(new Request{tasks, onComplete});
-}
+	// Set the telemetry
+	for (auto &task : tasks) {
+		this->telemetry->tasks.push_back(task.telemetry);
+	}
 
+	runtime->submit(new Request{tasks, this->onComplete});
+}
 
 void FIFOQueue::enqueue(Request* request) {
 	queue.push(request);
@@ -31,8 +42,6 @@ void FIFOQueue::enqueue(Request* request) {
 bool FIFOQueue::try_dequeue(Request* &request) {
 	return queue.try_pop(request);
 }
-
-
 
 ThreadpoolRuntime::ThreadpoolRuntime(const unsigned numThreads, Queue* queue) : numThreads(numThreads), queue(queue), alive(true) {
 	for (unsigned i = 0; i < numThreads; i++) {

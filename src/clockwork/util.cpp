@@ -63,6 +63,10 @@ void set_core(unsigned core) {
   }
 }
 
+unsigned get_num_cores() {
+  return std::thread::hardware_concurrency();
+}
+
 void setCudaFlags() {
   cudaError_t error = cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync);
   if(error != cudaSuccess) {

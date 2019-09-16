@@ -12,10 +12,12 @@ Runtime* newGreedyRuntime(const unsigned numThreadsPerExecutor, const unsigned m
 
 namespace greedyruntime {
 
-Task::Task(TaskType type, std::function<void(void)> f, TaskTelemetry &telemetry) : type(type), f(f), telemetry(telemetry) {
+Task::Task(TaskType type, std::function<void(void)> f) : type(type), f(f) {
 	CUDA_CALL(cudaEventCreate(&asyncSubmit));
 	CUDA_CALL(cudaEventCreate(&asyncStart));
 	CUDA_CALL(cudaEventCreate(&asyncComplete));
+	this->telemetry = new TaskTelemetry();
+	this->telemetry->created = clockwork::util::hrt();
 }
 
 void Task::awaitCompletion() {
@@ -36,23 +38,23 @@ bool Task::isAsyncComplete() {
 }
 
 void Task::run(cudaStream_t execStream, cudaStream_t telemetryStream) {
-	telemetry.dequeued = clockwork::util::hrt();
+	telemetry->dequeued = clockwork::util::hrt();
 
 	CUDA_CALL(cudaEventRecord(asyncSubmit, telemetryStream))
 	CUDA_CALL(cudaEventRecord(asyncStart, execStream));
 
 	f();
 
-	telemetry.exec_complete = clockwork::util::hrt();
+	telemetry->exec_complete = clockwork::util::hrt();
 
 	CUDA_CALL(cudaEventRecord(asyncComplete, execStream));
 	syncComplete.store(true);
 }
 
 void Task::processAsyncCompleteTelemetry() {
-	telemetry.async_complete = clockwork::util::hrt();
-	CUDA_CALL(cudaEventElapsedTime(&telemetry.async_wait, asyncSubmit, asyncStart));
-	CUDA_CALL(cudaEventElapsedTime(&telemetry.async_duration, asyncStart, asyncComplete));
+	telemetry->async_complete = clockwork::util::hrt();
+	CUDA_CALL(cudaEventElapsedTime(&telemetry->async_wait, asyncSubmit, asyncStart));
+	CUDA_CALL(cudaEventElapsedTime(&telemetry->async_duration, asyncStart, asyncComplete));
 }
 
 void Task::complete() {
@@ -86,7 +88,12 @@ void Executor::join() {
 }
 
 void Executor::executorMain(int executorId) {
+	unsigned core = runtime->assignCore(type, executorId);
+	util::set_core(core);
+	util::setCurrentThreadMaxPriority();
 	util::initializeCudaStream();
+
+
 	cudaStream_t execStream = clockwork::util::Stream();
 	cudaStream_t telemetryStream;
 	CUDA_CALL(cudaStreamCreate(&telemetryStream));
@@ -128,10 +135,16 @@ GreedyRuntime::~GreedyRuntime() {
 	shutdown(false);
 }
 
+unsigned GreedyRuntime::assignCore(TaskType type, int executorId) {
+	unsigned core = (2 + this->coreCount++) % util::get_num_cores();
+	CHECK(core >= 2) << "GreedyRuntime ran out of cores";
+	return core;
+}
+
 void GreedyRuntime::enqueue(Task* task) {
-	task->telemetry.task_type = task->type;
-	task->telemetry.enqueued = clockwork::util::hrt();
-	task->telemetry.eligible_for_dequeue = task->telemetry.enqueued; // Not used in greedy
+	task->telemetry->task_type = task->type;
+	task->telemetry->enqueued = clockwork::util::hrt();
+	task->telemetry->eligible_for_dequeue = task->telemetry->enqueued; // Not used in greedy
 	executors[task->type]->enqueue(task);
 }
 
@@ -154,23 +167,31 @@ clockwork::RequestBuilder* GreedyRuntime::newRequest() {
 
 RequestBuilder::RequestBuilder(GreedyRuntime *runtime) : runtime(runtime) {}
 
-RequestBuilder* RequestBuilder::addTask(TaskType type, std::function<void(void)> operation, TaskTelemetry &telemetry) {
-	telemetry.created = clockwork::util::hrt();
-	tasks.push_back(new Task(type, operation, telemetry));
+RequestBuilder* RequestBuilder::setTelemetry(RequestTelemetry* telemetry) {
+	this->telemetry = telemetry;
+}
+
+RequestBuilder* RequestBuilder::addTask(TaskType type, std::function<void(void)> operation) {
+	tasks.push_back(new Task(type, operation));
 	return this;
 }
 
-void RequestBuilder::submit() {
-	submit(nullptr);
+RequestBuilder* RequestBuilder::setCompletionCallback(std::function<void(void)> onComplete) {
+	this->onComplete = onComplete;
 }
 
-void RequestBuilder::submit(std::function<void(void)> onComplete) {
+void RequestBuilder::submit() {
+	CHECK(telemetry != nullptr) << "RequestBuilder requires a RequestTelemetry to be set using setTelemetry";
+
 	// Initialize and link the tasks
-	for (unsigned i = 0; i < tasks.size(); i++) {
-		if (i > 0) {
-			tasks[i-1]->next = tasks[i];
-			tasks[i]->prev = tasks[i-1];
-		}
+	for (unsigned i = 1; i < tasks.size(); i++) {
+		tasks[i-1]->next = tasks[i];
+		tasks[i]->prev = tasks[i-1];
+	}
+
+	// Add the telemetry
+	for (auto &task : tasks) {
+		this->telemetry->tasks.push_back(task->telemetry);
 	}
 
 	// Enqueue the first task
