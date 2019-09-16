@@ -60,57 +60,55 @@ std::shared_ptr<Allocation> PageCache::alloc(unsigned n_pages, EvictionCallback*
 
 
 	std::vector<EvictionCallback*> callbacks;
-	{ 	// only hold mutex in this section
-		std::lock_guard<std::mutex> lock(mutex);
+	std::lock_guard<std::mutex> lock(mutex);
 
-		// Use up free pages
-		while(alloc->pages.size() < n_pages && !freePages.isEmpty()) {
-			Page* p = freePages.popHead();
+	// Use up free pages
+	while(alloc->pages.size() < n_pages && !freePages.isEmpty()) {
+		Page* p = freePages.popHead();
+		p->current_allocation = alloc;
+		alloc->pages.push_back(p);
+	}
+
+	// Start evicting allocations
+	while (alloc->pages.size() < n_pages && !unlockedAllocations.isEmpty()) {
+		std::shared_ptr<Allocation> toEvict = unlockedAllocations.popHead();
+		toEvict->evicted = true;
+		callbacks.push_back(toEvict->callback);
+
+		unsigned i = 0;
+
+		// Claim as many of the evicted pages as we need
+		for (; i < toEvict->pages.size() && alloc->pages.size() < n_pages; i++) {
+			Page* p = toEvict->pages[i];
 			p->current_allocation = alloc;
 			alloc->pages.push_back(p);
 		}
 
-		// Start evicting allocations
-		while (alloc->pages.size() < n_pages && !unlockedAllocations.isEmpty()) {
-			std::shared_ptr<Allocation> toEvict = unlockedAllocations.popHead();
-			toEvict->evicted = true;
-			callbacks.push_back(toEvict->callback);
-
-			unsigned i = 0;
-
-			// Claim as many of the evicted pages as we need
-			for (; i < toEvict->pages.size() && alloc->pages.size() < n_pages; i++) {
-				Page* p = toEvict->pages[i];
-				p->current_allocation = alloc;
-				alloc->pages.push_back(p);
-			}
-
-			// Put the remaining evicted pages in the list of free pages
-			for (; i < toEvict->pages.size(); i++) {
-				Page* p = toEvict->pages[i];
-				p->current_allocation = nullptr;
-				freePages.pushBack(p);		
-			}
+		// Put the remaining evicted pages in the list of free pages
+		for (; i < toEvict->pages.size(); i++) {
+			Page* p = toEvict->pages[i];
+			p->current_allocation = nullptr;
+			freePages.pushBack(p);		
 		}
+	}
 
-		// Free alloced pages if this alloc is going to fail
-		if (alloc->pages.size() < n_pages) {
-			// If we reach here, we were unable to alloc enough pages,
-			// because too many allocations are locked and cannot be evicted
-			// This case could be optimized but for now don't
-			// Put back all of the free pages we took
-			for (unsigned i = 0; i < alloc->pages.size(); i++) {
-				Page* p = alloc->pages[i];
-				p->current_allocation = nullptr;
-				freePages.pushBack(p);
-			}
-			alloc = nullptr;
-		} else {
-			// Allocation successful; lock it
-			alloc->usage_count++;
-			alloc->list_position = lockedAllocations.pushBack(alloc);
+	// Free alloced pages if this alloc is going to fail
+	if (alloc->pages.size() < n_pages) {
+		// If we reach here, we were unable to alloc enough pages,
+		// because too many allocations are locked and cannot be evicted
+		// This case could be optimized but for now don't
+		// Put back all of the free pages we took
+		for (unsigned i = 0; i < alloc->pages.size(); i++) {
+			Page* p = alloc->pages[i];
+			p->current_allocation = nullptr;
+			freePages.pushBack(p);
 		}
-	} // mutex is released here
+		alloc = nullptr;
+	} else {
+		// Allocation successful; lock it
+		alloc->usage_count++;
+		alloc->list_position = lockedAllocations.pushBack(alloc);
+	}
 
 	// Notify eviction handlers
 	for (unsigned i = 0; i < callbacks.size(); i++) {
@@ -123,9 +121,11 @@ std::shared_ptr<Allocation> PageCache::alloc(unsigned n_pages, EvictionCallback*
 }
 
 void PageCache::free(std::shared_ptr<Allocation> allocation) {
+	if (allocation == nullptr) return;
+
 	std::lock_guard<std::mutex> lock(mutex);
 
-	if (allocation == nullptr || allocation->evicted) return;
+	if (allocation->evicted) return;
 	CHECK(allocation->usage_count == 0) << "Tried freeing an allocation that's currently in use";
 
 	// Remove from the unlocked allocations
@@ -138,8 +138,13 @@ void PageCache::free(std::shared_ptr<Allocation> allocation) {
 		freePages.pushBack(p);
 	}
 
-	// Mark as evicted but don't call eviction callback since it was explicitly freed
+	// Mark as evicted
 	allocation->evicted = true;
+
+	// Call eviction handler
+	if (allocation->callback != nullptr) {
+		allocation->callback->evicted();
+	}
 }
 
 }

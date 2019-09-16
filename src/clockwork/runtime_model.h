@@ -46,6 +46,8 @@ public:
 	State lock();
 	void unlock();
 
+	void evict();
+
 	int inputsize();
 	int outputsize();
 

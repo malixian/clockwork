@@ -16,6 +16,21 @@ ModelManager::ModelManager(const int id, Runtime* runtime, PageCache* cache, mod
 
 std::atomic_int request_id_seed = 0;
 
+EvictResponse ModelManager::evict() {
+	std::lock_guard<std::mutex> lock(queue_mutex);
+
+	if (in_use.test_and_set()) {
+		std::stringstream errorMsg;
+		errorMsg << "Cannot evict model that is in use, model_id=" << id;
+		return EvictResponse{ResponseHeader{clockworkError, errorMsg.str()}};	
+	}
+
+	model.evict();
+	in_use.clear();
+
+	return EvictResponse{ResponseHeader{clockworkSuccess, ""}};
+}
+
 std::shared_future<InferenceResponse> ModelManager::add_request(InferenceRequest &request) {
 
 	if (request.input_size != model.inputsize()) {
@@ -163,4 +178,20 @@ std::shared_future<InferenceResponse> Worker::infer(InferenceRequest &request) {
 		return std::shared_future<InferenceResponse>(response.get_future());
 	}
 	return managers[request.model_id]->add_request(request);
+}
+
+std::shared_future<EvictResponse> Worker::evict(EvictRequest &request) {
+	std::promise<EvictResponse> response;
+
+	std::lock_guard<std::mutex> lock(managers_mutex);
+
+	if (request.model_id < 0 || request.model_id >= managers.size()) {
+		std::stringstream errorMsg;
+		errorMsg << "No model exists with ID " << request.model_id;
+
+		response.set_value(EvictResponse{ResponseHeader{clockworkError, errorMsg.str()}});
+	} else {
+		response.set_value(managers[request.model_id]->evict());
+	}
+	return std::shared_future<EvictResponse>(response.get_future());
 }

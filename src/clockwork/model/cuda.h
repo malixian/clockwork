@@ -50,7 +50,6 @@ class LoadedCUDAFunc {
 public:
   UnloadedCUDAFunc* source;
   CUfunction f;
-  tvm::runtime::PackedFunc packed;
 
   LoadedCUDAFunc(UnloadedCUDAFunc* source, CUfunction f);
 
@@ -64,6 +63,8 @@ public:
   const std::string name;
   const tvm::runtime::FunctionInfo info;
   tvm::runtime::ThreadAxisConfig thread_axis_cfg_;
+  LoadedCUDAFunc* loaded = nullptr;
+  tvm::runtime::PackedFunc packed;
 
   UnloadedCUDAFunc(const std::string &name, const tvm::runtime::FunctionInfo &info);
 

@@ -58,6 +58,15 @@ struct InferenceResponse {
 	char* output;
 };
 
+struct EvictRequest {
+	RequestHeader header;
+	int model_id;
+};
+
+struct EvictResponse {
+	ResponseHeader header;
+};
+
 
 /** Manages a specific model instance */
 class ModelManager {
@@ -83,6 +92,7 @@ public:
 
 	ModelManager(const int id, Runtime* runtime, PageCache* cache, model::ColdModel* cold, TelemetryLogger* logger);
 	std::shared_future<InferenceResponse> add_request(InferenceRequest &request);
+	EvictResponse evict();
 
 private:
 
@@ -106,6 +116,7 @@ public:
 	Worker(Runtime* runtime, PageCache* cache, TelemetryLogger* logger);
 	std::shared_future<LoadModelFromDiskResponse> loadModelFromDisk(LoadModelFromDiskRequest &request);
 	std::shared_future<InferenceResponse> infer(InferenceRequest &request);
+	std::shared_future<EvictResponse> evict(EvictRequest &request);
 };
 
 }

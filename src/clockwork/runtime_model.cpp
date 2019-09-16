@@ -27,6 +27,11 @@ int RuntimeModel::outputsize() {
 	return warm->outputsize();
 }
 
+void RuntimeModel::evict() {
+	cache->free(workspace_alloc); // Triggers transition exec -> hot if workspace_alloc is valid
+	cache->free(params_alloc); // Triggers transition hot -> warm if params_alloc is valid
+}
+
 void RuntimeModel::coldToCool() {
 	CHECK(cold != nullptr) << "Cannot transition cold -> cool, cold == nullptr";
 	CHECK(cool == nullptr) << "Cannot transition cold -> cool, cool already exists";
@@ -40,6 +45,7 @@ void RuntimeModel::coolToWarm() {
 }
 
 void RuntimeModel::warmToHot() {
+	std::cout << "warmToHot" << std::endl;
 	CHECK(warm != nullptr) << "Cannot transition warm -> hot, warm == nullptr";
 	CHECK(hot == nullptr) << "Cannot transition warm -> hot, hot != nullptr";
 	CHECK(params_alloc == nullptr) << "Cannot transition warm -> hot, params_alloc already allocated";
@@ -52,6 +58,7 @@ void RuntimeModel::warmToHot() {
 }
 
 void RuntimeModel::hotToExec() {
+	std::cout << "hotToExec" << std::endl;
 	CHECK(hot != nullptr) << "Cannot transition hot -> exec, hot == nullptr";
 	CHECK(exec == nullptr) << "Cannot transition hot -> exec, exec != nullptr";
 	CHECK(workspace_alloc == nullptr) << "Cannot transition hot -> exec, workspace_alloc already allocated";
@@ -79,6 +86,7 @@ void RuntimeModel::getOutput(void* output) {
 }
 
 void RuntimeModel::execToHot() {
+	std::cout << "execToHot" << std::endl;
 	CHECK(exec != nullptr) << "Cannot transition exec -> hot, exec == nullptr";
 	CHECK(workspace_alloc != nullptr) << "Cannot transition exec -> hot, workspace_alloc == nullptr";
 	workspace_alloc = nullptr;
@@ -87,11 +95,12 @@ void RuntimeModel::execToHot() {
 }
 
 void RuntimeModel::hotToWarm() {
+	std::cout << "hotToWarm" << std::endl;
 	CHECK(hot != nullptr) << "Cannot transition hot -> warm, hot == nullptr";
 	CHECK(params_alloc != nullptr) << "Cannot transition hot -> warm, params_alloc == nullptr";
 	params_alloc = nullptr;
-	exec->unload();
-	exec = nullptr;
+	hot->unload();
+	hot = nullptr;
 }
 
 void RuntimeModel::warmToCool() {

@@ -34,6 +34,16 @@ public:
 
 	LoadedModels(clockwork::alternatives::Worker* worker) : worker(worker) {}
 
+	void checkHeader(clockwork::alternatives::ResponseHeader header) {
+		CHECK(header.status == clockworkSuccess) << "Error inferring model: " << header.message;
+	}
+
+	void checkResponse(clockwork::alternatives::InferenceResponse rsp) {
+		checkHeader(rsp.header);
+		// std::cout << "Got response of size " << rsp.output_size << std::endl;
+		free(rsp.output);
+	}
+
 	void addModel(std::string source, int model_id, int input_size) {
 		sources[model_id] = source;
 		sizes[model_id] = input_size;
@@ -48,6 +58,14 @@ public:
 		// std::cout << "Loaded " << rsp.model_id << ": [" << rsp.input_size << "] " << modelPath << std::endl;
 		addModel(modelPath, rsp.model_id, rsp.input_size);
 		return rsp.model_id;
+	}
+
+	void evict(int model_id) {
+		clockwork::alternatives::EvictRequest request;
+		request.model_id = model_id;
+		auto f = worker->evict(request);
+		auto rsp = f.get();
+		checkHeader(rsp.header);
 	}
 
 	std::shared_future<clockwork::alternatives::InferenceResponse> infer(int model_id) {
@@ -73,12 +91,6 @@ public:
 			}
 		}
 	}
-
-	void checkResponse(clockwork::alternatives::InferenceResponse rsp) {
-		CHECK(rsp.header.status == clockworkSuccess) << "Error inferring model: " << rsp.header.message;
-		// std::cout << "Got response of size " << rsp.output_size << std::endl;
-		free(rsp.output);
-	}
 };
 
 void testmemory(uint64_t totalsize, uint64_t pagesize) {
@@ -95,23 +107,34 @@ void testmemory(uint64_t totalsize, uint64_t pagesize) {
 
 	LoadedModels models(worker);
 
-	int num_models = 1;
+	int hot_models = 1;
+	int num_models = 10;
 	for (unsigned i = 0; i < num_models; i++) {
 		models.load("/home/jcmace/modelzoo/resnet50/tesla-m40_batchsize1/tvm-model");
 	}
 
 	std::cout << "Loaded " << num_models << " models" << std::endl;
 
-	int num_per_model = 20000;
-	int max_outstanding = 4;
-	for (unsigned i = 0; i < num_per_model; i++) {
-		for (unsigned j = 0; j < models.model_ids.size(); j++) {
-			models.infer(j);
-
-			while (models.pending.size() > max_outstanding) {
+	int iterations = 10000;
+	int max_outstanding = 1;
+	for (unsigned i = 0; i < iterations; i++) {
+		// Do a hot model
+		{
+			int next = rand() % hot_models;
+			models.infer(next);
+			while (models.pending.size() >= max_outstanding) {
 				models.checkResponse(models.awaitOne().get());						
 			}
 		}
+		// Do a random one
+		{
+			int next = rand() % num_models;
+			models.infer(next);
+			while (models.pending.size() >= max_outstanding) {
+				models.checkResponse(models.awaitOne().get());						
+			}
+		}
+		// models.evict(j);
 	}
 
 }
@@ -120,7 +143,7 @@ int main(int argc, char *argv[]) {
 	std::cout << "begin" << std::endl;
 
     uint64_t pagesize = 16L * 1024 * 1024;
-    uint64_t totalsize = 8L * 1024 * 1024 * 1024;
+    uint64_t totalsize = 200 * 1024 * 1024;
 	testmemory(totalsize, pagesize);
 
 	std::cout << "end" << std::endl;

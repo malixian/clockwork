@@ -87,16 +87,20 @@ LoadedCUDAModule::~LoadedCUDAModule() {
 }
 
 void LoadedCUDAModule::unload() {
+  for (auto &elem : this->source->functions) {
+    elem.second->loaded = nullptr;
+  }
   delete this;
 }
 
 tvm::runtime::PackedFunc* LoadedCUDAModule::getFunction(const std::string &name) {
+  // This has been pushed to unloadedCudamodule
   LoadedCUDAFunc* f = functions[name];
-  return &f->packed;
+  return &f->source->packed;
 }
 
 LoadedCUDAFunc::LoadedCUDAFunc(UnloadedCUDAFunc* source, CUfunction f) : source(source), f(f) {
-  packed = tvm::runtime::PackFuncVoidAddr(*this, source->info.arg_types);
+  // packed = tvm::runtime::PackFuncVoidAddr(*this, source->info.arg_types);
 }
 
 void LoadedCUDAFunc::operator()(tvm::runtime::TVMArgs args,
@@ -137,10 +141,19 @@ void LoadedCUDAFunc::operator()(tvm::runtime::TVMArgs args,
 }
 
 UnloadedCUDAFunc::UnloadedCUDAFunc(const std::string &name, const tvm::runtime::FunctionInfo &info) : name(name), info(info) {
-    thread_axis_cfg_.Init(info.arg_types.size(), info.thread_axis_tags);
+  thread_axis_cfg_.Init(info.arg_types.size(), info.thread_axis_tags);
+  packed = tvm::runtime::PackFuncVoidAddr(
+    [this] (tvm::runtime::TVMArgs args, tvm::runtime::TVMRetValue* rv, void** void_args) {
+      CHECK(this->loaded != nullptr) << "Cannot call unloaded CUDA function";
+      (*this->loaded)(args, rv, void_args);
+    }, 
+    info.arg_types
+  );
 }
 
 LoadedCUDAFunc* UnloadedCUDAFunc::load(CUmodule &m) {
+  CHECK(this->loaded == nullptr) << "Cannot load CUDA functions more than once";
+
   CUfunction f;
 
   CUresult result = cuModuleGetFunction(&f, m, name.c_str());
@@ -152,7 +165,8 @@ LoadedCUDAFunc* UnloadedCUDAFunc::load(CUmodule &m) {
         << " failed with error: " << msg;
   }
 
-  return new LoadedCUDAFunc(this, f);
+  this->loaded = new LoadedCUDAFunc(this, f);
+  return this->loaded;
 }
 
 
