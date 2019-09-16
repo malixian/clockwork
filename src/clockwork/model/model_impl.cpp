@@ -188,6 +188,18 @@ CoolModelImpl::CoolModelImpl(ColdDiskModelImpl* cold) :
 	std::memcpy(this->params, params.data(), paramsSize);
 }
 
+/// Load model from memory buffers
+CoolModelImpl::CoolModelImpl(const void *so, size_t so_size, const void *cw,
+  size_t cw_size, const void *params, size_t params_size) :
+	so(Memfile::fromBuffer(so, so_size)),
+	clockwork(reinterpret_cast<const char *>(cw), cw_size),
+	paramsSize(params_size)
+{
+	// malloc cuda pinned memory
+	CUDA_CALL(cudaMallocHost(&this->params, paramsSize));
+	std::memcpy(this->params, params, paramsSize);
+}
+
 CoolModelImpl::~CoolModelImpl() {
 	CUDA_CALL(cudaFreeHost(this->params));
 	// TODO: delete so memfile

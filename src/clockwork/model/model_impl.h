@@ -76,6 +76,8 @@ public:
 	int paramsSize;
 
 	CoolModelImpl(ColdDiskModelImpl* cold);
+	CoolModelImpl(const void *so, size_t so_size, const void *cw,
+	  size_t cw_size, const void *params, size_t params_size);
 	~CoolModelImpl();
 
 	WarmModel* load();

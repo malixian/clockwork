@@ -55,6 +55,8 @@ public:
 };
 
 extern ColdModel* FromDisk(std::string so, std::string clockwork, std::string params);
+extern CoolModel* FromMemory(const void *so, size_t so_size, const void *cw,
+    size_t cw_size, const void *params, size_t params_size);
 
 }
 }
