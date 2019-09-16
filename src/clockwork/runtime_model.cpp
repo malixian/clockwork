@@ -14,6 +14,15 @@ RuntimeModel::State RuntimeModel::lock() {
 	return State::Exec;
 }
 
+void RuntimeModel::ensureState(State state) {
+	// TODO: don't do this here
+	if (state == State::Exec) return;
+	if (exec != nullptr) execToHot();
+
+	if (state == State::Hot) return;
+	if (hot != nullptr) hotToWarm();
+}
+
 void RuntimeModel::unlock() {
 	cache->unlock(workspace_alloc);
 	cache->unlock(params_alloc);

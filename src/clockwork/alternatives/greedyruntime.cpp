@@ -3,6 +3,7 @@
 #include "clockwork/runtime.h"
 #include "clockwork/util.h"
 #include <array>
+#include <sstream>
 
 namespace clockwork {
 
@@ -44,10 +45,12 @@ void Task::run(cudaStream_t execStream, cudaStream_t telemetryStream) {
 	CUDA_CALL(cudaEventRecord(asyncStart, execStream));
 
 	f();
+	CUDA_CALL(cudaEventRecord(asyncComplete, execStream));
 
+	CUDA_CALL(cudaStreamSynchronize(execStream));
 	telemetry->exec_complete = clockwork::util::hrt();
 
-	CUDA_CALL(cudaEventRecord(asyncComplete, execStream));
+
 	syncComplete.store(true);
 }
 
@@ -94,10 +97,17 @@ void Executor::executorMain(int executorId) {
 	util::initializeCudaStream();
 
 
+
+
 	cudaStream_t execStream = clockwork::util::Stream();
 	cudaStream_t telemetryStream;
 	CUDA_CALL(cudaStreamCreate(&telemetryStream));
 	std::vector<Task*> pending;
+
+	std::stringstream ss;
+	ss << TaskTypeName(type) << "-" << executorId << " core " << core << " streams " << execStream << " " << telemetryStream << std::endl;
+	std::cout << ss.str();
+
 	while (runtime->isAlive()) {
 		// Finish any pending tasks that are complete
 		for (unsigned i = 0; i < pending.size(); i++) {

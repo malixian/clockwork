@@ -95,7 +95,7 @@ public:
 
 void testmemory(uint64_t totalsize, uint64_t pagesize) {
 	
-	Runtime* runtime = clockwork::newGreedyRuntime(1, 2);
+	Runtime* runtime = clockwork::newGreedyRuntime(1, 1);
 
 	void* baseptr;
 	CUDA_CALL(cudaMalloc(&baseptr, totalsize));

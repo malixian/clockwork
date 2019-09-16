@@ -4,6 +4,7 @@
 #include "clockwork/tvm/pack_args.h"
 
 #include <tvm/runtime/cuda_common.h>
+#include "clockwork/util.h"
 
 namespace clockwork {
 namespace cuda {
@@ -106,7 +107,7 @@ LoadedCUDAFunc::LoadedCUDAFunc(UnloadedCUDAFunc* source, CUfunction f) : source(
 void LoadedCUDAFunc::operator()(tvm::runtime::TVMArgs args,
                 tvm::runtime::TVMRetValue* rv,
                 void** void_args) const {
-  CUstream strm = static_cast<CUstream>(tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream);
+  CUstream strm = static_cast<CUstream>(clockwork::util::Stream());
   tvm::runtime::ThreadWorkLoad wl = source->thread_axis_cfg_.Extract(args);
   // std::cout << "cuLaunchKernel " << wl.grid_dim(0) << " "
   //                                << wl.grid_dim(1) << " "

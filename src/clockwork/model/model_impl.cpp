@@ -131,7 +131,7 @@ int ModelExec::outputsize() {
 
 void ModelExec::setinput(std::vector<char*> &pages, void* inputptr) {
 	void* dstptr = pages[mm.inputs[0].page] + mm.inputs[0].page_offset;
-	cudaStream_t stream = tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream;
+	cudaStream_t stream = clockwork::util::Stream();
 	CUDA_CALL(
 		cudaMemcpyAsync(
 			dstptr,
@@ -145,7 +145,7 @@ void ModelExec::setinput(std::vector<char*> &pages, void* inputptr) {
 
 void ModelExec::getoutput(std::vector<char*> &pages, void* outputptr) {
 	void* srcptr = pages[mm.outputs[0].page] + mm.outputs[0].page_offset;
-	cudaStream_t stream = tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream;
+	cudaStream_t stream = clockwork::util::Stream();
 	CUDA_CALL(
 		cudaMemcpyAsync(
 			outputptr, 

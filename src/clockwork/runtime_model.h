@@ -46,6 +46,8 @@ public:
 	State lock();
 	void unlock();
 
+	void ensureState(State state);
+
 	void evict();
 
 	int inputsize();
@@ -75,7 +77,9 @@ public:
 	// TODO: unloading hot model isn't cheap (~100 microseconds for cuda module unload)
 	//   so don't do it here?
 	void evicted() {
-		model->hotToWarm();
+		// Let the eviction be lazily picked up
+		// TODO: handle this out-of-band
+		// model->hotToWarm();
 	}
 };
 
@@ -87,7 +91,9 @@ public:
 
 	// evicted is always called while holding the cache lock
 	void evicted() {
-		model->execToHot();
+		// Let the eviction be lazily picked up
+		// TODO: handle this out-of-band
+		//model->execToHot();
 	}
 };
 

@@ -69,6 +69,22 @@ target_link_libraries(
 	tbb
 )
 
+add_executable (main2
+	src/main2.cc
+	src/clockwork/util.cpp
+)
+
+target_link_libraries(
+	main2
+	clockwork
+	Threads::Threads
+	dl
+	cuda
+	cudart
+	tvm_runtime
+	tbb
+)
+
 add_executable (convert
 	src/clockwork/tvm/decoupled_graph_runtime.cc
 	src/clockwork-convert/convert.cpp

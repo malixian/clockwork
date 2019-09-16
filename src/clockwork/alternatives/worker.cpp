@@ -74,8 +74,6 @@ std::shared_future<InferenceResponse> ModelManager::add_request(InferenceRequest
 void ModelManager::handle_response(Request* request) {
 	request->telemetry->complete = clockwork::util::hrt();
 
-	model.unlock();
-
 	Request* toSubmit = nullptr;
 	{
 		std::lock_guard<std::mutex> lock(queue_mutex);
@@ -91,6 +89,7 @@ void ModelManager::handle_response(Request* request) {
 	if (toSubmit != nullptr) {
 		submit(toSubmit);
 	}
+	model.unlock();
 
 	request->promise.set_value(
 		InferenceResponse{
@@ -104,6 +103,7 @@ void ModelManager::handle_response(Request* request) {
 
 void ModelManager::submit(Request* request) {
 	RuntimeModel::State state = model.lock();
+	model.ensureState(state);
 
 	RequestBuilder* builder = runtime->newRequest();
 

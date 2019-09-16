@@ -97,10 +97,18 @@ void loadmodel() {
             }
         }
 
+
+            size_t free, total;
+            CUDA_CALL(cudaMemGetInfo(&free, &total));
+            std::cout << "   AGPU " << (total-free) << " used" << std::endl;
+
         CUDA_CALL(cudaEventRecord(prehot, stream));
         clockwork::model::HotModel* hot = warm->load(params_pages);
         //CUDA_CALL(cudaStreamSynchronize(stream));
         //d[i].hot = std::chrono::high_resolution_clock::now();
+
+            CUDA_CALL(cudaMemGetInfo(&free, &total));
+            std::cout << "   BGPU " << (total-free) << " used" << std::endl;
 
         if (i == 0) {
             for (unsigned j = 0; j < hot->num_workspace_pages(page_size); j++) {
