@@ -50,13 +50,17 @@ protected:
       // TODO: actually do load request
 
       msg_load_model_res_tx *res =
-        new msg_load_model_res_tx(load_req->get_msg_id(), 0);
+        new msg_load_model_res_tx(load_req->get_msg_id());
+      res->msg.set_status(0);
+
       msg_tx_.send_request(*res);
     } else if (inf_req = dynamic_cast<msg_inference_req_rx *>(req)) {
       // TODO: actually do inference
 
       msg_inference_res_tx *res =
-        new msg_inference_res_tx(inf_req->get_msg_id(), 0);
+        new msg_inference_res_tx(inf_req->get_msg_id());
+      res->msg.set_status(0);
+
       msg_tx_.send_request(*res);
     } else {
       throw "todo";
@@ -67,13 +71,12 @@ protected:
 
   virtual void completed_transmit(message_connection *tcp_conn, message_tx *req)
   {
-    std::cout << "completed response" << std::endl;
     delete req;
   }
 
   virtual void aborted_transmit(message_connection *tcp_conn, message_tx *req)
   {
-    std::cout << "completed response" << std::endl;
+    std::cout << "aborted response" << std::endl;
     delete req;
   }
 

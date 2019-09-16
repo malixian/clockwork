@@ -24,10 +24,6 @@ public:
   {
   }
 
-  TMsg &msg() {
-    return msg_;
-  }
-
   virtual uint64_t get_tx_msg_type() const
   {
     return TMsgType;
@@ -40,12 +36,12 @@ public:
 
   virtual uint64_t get_tx_header_len() const
   {
-    return msg_.ByteSize();
+    return msg.ByteSize();
   }
 
   virtual void serialize_tx_header(void *dest)
   {
-    msg_.SerializeWithCachedSizesToArray(
+    msg.SerializeWithCachedSizesToArray(
         reinterpret_cast<google::protobuf::uint8 *>(dest));
   }
 
@@ -64,8 +60,9 @@ public:
     throw "Should not be called";
   }
 
+  TMsg msg;
+
 protected:
-  TMsg msg_;
   uint64_t req_id_;
 };
 
@@ -79,10 +76,6 @@ public:
   {
   }
 
-  TMsg &msg() {
-    return msg_;
-  }
-
   virtual uint64_t get_msg_id() const
   {
     return req_id_;
@@ -90,7 +83,7 @@ public:
 
   virtual void header_received(const void *hdr, size_t hdr_len)
   {
-    if (!msg_.ParseFromArray(hdr, hdr_len))
+    if (!msg.ParseFromArray(hdr, hdr_len))
       throw "parsing failed";
   }
 
@@ -108,8 +101,9 @@ public:
   {
   }
 
+  TMsg msg;
+
 protected:
-  TMsg msg_;
   uint64_t req_id_;
   size_t body_len_;
 };
@@ -121,30 +115,38 @@ class msg_load_model_req_tx :
     clockwork::REQ_MODEL_LOAD>
 {
 public:
-  msg_load_model_req_tx(uint64_t req_id, const struct model_description &model,
-      uint32_t model_id, uint32_t batchsize) :
-    msg_protobuf_tx(req_id), model_(model)
+  msg_load_model_req_tx(uint64_t req_id)
+    : msg_protobuf_tx(req_id), blob_a_(0), blob_a_len_(0), blob_b_(0),
+    blob_b_len_(0)
   {
-    msg_.set_model_id(model_id);
-    msg_.set_batchsize(batchsize);
-    msg_.set_blob_a_len(model.blob_a_len);
-    msg_.set_blob_b_len(model.blob_b_len);
     body_send_state = BODY_SEND_BLOB_A;
+  }
+
+  void set_model(void *blob_a, size_t blob_a_len, void *blob_b,
+      size_t blob_b_len)
+  {
+    blob_a_ = blob_a;
+    blob_a_len_ = blob_a_len;
+    msg.set_blob_a_len(blob_a_len);
+
+    blob_b_ = blob_b;
+    blob_b_len_ = blob_b_len;
+    msg.set_blob_b_len(blob_b_len);
   }
 
   virtual uint64_t get_tx_body_len() const
   {
-    return model_.blob_a_len + model_.blob_b_len;
+    return blob_a_len_ + blob_b_len_;
   }
 
   virtual std::pair<const void *,size_t> next_tx_body_buf()
   {
     if (body_send_state == BODY_SEND_BLOB_A) {
       body_send_state = BODY_SEND_BLOB_B;
-      return std::make_pair(model_.blob_a, model_.blob_a_len);
+      return std::make_pair(blob_a_, blob_a_len_);
     } else if (body_send_state == BODY_SEND_BLOB_B) {
       body_send_state = BODY_SEND_DONE;
-      return std::make_pair(model_.blob_b, model_.blob_b_len);
+      return std::make_pair(blob_b_, blob_b_len_);
     } else {
       throw "TODO";
     }
@@ -157,7 +159,10 @@ private:
     BODY_SEND_DONE,
   } body_send_state;
 
-  const struct model_description &model_;
+  void *blob_a_;
+  size_t blob_a_len_;
+  void *blob_b_;
+  size_t blob_b_len_;
 };
 
 class msg_load_model_req_rx :
@@ -178,8 +183,8 @@ public:
   {
     msg_protobuf_rx::header_received(hdr, hdr_len);
 
-    model_.blob_a_len = msg_.blob_a_len();
-    model_.blob_b_len = msg_.blob_b_len();
+    model_.blob_a_len = msg.blob_a_len();
+    model_.blob_b_len = msg.blob_b_len();
 
     if (model_.blob_a_len + model_.blob_b_len != body_len_)
       throw "model size sum does not match body len";
@@ -234,11 +239,8 @@ class msg_load_model_res_tx :
     clockwork::RES_MODEL_LOAD>
 {
 public:
-  msg_load_model_res_tx(uint64_t req_id, int32_t status) :
-    msg_protobuf_tx(req_id)
-  {
-    msg_.set_status(status);
-  }
+  msg_load_model_res_tx(uint64_t req_id) :
+    msg_protobuf_tx(req_id) { }
 };
 
 class msg_load_model_res_rx :
@@ -259,12 +261,13 @@ class msg_inference_req_tx :
     clockwork::REQ_MODEL_INFERENCE>
 {
 public:
-  msg_inference_req_tx(uint64_t req_id, uint32_t model_id, void *inputs,
-      size_t inputs_size) :
-    msg_protobuf_tx(req_id), inputs_(inputs),
-    inputs_size_(inputs_size)
+  msg_inference_req_tx(uint64_t req_id)
+    : msg_protobuf_tx(req_id), inputs_(0), inputs_size_(0) { }
+
+  void set_inputs(void *inputs, size_t inputs_size)
   {
-    msg_.set_model_id(model_id);
+    inputs_ = inputs;
+    inputs_size_ = inputs_size;
   }
 
   virtual uint64_t get_tx_body_len() const
@@ -321,11 +324,8 @@ class msg_inference_res_tx :
     clockwork::RES_MODEL_INFERENCE>
 {
 public:
-  msg_inference_res_tx(uint64_t req_id, int32_t status) :
-    msg_protobuf_tx(req_id), outputs_(0), outputs_size_(0)
-  {
-    msg_.set_status(status);
-  }
+  msg_inference_res_tx(uint64_t req_id)
+    : msg_protobuf_tx(req_id), outputs_(0), outputs_size_(0) { }
 
   void set_outputs(const void *outputs, size_t outputs_size)
   {

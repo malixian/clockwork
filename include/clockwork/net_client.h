@@ -20,13 +20,13 @@ template<class TReq, class TRes>
 class client_rpc : public client_rpc_base
 {
 public:
-  client_rpc(TReq &req) : req_(req)
+  client_rpc(uint64_t id) : req(id)
   {
   }
 
   virtual message_tx &request()
   {
-    return req_;
+    return req;
   }
 
   virtual message_rx &make_response(uint64_t msg_type, uint64_t body_len)
@@ -34,17 +34,16 @@ public:
     if (msg_type != TRes::MsgType)
       throw "unexpected message type in response";
 
-    res_ = new TRes(id(), body_len);
-    return *res_;
+    res = new TRes(id(), body_len);
+    return *res;
   }
 
   virtual void done()
   {
-    std::cerr << "request done:" << id() << std::endl;
   }
 
-  TReq &req_;
-  TRes *res_;
+  TReq req;
+  TRes *res;
 };
 
 
@@ -88,6 +87,8 @@ protected:
     client_rpc_base *rb = it->second;
     requests.erase(it);
     rb->done();
+
+    request_done(*rb);
   }
 
   virtual void completed_transmit(message_connection *tcp_conn, message_tx *req)

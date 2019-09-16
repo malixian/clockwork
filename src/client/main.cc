@@ -15,25 +15,46 @@ class benchmark_test_client :
 {
 public:
   benchmark_test_client(asio::io_service& io_service)
-    : clockwork_client_conn(io_service) { }
+    : clockwork_client_conn(io_service)
+  {
+    inputs = new uint8_t[1024];
+    msg_id = 1;
+  }
 
   virtual void ready()
   {
-    msg_load_model_req_tx *ltxmsg = new msg_load_model_req_tx(42, testmodel_a, 1, 1);
     client_rpc<msg_load_model_req_tx, msg_load_model_res_rx> *lreq =
-      new client_rpc<msg_load_model_req_tx, msg_load_model_res_rx>(*ltxmsg);
+      new client_rpc<msg_load_model_req_tx, msg_load_model_res_rx>(msg_id++);
+
+    lreq->req.set_model(testmodel_a.blob_a, testmodel_a.blob_a_len,
+        testmodel_a.blob_b, testmodel_a.blob_b_len);
+    lreq->req.msg.set_model_id(1);
+    lreq->req.msg.set_batchsize(1);
+
     send_request(*lreq);
 
-    void *inputs = new uint8_t[1024];
-    msg_inference_req_tx *txmsg = new msg_inference_req_tx(43, 1, inputs, 1024);
-    client_rpc<msg_inference_req_tx, msg_inference_res_rx> *req =
-      new client_rpc<msg_inference_req_tx, msg_inference_res_rx>(*txmsg);
-    send_request(*req);
+
   }
 
   virtual void request_done(client_rpc_base &req)
   {
+    delete &req;
+
+    if (msg_id % 10000 == 0)
+      std::cout << "Send request " << msg_id << std::endl;
+
+    client_rpc<msg_inference_req_tx, msg_inference_res_rx> *ireq =
+      new client_rpc<msg_inference_req_tx, msg_inference_res_rx>(msg_id++);
+    ireq->req.msg.set_model_id(1);
+    ireq->req.set_inputs(inputs, 1024);
+
+    send_request(*ireq);
+
   }
+
+private:
+  void *inputs;
+  uint64_t msg_id;
 };
 
 int main(int argc, char *argv[])
