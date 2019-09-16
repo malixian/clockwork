@@ -7,7 +7,7 @@ message_sender::message_sender(message_connection *conn, message_handler &handle
 {
 }
 
-void message_sender::send_request(message_tx &req)
+void message_sender::send_message(message_tx &req)
 {
   if (!req_) {
     start_send(req);

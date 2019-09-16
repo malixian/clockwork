@@ -64,7 +64,7 @@ protected:
   void send_request(client_rpc_base &rb)
   {
     requests[rb.id()] = &rb;
-    msg_tx_.send_request(rb.request());
+    msg_tx_.send_message(rb.request());
   }
 
   virtual message_rx *new_rx_message(message_connection *tcp_conn, uint64_t header_len,

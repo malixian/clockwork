@@ -52,7 +52,7 @@ public:
 class message_sender {
 public:
   message_sender(message_connection *conn, message_handler &handler);
-  void send_request(message_tx &req);
+  void send_message(message_tx &req);
 
 private:
   void start_send(message_tx &req);
