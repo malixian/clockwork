@@ -4,7 +4,7 @@
 #include <boost/bind.hpp>
 #include <asio.hpp>
 
-#include <clockwork/net_clockwork.h>
+#include <clockwork/net_messages.h>
 
 
 struct model_description testmodel_a;
