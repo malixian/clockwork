@@ -4,7 +4,7 @@ project(clockwork)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -O2")
 set(THREADS_PREFER_PTHREAD_FLAG ON)
-set(CMAKE_BUILD_TYPE Debug)
+#set(CMAKE_BUILD_TYPE Debug)
 
 find_package(Threads REQUIRED)
 
@@ -60,6 +60,22 @@ add_executable (main
 
 target_link_libraries(
 	main
+	clockwork
+	Threads::Threads
+	dl
+	cuda
+	cudart
+	tvm_runtime
+	tbb
+)
+
+add_executable (cudafatbin
+	src/cudafatbin.cc
+	src/clockwork/util.cpp
+)
+
+target_link_libraries(
+	cudafatbin
 	clockwork
 	Threads::Threads
 	dl
