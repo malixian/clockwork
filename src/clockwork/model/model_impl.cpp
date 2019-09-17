@@ -95,6 +95,10 @@ ModelExec::ModelExec(PageMappedModelDef &mm, clockwork::so::TVMWarmSharedObject*
 	// TODO: should be able to handle more than one input and output
 	CHECK(mm.inputs.size() == 1) << "Expected model to have 1 input, but found " << mm.inputs.size();
 	CHECK(mm.outputs.size() == 1) << "Expected model to have 1 input, but found " << mm.inputs.size();
+
+	for (unsigned i = 0; i < events.size(); i++) {
+		CUDA_CALL(cudaEventCreateWithFlags(&events[i], cudaEventDisableTiming));
+	}
 }
 
 ModelExec::~ModelExec() {
@@ -159,8 +163,11 @@ void ModelExec::getoutput(std::vector<char*> &pages, void* outputptr) {
 }
 
 void ModelExec::call(std::vector<char*> &pages) {
+	cudaStream_t stream = clockwork::util::Stream();
 	for (unsigned i = 0; i < ops.size(); i++) {
 	  ops[i]->call(pages);
+	  CUDA_CALL(cudaEventSynchronize(events[i % events.size()]));
+	  CUDA_CALL(cudaEventRecord(events[i % events.size()], stream));
 	}
 }
 
@@ -213,6 +220,10 @@ WarmModelImpl::WarmModelImpl(CoolModelImpl* cool) {
 	// Don't do anything with params yet
 	params = cool->params;
 	paramsSize = cool->paramsSize;
+
+	for (unsigned i = 0; i < events.size(); i++) {
+		CUDA_CALL(cudaEventCreateWithFlags(&events[i], cudaEventDisableTiming));
+	}
 }
 
 WarmModelImpl::~WarmModelImpl() {
@@ -247,7 +258,7 @@ void WarmModelImpl::unload() {
 
 HotModelImpl::HotModelImpl(WarmModelImpl* warm, std::vector<char*> params_pages) : params_pages(params_pages), clockwork(warm->clockwork), so(warm->hotso) {
 	// Do the CUDA memcpy
-	cudaStream_t stream = tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream;
+	cudaStream_t stream = clockwork::util::Stream();
 
 	// No longer doing this here due to global synchronization barrier
 	//so = warm->so->load();  // Loads CUDA code into memory
@@ -263,6 +274,8 @@ HotModelImpl::HotModelImpl(WarmModelImpl* warm, std::vector<char*> params_pages)
 				stream
 			)
 		)
+		CUDA_CALL(cudaEventSynchronize(warm->events[i % warm->events.size()]));
+		CUDA_CALL(cudaEventRecord(warm->events[i % warm->events.size()], stream));
 	}
 }
 

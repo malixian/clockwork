@@ -11,6 +11,7 @@
 #include "clockwork/modeldef.h"
 #include "clockwork/model/memfile.h"
 #include "clockwork/model/so.h"
+#include <cuda_runtime.h>
 
 namespace clockwork{
 namespace model {
@@ -44,6 +45,7 @@ class ModelExec {
 public:
 	PageMappedModelDef &mm;
 	std::vector<OpExec*> ops;
+	std::array<cudaEvent_t, 2> events;
 
 	ModelExec(PageMappedModelDef &mm, clockwork::so::TVMWarmSharedObject* warm);
 	~ModelExec();
@@ -93,6 +95,7 @@ public:
 	ModelExec* clockwork;
 	so::TVMWarmSharedObject* so;
 	so::TVMHotSharedObject* hotso;
+	std::array<cudaEvent_t, 2> events;
 	char* params;
 	int paramsSize;
 	
