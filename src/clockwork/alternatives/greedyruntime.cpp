@@ -47,7 +47,7 @@ void Task::run(cudaStream_t execStream, cudaStream_t telemetryStream) {
 	f();
 	CUDA_CALL(cudaEventRecord(asyncComplete, execStream));
 
-	CUDA_CALL(cudaStreamSynchronize(execStream));
+	// CUDA_CALL(cudaStreamSynchronize(execStream));
 	telemetry->exec_complete = clockwork::util::hrt();
 
 
@@ -110,17 +110,19 @@ void Executor::executorMain(int executorId) {
 
 	while (runtime->isAlive()) {
 		// Finish any pending tasks that are complete
-		for (unsigned i = 0; i < pending.size(); i++) {
-			if (pending[i]->isAsyncComplete()) {
-				pending[i]->processAsyncCompleteTelemetry();
-				if (pending[i]->next != nullptr) {
-					runtime->enqueue(pending[i]->next);
+		while (pending.size() > 0) {
+			Task* task = pending[0];
+			if (task->isAsyncComplete()) {
+				task->processAsyncCompleteTelemetry();
+				if (task->next != nullptr) {
+					runtime->enqueue(task->next);
 				} else {
-					pending[i]->complete();
-					deleteTaskAndPredecessors(pending[i]);
+					task->complete();
+					deleteTaskAndPredecessors(task);
 				}
-				pending.erase(pending.begin()+i);
-				i--;
+				pending.erase(pending.begin());
+			} else {
+				continue;
 			}
 		}
 
