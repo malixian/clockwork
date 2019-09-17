@@ -120,10 +120,10 @@ void readFileAsString(const std::string &filename, std::string &dst) {
 }
 
 
-void initializeCudaStream() {
+void initializeCudaStream(int priority) {
   CUDA_CALL(cudaSetDevice(0));
   cudaStream_t stream;  
-  CUDA_CALL(cudaStreamCreate(&stream));
+  CUDA_CALL(cudaStreamCreateWithPriority(&stream, cudaStreamNonBlocking, priority));
   tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream = stream;
   tvm::runtime::CUDAThreadEntry::ThreadLocal()->stream = stream;
 }

@@ -35,7 +35,7 @@ void setCurrentThreadMaxPriority();
 void readFileAsString(const std::string &filename, std::string &dst);
 
 
-void initializeCudaStream();
+void initializeCudaStream(int priority = 0);
 cudaStream_t Stream();
 
 }
