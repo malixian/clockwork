@@ -43,6 +43,7 @@ struct LoadModelFromDiskResponse {
 	ResponseHeader header;
 	int model_id;
 	int input_size;
+	int output_size;
 };
 
 struct InferenceRequest {
@@ -50,6 +51,8 @@ struct InferenceRequest {
 	int model_id;
 	int input_size;
 	char* input;
+	int output_size;
+	char* output;
 };
 
 struct InferenceResponse {

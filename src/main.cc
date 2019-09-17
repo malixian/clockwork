@@ -46,7 +46,8 @@ void loadmodel() {
 	const int device_id = 0;
 
 	// std::string model = "/home/jcmace/modelzoo/resnet50/tesla-m40_batchsize1/tvm-model";
-    std::string model = "/home/jcmace/modelzoo/resnet18/tesla-m40_batchsize1/resnet18v2-batchsize1-optimized";
+    std::string model = "/home/jcmace/modelzoo/resnet50/tesla-m40-2_batchsize1/tvm-model";
+    // std::string model = "/home/jcmace/modelzoo-test/tvm-model";
 
 
     clockwork::model::ColdModel* cold = clockwork::model::FromDisk(

@@ -42,10 +42,19 @@ std::shared_future<InferenceResponse> ModelManager::add_request(InferenceRequest
 		return std::shared_future<InferenceResponse>(response.get_future());
 	}
 
+	if (request.output_size != model.outputsize()) {
+		std::stringstream errorMsg;
+		errorMsg << "Mismatched input size, expected " << model.outputsize() << ", got " << request.output_size;
+
+		std::promise<InferenceResponse> response;
+		response.set_value(InferenceResponse{ResponseHeader{clockworkError, errorMsg.str()}});
+		return std::shared_future<InferenceResponse>(response.get_future());
+	}
+
 	Request* r = new Request();
 	r->id = request_id_seed++;
 	r->input = request.input;
-	r->output = static_cast<char*>(malloc(model.outputsize())); // Later don't use malloc?
+	r->output = request.output; // Later don't use malloc?
 
 	r->telemetry = new RequestTelemetry();
 	r->telemetry->model_id = id;
@@ -172,23 +181,28 @@ std::shared_future<LoadModelFromDiskResponse> Worker::loadModelFromDisk(LoadMode
 		LoadModelFromDiskResponse{
 			ResponseHeader{clockworkSuccess, ""},
 			id,
-			manager->model.inputsize()
+			manager->model.inputsize(),
+			manager->model.outputsize()
 		});
 	return std::shared_future<LoadModelFromDiskResponse>(response.get_future());
 }
 
 std::shared_future<InferenceResponse> Worker::infer(InferenceRequest &request) {
-	std::lock_guard<std::mutex> lock(managers_mutex);
+	ModelManager* manager = nullptr;
+	{
+		std::lock_guard<std::mutex> lock(managers_mutex);
 
-	if (request.model_id < 0 || request.model_id >= managers.size()) {
-		std::stringstream errorMsg;
-		errorMsg << "No model exists with ID " << request.model_id;
+		if (request.model_id < 0 || request.model_id >= managers.size()) {
+			std::stringstream errorMsg;
+			errorMsg << "No model exists with ID " << request.model_id;
 
-		std::promise<InferenceResponse> response;
-		response.set_value(InferenceResponse{ResponseHeader{clockworkError, errorMsg.str()}});
-		return std::shared_future<InferenceResponse>(response.get_future());
+			std::promise<InferenceResponse> response;
+			response.set_value(InferenceResponse{ResponseHeader{clockworkError, errorMsg.str()}});
+			return std::shared_future<InferenceResponse>(response.get_future());
+		}
+		manager = managers[request.model_id];
 	}
-	return managers[request.model_id]->add_request(request);
+	return manager->add_request(request);
 }
 
 std::shared_future<EvictResponse> Worker::evict(EvictRequest &request) {

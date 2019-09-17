@@ -1,3 +1,5 @@
+//#define CUDA_API_PER_THREAD_DEFAULT_STREAM
+
 #include <iostream>
 #include "tbb/task_scheduler_init.h"
 #include "clockwork/runtime.h"
@@ -38,7 +40,8 @@ void copymodel() {
     clockwork::util::setCurrentThreadMaxPriority();
     clockwork::util::set_core(7);
 
-    std::string model = "/home/jcmace/modelzoo/resnet50/tesla-m40_batchsize1/tvm-model";
+    std::string model = "/home/jcmace/modelzoo/resnet50/tesla-m40-2_batchsize1/tvm-model";
+    //std::string model = "/home/jcmace/modelzoo-test/tvm-model";
     //std::string model = "/home/jcmace/modelzoo/resnet18/tesla-m40_batchsize1/resnet18v2-batchsize1-optimized";
 
 
@@ -163,7 +166,8 @@ void loadmodel() {
     clockwork::util::setCurrentThreadMaxPriority();
     clockwork::util::set_core(8);
 
-	std::string model = "/home/jcmace/modelzoo/resnet50/tesla-m40_batchsize1/tvm-model";
+	// std::string model = "/home/jcmace/modelzoo/resnet50/tesla-m40_batchsize1/tvm-model";
+    std::string model = "/home/jcmace/modelzoo/resnet50/tesla-m40-2_batchsize1/tvm-model";
     // std::string model = "/home/jcmace/modelzoo/resnet18/tesla-m40_batchsize1/resnet18v2-batchsize1-optimized";
 
     int page_size = 16 * 1024 * 1024;

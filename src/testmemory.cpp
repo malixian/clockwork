@@ -1,3 +1,6 @@
+#define CUDA_API_PER_THREAD_DEFAULT_STREAM
+
+
 #include <iostream>
 #include <sstream>
 #include <atomic>
@@ -24,12 +27,20 @@ template<typename R>
   bool is_ready(std::shared_future<R> const& f)
   { return f.wait_for(std::chrono::seconds(0)) == std::future_status::ready; }
 
+struct ModelInfo {
+	int id;
+	int input_size;
+	int output_size;
+	char* input;
+	char* output;
+	std::string source;
+};
+
 class LoadedModels {
 public:
 	clockwork::alternatives::Worker* worker;
-	std::unordered_map<int, std::string> sources;
-	std::unordered_map<int, int> sizes;
-	std::vector<int> model_ids;
+	std::unordered_map<int, ModelInfo> model_infos;
+
 	std::vector<std::shared_future<clockwork::alternatives::InferenceResponse>> pending;
 
 	LoadedModels(clockwork::alternatives::Worker* worker) : worker(worker) {}
@@ -41,13 +52,6 @@ public:
 	void checkResponse(clockwork::alternatives::InferenceResponse rsp) {
 		checkHeader(rsp.header);
 		// std::cout << "Got response of size " << rsp.output_size << std::endl;
-		free(rsp.output);
-	}
-
-	void addModel(std::string source, int model_id, int input_size) {
-		sources[model_id] = source;
-		sizes[model_id] = input_size;
-		model_ids.push_back(model_id);
 	}
 
 	int load(std::string modelPath) {
@@ -56,7 +60,17 @@ public:
 		auto rsp = worker->loadModelFromDisk(request).get();
 		CHECK(rsp.header.status == clockworkSuccess) << "Error loading model: " << rsp.header.message;
 		// std::cout << "Loaded " << rsp.model_id << ": [" << rsp.input_size << "] " << modelPath << std::endl;
-		addModel(modelPath, rsp.model_id, rsp.input_size);
+		
+		ModelInfo info;
+		info.id = rsp.model_id;
+		info.input_size = rsp.input_size;
+		info.output_size = rsp.output_size;
+		CUDA_CALL(cudaMallocHost(&info.input, info.input_size));
+		CUDA_CALL(cudaMallocHost(&info.output, info.output_size));
+		info.source = modelPath;
+
+		model_infos[rsp.model_id] = info;
+
 		return rsp.model_id;
 	}
 
@@ -70,11 +84,15 @@ public:
 
 	std::shared_future<clockwork::alternatives::InferenceResponse> infer(int model_id) {
 		// std::cout << "Inferring on " << model_id << " with input size " << sizes[model_id] << std::endl;
-		char* input = static_cast<char*>(malloc(sizes[model_id]));
+		
+		ModelInfo info = model_infos[model_id];
+
 		clockwork::alternatives::InferenceRequest request;
 		request.model_id = model_id;
-		request.input_size = sizes[model_id];
-		request.input = input;
+		request.input_size = info.input_size;
+		request.input = info.input;
+		request.output_size = info.output_size;
+		request.output = info.output;
 		auto f = worker->infer(request);
 		pending.push_back(f);
 		return f;
@@ -110,7 +128,8 @@ void testmemory(uint64_t totalsize, uint64_t pagesize) {
 	int hot_models = 1;
 	int num_models = 10;
 	for (unsigned i = 0; i < num_models; i++) {
-		models.load("/home/jcmace/modelzoo/resnet50/tesla-m40_batchsize1/tvm-model");
+		models.load("/home/jcmace/modelzoo/resnet50/tesla-m40-2_batchsize1/tvm-model");
+		//models.load("/home/jcmace/modelzoo/resnet18/tesla-m40-2_batchsize1/tvm-model");
 	}
 
 	std::cout << "Loaded " << num_models << " models" << std::endl;
