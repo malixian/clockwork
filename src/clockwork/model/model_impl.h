@@ -92,6 +92,7 @@ public:
 	model::PageMappedModelDef clockwork_spec;
 	ModelExec* clockwork;
 	so::TVMWarmSharedObject* so;
+	so::TVMHotSharedObject* hotso;
 	char* params;
 	int paramsSize;
 	

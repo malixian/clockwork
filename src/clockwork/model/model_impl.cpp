@@ -204,6 +204,7 @@ void CoolModelImpl::unload() {
 WarmModelImpl::WarmModelImpl(CoolModelImpl* cool) {
 	// Load shared object
 	so = new so::TVMWarmSharedObject(cool->so.filename);
+	hotso = so->load();
 
 	// Deserialize minmodel data structure
 	PageMappedModelDef::ReadFrom(cool->clockwork, this->clockwork_spec);
@@ -215,6 +216,7 @@ WarmModelImpl::WarmModelImpl(CoolModelImpl* cool) {
 }
 
 WarmModelImpl::~WarmModelImpl() {
+	hotso->unload();
 	delete so;
 	delete this->clockwork;
 }
@@ -243,9 +245,12 @@ void WarmModelImpl::unload() {
 	delete this;
 }
 
-HotModelImpl::HotModelImpl(WarmModelImpl* warm, std::vector<char*> params_pages) : params_pages(params_pages), clockwork(warm->clockwork) {
+HotModelImpl::HotModelImpl(WarmModelImpl* warm, std::vector<char*> params_pages) : params_pages(params_pages), clockwork(warm->clockwork), so(warm->hotso) {
 	// Do the CUDA memcpy
 	cudaStream_t stream = tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream;
+
+	// No longer doing this here due to global synchronization barrier
+	//so = warm->so->load();  // Loads CUDA code into memory
 
 	for (unsigned i = 0; i < warm->clockwork_spec.weights_pages.size(); i++) {
 		PageDef &def = warm->clockwork_spec.weights_pages[i];
@@ -259,12 +264,10 @@ HotModelImpl::HotModelImpl(WarmModelImpl* warm, std::vector<char*> params_pages)
 			)
 		)
 	}
-
-	so = warm->so->load();  // Loads CUDA code into memory
 }
 
 HotModelImpl::~HotModelImpl() {
-	so->unload();
+	// so->unload();
 }
 
 int HotModelImpl::num_workspace_pages(int pagesize) {

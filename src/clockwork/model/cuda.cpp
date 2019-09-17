@@ -51,7 +51,11 @@ UnloadedCUDAModule::~UnloadedCUDAModule() {
 
 LoadedCUDAModule* UnloadedCUDAModule::load() {
   CUmodule module;
-  CUresult result = cuModuleLoadData(&module, data.c_str());
+
+  // uint64_t pre = clockwork::util::now();
+  CUresult result = cuModuleLoadFatBinary(&module, data.c_str());
+  // uint64_t post = clockwork::util::now();
+  // std::cout << "cuModuleLoadData size=" << data.size() << " took " << (post-pre) << std::endl;
   if (result != CUDA_SUCCESS && result != CUDA_ERROR_DEINITIALIZED) {
     const char *msg;
     cuGetErrorName(result, &msg);
