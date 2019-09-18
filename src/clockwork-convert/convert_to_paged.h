@@ -364,7 +364,9 @@ void printWorkspaceAlloc(PageMappedWorkspaceAllocDef def, std::string prefix) {
 }
 
 void printOp(unsigned i, PageMappedModelDef model, PageMappedOpDef op, std::string prefix) {
-	std::cout << prefix << "Op " << i << " function " << op.so_function << " (" << model.so_functions[op.so_function] << "):" << std::endl;
+	std::cout << prefix << "Op " << i << " function " << op.so_function;
+	std::cout.flush();
+	std::cout << " (" << model.so_functions[op.so_function] << "):" << std::endl;
 	for (unsigned i = 0; i < op.inputs.size(); i++) {
 		printTensorDef(op.inputs[i], prefix+"   ");
 	}
