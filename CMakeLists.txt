@@ -37,6 +37,7 @@ add_library(clockwork
 	src/clockwork/clockworkruntime.cpp
 	src/clockwork/cache.cpp
 	src/clockwork/runtime_model.cpp
+	src/clockwork/runtime_model2.cpp
 	src/clockwork/util.cpp
 	src/clockwork/model/memfile.cpp
 	src/clockwork/model/model_impl.cpp

@@ -1,11 +1,9 @@
 #include <dmlc/logging.h>
-#include "clockwork/runtime_model.h"
+#include "clockwork/runtime_model2.h"
 
 using namespace clockwork;
 
-RuntimeModel2::RuntimeModel2(PageCache* cache, Model* model) : cache(cache), model(model), in_use(ATOMIC_FLAG_INIT) {
-	params_callback = new ParamsEvictionCallback(this);
-	workspace_callback = new WorkspaceEvictionCallback(this);
+RuntimeModel2::RuntimeModel2(PageCache* cache, model::Model* model) : cache(cache), model(model), in_use(ATOMIC_FLAG_INIT) {
 	model->instantiate_model_on_host();
 }
 
@@ -52,7 +50,10 @@ void RuntimeModel2::evict_weights() {
 
 void RuntimeModel2::transfer_weights(cudaStream_t stream) {
 	if (weights_pages == nullptr) {
-		weights_pages = cache->alloc(model->num_weights_pages(cache->page_size), weights_evicted);
+		weights_pages = cache->alloc(model->num_weights_pages(cache->page_size), [this] {
+			weights_pages = nullptr;
+			model->unset_weights_pages();
+		});
 		model->set_weights_pages(weights_pages->page_pointers);
 	}
 	model->transfer_weights_to_device(stream);
@@ -64,10 +65,13 @@ unsigned RuntimeModel2::input_size() {
 
 void RuntimeModel2::set_input(void* input, cudaStream_t stream) {
 	if (workspace_pages == nullptr) {
-		workspace_pages = cache->alloc(model->num_workspace_pages(cache->page_size), workspace_evicted);
+		workspace_pages = cache->alloc(model->num_workspace_pages(cache->page_size), [this] {
+			workspace_pages = nullptr;
+			model->unset_workspace_pages();
+		});
 		model->set_workspace_pages(workspace_pages->page_pointers);
 	}
-	model->transfer_input_to_device(input, stream);
+	model->transfer_input_to_device(static_cast<char*>(input), stream);
 }
 
 void RuntimeModel2::call(cudaStream_t stream) {
@@ -79,5 +83,5 @@ unsigned RuntimeModel2::output_size() {
 }
 
 void RuntimeModel2::get_output(void* output, cudaStream_t stream) {
-	model->transfer_output_from_device(output, stream);
+	model->transfer_output_from_device(static_cast<char*>(output), stream);
 }

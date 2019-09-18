@@ -71,37 +71,6 @@ public:
 
 	/* get output from GPU (can only be called once per invocation) */
 	void get_output(void* output, cudaStream_t stream);
-
-private:
-
-	EvictionCallback* weights_evicted = nullptr;
-	EvictionCallback* workspace_evicted = nullptr;
-
-
-	class WeightsEvictionCallback : public EvictionCallback {
-	private:
-		RuntimeModel2* runtime_model;
-
-	public:
-		WeightsEvictionCallback(RuntimeModel2* model) : runtime_model(model) {}
-
-		void evicted() {
-			runtime_model->weights_pages = nullptr;
-			runtime_model->model->unset_weights_pages();
-		}
-	};
-
-	class WorkspaceEvictionCallback : public EvictionCallback {
-	private:
-		RuntimeModel2* runtime_model;
-	public:
-		WorkspaceEvictionCallback(RuntimeModel2* model) : runtime_model(model) {}
-
-		void evicted() {
-			runtime_model->workspace_pages = nullptr;
-			runtime_model->model->unset_workspace_pages();
-		}
-	};
 	
 };
 
