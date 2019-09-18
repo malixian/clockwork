@@ -686,7 +686,7 @@ clockwork::model::ModelDef* DecoupledGraphRuntime::ExtractModelSpec() {
     // Get the name of the function from the SO that this op invokes
     auto search = so_functions.find(inode.param.func_name);
     if (search == so_functions.end()) {
-      so_functions[inode.param.func_name] = so_functions.size();
+      so_functions[inode.param.func_name] = mm->so_functions.size();
       mm->so_functions.push_back(inode.param.func_name);
     }
     op.so_function = so_functions[inode.param.func_name];
