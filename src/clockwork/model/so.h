@@ -1,17 +1,8 @@
 #ifndef _CLOCKWORK_SO_H_
 #define _CLOCKWORK_SO_H_
 
-#include <cstring>
-#include <dlfcn.h>
-#include "dmlc/logging.h"
-#include <tvm/runtime/c_runtime_api.h>
-#include <tvm/runtime/c_backend_api.h>
-#include <tvm/runtime/packed_func.h>
-#include <clockwork/tvm/meta_data.h>
-#include <clockwork/tvm/thread_storage_scope.h>
-#include <unistd.h>
-#include <functional>
-#include "clockwork/tvm/runtime_base.h"
+#include <string>
+#include <vector>
 #include "clockwork/model/cuda.h"
 
 namespace clockwork {
@@ -24,18 +15,9 @@ public:
   void* lib_handle_{nullptr};
 
 public:
-  void* GetSymbol(const char* symbolName) {
-    return dlsym(lib_handle_, symbolName);
-  }
-
-  SharedObject(const std::string &name) : name(name) {
-    lib_handle_ = dlopen(name.c_str(), RTLD_LOCAL | RTLD_NOW);
-    CHECK(lib_handle_ != nullptr) << "Failed to load SO " << name << dlerror();
-  }
-
-  ~SharedObject() {
-    dlclose(lib_handle_);
-  }
+  void* GetSymbol(const char* symbolName);
+  SharedObject(const std::string &name);
+  ~SharedObject();
 
   template<typename T> void LinkFunctionPtr(void* funcPtr, T func) {
     if (funcPtr != nullptr) {

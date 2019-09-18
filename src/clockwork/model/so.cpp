@@ -1,11 +1,26 @@
 #include "clockwork/model/so.h"
 
-#include <cuda.h>
 #include <cuda_runtime.h>
-#include <tvm/runtime/cuda_common.h>
+#include <dlfcn.h>
+#include "dmlc/logging.h"
+#include "tvm/runtime/cuda_common.h"
 
 namespace clockwork {
 namespace so {
+
+
+void* SharedObject::GetSymbol(const char* symbolName) {
+    return dlsym(lib_handle_, symbolName);
+}
+
+SharedObject::SharedObject(const std::string &name) : name(name) {
+    lib_handle_ = dlopen(name.c_str(), RTLD_LOCAL | RTLD_NOW);
+    CHECK(lib_handle_ != nullptr) << "Failed to load SO " << name << dlerror();
+}
+
+SharedObject::~SharedObject() {
+    dlclose(lib_handle_);
+}
 
 int TVMFuncCallProxy(TVMFunctionHandle func,
                  TVMValue* args,
