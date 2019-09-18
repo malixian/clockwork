@@ -5,7 +5,6 @@
 #include <pods/pods.h>
 #include <pods/binary.h>
 #include <pods/buffers.h>
-#include "dmlc/logging.h"
 
 namespace clockwork {
 namespace model {
@@ -66,12 +65,7 @@ struct ModelDef {
         PODS_MDR(outputs)
     )
 
-    static void ReadFrom(const std::string &data, ModelDef &def) {
-        pods::InputBuffer in(data.data(), data.size());
-        pods::BinaryDeserializer<decltype(in)> deserializer(in);
-        pods::Error status = deserializer.load(def);
-        CHECK(status == pods::Error::NoError) << "Cannot deserialize minmodel";
-    }
+    static void ReadFrom(const std::string &data, ModelDef &def);
 
     // TODO: currently, src/convert.cpp is the only usage of writing model defs; eventually migrate code here
 };
@@ -158,12 +152,7 @@ struct PageMappedModelDef {
         PODS_MDR(weights_pages)
     )
 
-    static void ReadFrom(const std::string &data, PageMappedModelDef &def) {
-        pods::InputBuffer in(data.data(), data.size());
-        pods::BinaryDeserializer<decltype(in)> deserializer(in);
-        pods::Error status = deserializer.load(def);
-        CHECK(status == pods::Error::NoError) << "Cannot deserialize minmodel";
-    }
+    static void ReadFrom(const std::string &data, PageMappedModelDef &def);
 
     // TODO: currently, src/convert.cpp is the only usage of writing model defs; eventually migrate code here
 };

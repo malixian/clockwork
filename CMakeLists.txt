@@ -32,6 +32,7 @@ link_directories(
 )
 
 add_library(clockwork
+	src/clockwork/modeldef.cpp
 	src/clockwork/runtime.cpp
 	src/clockwork/clockworkruntime.cpp
 	src/clockwork/cache.cpp
