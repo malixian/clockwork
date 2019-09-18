@@ -40,6 +40,7 @@ add_library(clockwork
 	src/clockwork/util.cpp
 	src/clockwork/model/memfile.cpp
 	src/clockwork/model/model_impl.cpp
+	src/clockwork/model/model_impl2.cpp
 	src/clockwork/model/cuda.cpp
 	src/clockwork/model/so.cpp
 	src/clockwork/alternatives/threadpoolruntime.cpp
@@ -152,6 +153,7 @@ target_link_libraries(
 add_executable (tests
 	test/tests.cpp
 	test/clockwork/testmemory.cpp
+	test/clockwork/model/testmodel.cpp
 )
 
 target_link_libraries(
