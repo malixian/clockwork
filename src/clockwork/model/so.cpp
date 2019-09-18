@@ -4,6 +4,8 @@
 #include <dlfcn.h>
 #include "dmlc/logging.h"
 #include "tvm/runtime/cuda_common.h"
+#include "tvm/runtime/c_backend_api.h"
+#include "clockwork/tvm/runtime_base.h"
 
 namespace clockwork {
 namespace so {

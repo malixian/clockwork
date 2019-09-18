@@ -38,8 +38,6 @@ UnloadedCUDAModule::UnloadedCUDAModule(const char* &cuda_blob) {
   for (auto & e : fmap) {
     this->functions[e.first] = new UnloadedCUDAFunc(e.first, e.second);
   }
-
-  std::string data;
   stream->Read(&this->data);
 }
 

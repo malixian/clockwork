@@ -1,13 +1,9 @@
 #ifndef _CLOCKWORK_CUDA_H_
 #define _CLOCKWORK_CUDA_H_
 
-#include <unordered_map>
-#include <string>
 #include <cuda.h>
-#include <tvm/runtime/c_backend_api.h>
-#include <tvm/runtime/c_runtime_api.h>
-#include <tvm/runtime/packed_func.h>
-#include "clockwork/tvm/runtime_base.h"
+#include <string>
+#include <unordered_map>
 #include "clockwork/tvm/meta_data.h"
 #include "clockwork/tvm/thread_storage_scope.h"
 
