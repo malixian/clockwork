@@ -1,10 +1,7 @@
-#include "clockwork/model/memfile.h"
-#include "dmlc/logging.h"
 #include <unistd.h>
 #include <sys/syscall.h>
-#include <iostream>
-#include <sys/stat.h> 
-#include <fcntl.h>
+#include "dmlc/logging.h"
+#include "clockwork/model/memfile.h"
 
 namespace clockwork {
 

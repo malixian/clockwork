@@ -3,15 +3,8 @@
 #define _CLOCKWORK_MEMFILE_H_
 
 #include <string>
-#include <unistd.h>
-#include <sys/syscall.h>
-#include <iostream>
-#include <sys/stat.h> 
-#include <fcntl.h>
 #include <istream>
-#include <sstream>
 #include <fstream>
-#include "dmlc/logging.h"
 
 namespace clockwork {
 
