@@ -9,12 +9,10 @@
 
 using namespace clockwork::alternatives;
 
-ModelManager::ModelManager(const int id, Runtime* runtime, PageCache* cache, model::ColdModel* cold, TelemetryLogger* logger) : id(id), runtime(runtime), model(cache, cold), logger(logger) {
+ModelManager::ModelManager(const int id, Runtime* runtime, PageCache* cache, model::ColdModel* cold, TelemetryLogger* logger) : id(id), runtime(runtime), model(cache, cold), logger(logger), request_id_seed(0) {
 	model.coldToCool();
 	model.coolToWarm();
 }
-
-std::atomic_int request_id_seed = 0;
 
 EvictResponse ModelManager::evict() {
 	std::lock_guard<std::mutex> lock(queue_mutex);
@@ -30,6 +28,7 @@ EvictResponse ModelManager::evict() {
 
 	return EvictResponse{ResponseHeader{clockworkSuccess, ""}};
 }
+
 
 std::shared_future<InferenceResponse> ModelManager::add_request(InferenceRequest &request) {
 

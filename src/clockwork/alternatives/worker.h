@@ -81,7 +81,7 @@ public:
 		std::promise<InferenceResponse> promise;
 		RequestTelemetry* telemetry;
 	};
-
+	std::atomic_int request_id_seed;
 	const int id;
 	Runtime* runtime;
 	TelemetryLogger* logger;

@@ -22,12 +22,12 @@ namespace clockwork {
 class TelemetryLogger {
 private:
 	const std::string output_filename;
-	std::atomic_bool alive = true;
+	std::atomic_bool alive;
 	std::thread thread;
 	tbb::concurrent_queue<RequestTelemetry*> queue;
 
 public:	
-	TelemetryLogger(std::string output_filename) : output_filename(output_filename) {
+	TelemetryLogger(std::string output_filename) : output_filename(output_filename), alive(true) {
 		thread = std::thread(&TelemetryLogger::main, this);
 	}
 

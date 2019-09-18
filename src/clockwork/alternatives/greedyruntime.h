@@ -57,7 +57,7 @@ public:
 class GreedyRuntime : public clockwork::Runtime {
 private:
 	std::atomic_bool alive;
-	std::atomic_uint coreCount = 0;
+	std::atomic_uint coreCount;
 	std::vector<Executor*> executors;
 	const unsigned numThreads;
 	const unsigned maxOutstanding;
