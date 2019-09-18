@@ -363,13 +363,13 @@ void printWorkspaceAlloc(PageMappedWorkspaceAllocDef def, std::string prefix) {
 	std::cout << prefix << "[" << def.page << " " << def.page_offset << "] + " << def.size << std::endl;
 }
 
-void printOp(PageMappedModelDef model, PageMappedOpDef op, std::string prefix) {
-	std::cout << prefix << op.so_function << " " << model.so_functions[op.so_function] << ":" << std::endl;
+void printOp(unsigned i, PageMappedModelDef model, PageMappedOpDef op, std::string prefix) {
+	std::cout << prefix << "Op " << i << " function " << op.so_function << " (" << model.so_functions[op.so_function] << "):" << std::endl;
 	for (unsigned i = 0; i < op.inputs.size(); i++) {
 		printTensorDef(op.inputs[i], prefix+"   ");
 	}
 	if (op.workspace_allocs.size() > 0) {
-		std::cout << prefix << "  " << "Workspace:" << std::endl;
+		std::cout << prefix << "   " << "Workspace:" << std::endl;
 		for (unsigned i = 0; i < op.workspace_allocs.size(); i++) {
 			printWorkspaceAlloc(op.workspace_allocs[i], prefix+"    ");
 		}
@@ -390,7 +390,7 @@ void printNewModel(PageMappedModelDef model) {
 	std::cout << model.so_functions.size() << " SO functions and " << model.cuda_functions.size() << " CUDA functions" << std::endl;
 	std::cout << model.ops.size() << " ops:" << std::endl;
 	for (unsigned i = 0; i < model.ops.size(); i++) {
-		printOp(model, model.ops[i], "   ");
+		printOp(i, model, model.ops[i], "  ");
 	}
 	std::cout << "Inputs:" << std::endl;
 	for (unsigned i = 0; i < model.inputs.size(); i++) {
