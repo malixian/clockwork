@@ -77,7 +77,7 @@ void Model::uninstantiate_model_on_device() {
 	hot_so = nullptr;
 }
 
-int Model::num_weights_pages(int page_size) {
+unsigned Model::num_weights_pages(unsigned page_size) {
 	CHECK(spec != nullptr) << "num_weights_pages spec is nullptr";
 	CHECK(spec->configured_page_size == page_size)
 			<< "Clockwork model was configured with mismatched page size, found "
@@ -96,7 +96,7 @@ void Model::unset_weights_pages() {
 	this->weights_pages = nullptr;
 }
 
-int Model::num_workspace_pages(int page_size) {
+unsigned Model::num_workspace_pages(unsigned page_size) {
 	CHECK(spec != nullptr) << "num_workspace_pages spec is nullptr";
 	CHECK(spec->configured_page_size == page_size)
 			<< "Clockwork model was configured with mismatched page size, found "
@@ -134,7 +134,7 @@ void Model::transfer_weights_to_device(cudaStream_t stream) {
 	}
 }
 
-int Model::input_size() {
+unsigned Model::input_size() {
 	/** TODO: for now, a model only has one input */
 	CHECK(spec != nullptr) << "input_size spec is nullptr";
 	return spec->inputs[0].size;
@@ -157,7 +157,7 @@ void Model::transfer_input_to_device(char* input_ptr, cudaStream_t stream) {
 }
 
 /* Preconditions: instantiate_model_on_host */
-int Model::output_size() {
+unsigned Model::output_size() {
 	/** TODO: for now, a model only has one output */
 	CHECK(spec != nullptr) << "output_size spec is nullptr";
 	return spec->outputs[0].size;

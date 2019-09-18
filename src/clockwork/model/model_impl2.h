@@ -88,7 +88,7 @@ public:
 	void uninstantiate_model_on_device();
 
 	/* Preconditions: instantiate_model_on_host */
-	int num_weights_pages(int page_size);
+	unsigned num_weights_pages(unsigned page_size);
 
 	/* Preconditions: none */
 	void set_weights_pages(std::vector<char*> &weights_pages);
@@ -97,7 +97,7 @@ public:
 	void unset_weights_pages();
 
 	/* Preconditions: instantiate_model_on_host */
-	int num_workspace_pages(int page_size);
+	unsigned num_workspace_pages(unsigned page_size);
 
 	/* Preconditions: none */
 	void set_workspace_pages(std::vector<char*> &workspace_pages);
@@ -109,13 +109,13 @@ public:
 	void transfer_weights_to_device(cudaStream_t stream);
 
 	/* Preconditions: instantiate_model_on_host */
-	int input_size();
+	unsigned input_size();
 
 	/* Preconditions: instantiate_model_on_host && set_workspace_pages */
 	void transfer_input_to_device(char* input_ptr, cudaStream_t stream);
 
 	/* Preconditions: instantiate_model_on_host */
-	int output_size();
+	unsigned output_size();
 
 	/* Preconditions: instantiate_model_on_host && set_workspace_pages */
 	void transfer_output_from_device(char* output_ptr, cudaStream_t stream);
