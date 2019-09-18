@@ -109,8 +109,9 @@ TEST_CASE("Simple Page alloc", "[memory]") {
     REQUIRE( cache->unlockedAllocations.isEmpty() );
 
     TestEvictionCallback* callback2 = new TestEvictionCallback();
-    std::shared_ptr<Allocation> alloc2 = cache->alloc(1, callback2);
-    REQUIRE (alloc2 == nullptr);
+    std::shared_ptr<Allocation> alloc2 = nullptr;
+    REQUIRE_THROWS(alloc2 = cache->alloc(1, callback2));
+    REQUIRE(alloc2 == nullptr);
     REQUIRE( alloc1->evicted == false );
     REQUIRE( alloc1->usage_count == 1 );
     REQUIRE( alloc1->pages.size() == 1 );
@@ -136,7 +137,8 @@ TEST_CASE("Alloc too much", "[memory]") {
 
     TestEvictionCallback* callback1 = new TestEvictionCallback();
 
-    std::shared_ptr<Allocation> alloc1 = cache->alloc(2, callback1);
+    std::shared_ptr<Allocation> alloc1 = nullptr;
+    REQUIRE_THROWS(cache->alloc(2, callback1));
     REQUIRE( alloc1 == nullptr);
     REQUIRE( !cache->freePages.isEmpty() );
     REQUIRE( cache->lockedAllocations.isEmpty() );
@@ -164,7 +166,8 @@ TEST_CASE("Simple Page eviction", "[memory]") {
     REQUIRE( alloc1->evicted == false );
 
     TestEvictionCallback* callback2 = new TestEvictionCallback();
-    std::shared_ptr<Allocation> alloc2 = cache->alloc(1, callback2);
+    std::shared_ptr<Allocation> alloc2 = nullptr;
+    REQUIRE_THROWS(cache->alloc(1, callback2));
     REQUIRE (alloc2 == nullptr);
     REQUIRE( alloc1->evicted == false );
 
@@ -213,7 +216,7 @@ TEST_CASE("Simple Page free", "[memory]") {
     REQUIRE( !cache->freePages.isEmpty() );
     REQUIRE( cache->lockedAllocations.isEmpty() );
     REQUIRE( cache->unlockedAllocations.isEmpty() );
-    REQUIRE(callback1->evictionCount == 0); // Explicit freeing doesn't call eviction callback
+    REQUIRE(callback1->evictionCount == 1);
     
 }
 
