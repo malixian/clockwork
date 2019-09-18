@@ -152,7 +152,7 @@ target_link_libraries(
 
 add_executable (tests
 	test/tests.cpp
-	test/clockwork/testmemory.cpp
+	test/clockwork/testcache.cpp
 	test/clockwork/model/testmodel.cpp
 )
 
