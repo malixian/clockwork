@@ -53,13 +53,13 @@ void PageCache::unlock(std::shared_ptr<Allocation> allocation) {
 	}
 }
 
-std::shared_ptr<Allocation> PageCache::alloc(unsigned n_pages, EvictionCallback* callback) {
+std::shared_ptr<Allocation> PageCache::alloc(unsigned n_pages, std::function<void(void)> eviction_callback) {
 	std::shared_ptr<Allocation> alloc = std::make_shared<Allocation>();
-	alloc->callback = callback;
+	alloc->eviction_callback = eviction_callback;
 	alloc->pages.reserve(n_pages);
 
 
-	std::vector<EvictionCallback*> callbacks;
+	std::vector<std::function<void(void)>> callbacks;
 	std::lock_guard<std::recursive_mutex> lock(mutex);
 
 	// Use up free pages
@@ -73,7 +73,7 @@ std::shared_ptr<Allocation> PageCache::alloc(unsigned n_pages, EvictionCallback*
 	while (alloc->pages.size() < n_pages && !unlockedAllocations.isEmpty()) {
 		std::shared_ptr<Allocation> toEvict = unlockedAllocations.popHead();
 		toEvict->evicted = true;
-		callbacks.push_back(toEvict->callback);
+		callbacks.push_back(toEvict->eviction_callback);
 
 		unsigned i = 0;
 
@@ -121,7 +121,7 @@ std::shared_ptr<Allocation> PageCache::alloc(unsigned n_pages, EvictionCallback*
 	// Notify eviction handlers
 	for (unsigned i = 0; i < callbacks.size(); i++) {
 		if (callbacks[i] != nullptr) {
-			callbacks[i]->evicted();
+			callbacks[i]();
 		}
 	}
 
@@ -150,8 +150,8 @@ void PageCache::free(std::shared_ptr<Allocation> allocation) {
 	allocation->evicted = true;
 
 	// Call eviction handler
-	if (allocation->callback != nullptr) {
-		allocation->callback->evicted();
+	if (allocation->eviction_callback != nullptr) {
+		allocation->eviction_callback();
 	}
 }
 

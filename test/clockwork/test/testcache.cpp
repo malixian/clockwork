@@ -4,14 +4,6 @@
 
 #include "clockwork/cache.h"
 
-class TestEvictionCallback : public clockwork::EvictionCallback {
-public:
-    int evictionCount = 0;
-    void evicted() {
-        evictionCount++;
-    }
-};
-
 TEST_CASE("Create Page Cache with bad sizes", "[memory]") {
 
     using namespace clockwork;
@@ -38,9 +30,9 @@ TEST_CASE("Cache lock and unlock", "[memory]") {
     REQUIRE( cache->lockedAllocations.isEmpty() );
     REQUIRE( cache->unlockedAllocations.isEmpty() );
 
-    TestEvictionCallback* callback1 = new TestEvictionCallback();
 
-    std::shared_ptr<Allocation> alloc1 = cache->alloc(1, callback1);
+
+    std::shared_ptr<Allocation> alloc1 = cache->alloc(1, []{});
     REQUIRE( alloc1 != nullptr);
     REQUIRE( alloc1->usage_count == 1 );
     REQUIRE( !cache->lockedAllocations.isEmpty() );
@@ -96,26 +88,22 @@ TEST_CASE("Simple Page alloc", "[memory]") {
     REQUIRE( cache->lockedAllocations.isEmpty() );
     REQUIRE( cache->unlockedAllocations.isEmpty() );
 
-    TestEvictionCallback* callback1 = new TestEvictionCallback();
 
-    std::shared_ptr<Allocation> alloc1 = cache->alloc(1, callback1);
+    std::shared_ptr<Allocation> alloc1 = cache->alloc(1, []{});
     REQUIRE( alloc1 != nullptr);
     REQUIRE( alloc1->evicted == false );
     REQUIRE( alloc1->usage_count == 1 );
     REQUIRE( alloc1->pages.size() == 1 );
-    REQUIRE( alloc1->callback == callback1 );
     REQUIRE( cache->freePages.isEmpty() );
     REQUIRE( !cache->lockedAllocations.isEmpty() );
     REQUIRE( cache->unlockedAllocations.isEmpty() );
 
-    TestEvictionCallback* callback2 = new TestEvictionCallback();
     std::shared_ptr<Allocation> alloc2 = nullptr;
-    REQUIRE_THROWS(alloc2 = cache->alloc(1, callback2));
+    REQUIRE_THROWS(alloc2 = cache->alloc(1, []{}));
     REQUIRE(alloc2 == nullptr);
     REQUIRE( alloc1->evicted == false );
     REQUIRE( alloc1->usage_count == 1 );
     REQUIRE( alloc1->pages.size() == 1 );
-    REQUIRE( alloc1->callback == callback1 );
     REQUIRE( cache->freePages.isEmpty() );
     REQUIRE( !cache->lockedAllocations.isEmpty() );
     REQUIRE( cache->unlockedAllocations.isEmpty() );    
@@ -135,10 +123,9 @@ TEST_CASE("Alloc too much", "[memory]") {
     REQUIRE( cache->lockedAllocations.isEmpty() );
     REQUIRE( cache->unlockedAllocations.isEmpty() );
 
-    TestEvictionCallback* callback1 = new TestEvictionCallback();
 
     std::shared_ptr<Allocation> alloc1 = nullptr;
-    REQUIRE_THROWS(cache->alloc(2, callback1));
+    REQUIRE_THROWS(cache->alloc(2, []{}));
     REQUIRE( alloc1 == nullptr);
     REQUIRE( !cache->freePages.isEmpty() );
     REQUIRE( cache->lockedAllocations.isEmpty() );
@@ -159,26 +146,25 @@ TEST_CASE("Simple Page eviction", "[memory]") {
     REQUIRE( cache->lockedAllocations.isEmpty() );
     REQUIRE( cache->unlockedAllocations.isEmpty() );
 
-    TestEvictionCallback* callback1 = new TestEvictionCallback();
+    int evictionCount = 0;
+    std::function<void(void)> callback1 = [&evictionCount]{ evictionCount++; };
 
     std::shared_ptr<Allocation> alloc1 = cache->alloc(1, callback1);
     REQUIRE( alloc1 != nullptr);
     REQUIRE( alloc1->evicted == false );
 
-    TestEvictionCallback* callback2 = new TestEvictionCallback();
     std::shared_ptr<Allocation> alloc2 = nullptr;
-    REQUIRE_THROWS(cache->alloc(1, callback2));
+    REQUIRE_THROWS(cache->alloc(1, []{}));
     REQUIRE (alloc2 == nullptr);
     REQUIRE( alloc1->evicted == false );
 
     REQUIRE_NOTHROW(cache->unlock(alloc1));
 
-    TestEvictionCallback* callback3 = new TestEvictionCallback();
-    std::shared_ptr<Allocation> alloc3 = cache->alloc(1, callback3);
+    std::shared_ptr<Allocation> alloc3 = cache->alloc(1, []{});
     REQUIRE (alloc3 != nullptr);
     REQUIRE( alloc3->evicted == false );
     REQUIRE( alloc1->evicted == true );
-    REQUIRE(callback1->evictionCount == 1);
+    REQUIRE(evictionCount == 1);
     
 }
 
@@ -196,7 +182,8 @@ TEST_CASE("Simple Page free", "[memory]") {
     REQUIRE( cache->lockedAllocations.isEmpty() );
     REQUIRE( cache->unlockedAllocations.isEmpty() );
 
-    TestEvictionCallback* callback1 = new TestEvictionCallback();
+    int evictionCount = 0;
+    std::function<void(void)> callback1 = [&evictionCount]{ evictionCount++; };
 
     std::shared_ptr<Allocation> alloc1 = cache->alloc(1, callback1);
     REQUIRE( alloc1 != nullptr);
@@ -216,7 +203,7 @@ TEST_CASE("Simple Page free", "[memory]") {
     REQUIRE( !cache->freePages.isEmpty() );
     REQUIRE( cache->lockedAllocations.isEmpty() );
     REQUIRE( cache->unlockedAllocations.isEmpty() );
-    REQUIRE(callback1->evictionCount == 1);
+    REQUIRE(evictionCount == 1);
     
 }
 
@@ -235,16 +222,16 @@ TEST_CASE("LRU page eviction", "[memory]") {
     REQUIRE( cache->unlockedAllocations.isEmpty() );
 
 
-    std::shared_ptr<Allocation> alloc1 = cache->alloc(5, nullptr);
+    std::shared_ptr<Allocation> alloc1 = cache->alloc(5, []{});
     REQUIRE( alloc1 != nullptr);
     
-    std::shared_ptr<Allocation> alloc2 = cache->alloc(5, nullptr);
+    std::shared_ptr<Allocation> alloc2 = cache->alloc(5, []{});
     REQUIRE( alloc2 != nullptr);
 
     REQUIRE_NOTHROW( cache->unlock(alloc2) );
     REQUIRE_NOTHROW( cache->unlock(alloc1) );
     
-    std::shared_ptr<Allocation> alloc3 = cache->alloc(1, nullptr);
+    std::shared_ptr<Allocation> alloc3 = cache->alloc(1, []{});
     REQUIRE( alloc3 != nullptr);
     REQUIRE( alloc1->evicted == false );
     REQUIRE( alloc2->evicted == true );
@@ -253,7 +240,7 @@ TEST_CASE("LRU page eviction", "[memory]") {
 
     REQUIRE_NOTHROW( cache->unlock(alloc3) );
 
-    std::shared_ptr<Allocation> alloc4 = cache->alloc(4, nullptr);
+    std::shared_ptr<Allocation> alloc4 = cache->alloc(4, []{});
     REQUIRE( alloc4 != nullptr);
     REQUIRE( alloc1->evicted == false );
     REQUIRE( alloc2->evicted == true );
@@ -263,7 +250,7 @@ TEST_CASE("LRU page eviction", "[memory]") {
 
     REQUIRE( cache->trylock(alloc1) );
 
-    std::shared_ptr<Allocation> alloc5 = cache->alloc(1, nullptr);
+    std::shared_ptr<Allocation> alloc5 = cache->alloc(1, []{});
     REQUIRE( alloc5 != nullptr);
     REQUIRE( alloc1->evicted == false );
     REQUIRE( alloc2->evicted == true );

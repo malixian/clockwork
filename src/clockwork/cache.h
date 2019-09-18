@@ -1,6 +1,7 @@
 #ifndef _CLOCKWORK_CACHE_H_
 #define _CLOCKWORK_CACHE_H_
 
+#include <functional>
 #include <mutex>
 #include <memory>
 #include <atomic>
@@ -104,7 +105,7 @@ struct Allocation {
 	int usage_count = 0;
 	std::vector<Page*> pages;
 	std::vector<char*> page_pointers;
-	EvictionCallback* callback = nullptr;
+	std::function<void(void)> eviction_callback;
 	LinkedListElement<std::shared_ptr<Allocation>>* list_position = nullptr;
 };
 
@@ -140,7 +141,7 @@ public:
 	/*
 	Alloc will also lock the allocation immediately
 	*/
-	std::shared_ptr<Allocation> alloc(unsigned n_pages, EvictionCallback* callback);
+	std::shared_ptr<Allocation> alloc(unsigned n_pages, std::function<void(void)> eviction_callback);
 	void free(std::shared_ptr<Allocation> allocation);
 
 };

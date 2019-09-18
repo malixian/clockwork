@@ -36,9 +36,6 @@ private:
 	std::shared_ptr<Allocation> params_alloc = nullptr;
 	std::shared_ptr<Allocation> workspace_alloc = nullptr;
 
-	EvictionCallback* params_callback = nullptr;
-	EvictionCallback* workspace_callback = nullptr;
-
 public:
 
 	RuntimeModel(PageCache* cache, model::ColdModel* cold);
@@ -65,36 +62,6 @@ public:
 	void warmToCool();
 	void coolToCold();
 	
-};
-
-class ParamsEvictionCallback : public EvictionCallback {
-private:
-	RuntimeModel* model;
-public:
-	ParamsEvictionCallback(RuntimeModel* model) : model(model) {}
-
-	// evicted is always called while holding the cache lock
-	// TODO: unloading hot model isn't cheap (~100 microseconds for cuda module unload)
-	//   so don't do it here?
-	void evicted() {
-		// Let the eviction be lazily picked up
-		// TODO: handle this out-of-band
-		// model->hotToWarm();
-	}
-};
-
-class WorkspaceEvictionCallback : public EvictionCallback {
-private:
-	RuntimeModel* model;
-public:
-	WorkspaceEvictionCallback(RuntimeModel* model) : model(model) {}
-
-	// evicted is always called while holding the cache lock
-	void evicted() {
-		// Let the eviction be lazily picked up
-		// TODO: handle this out-of-band
-		//model->execToHot();
-	}
 };
 
 }
