@@ -74,6 +74,9 @@ void convert_ptx_to_fatbin(std::string model) {
     outs.close();
 
     std::cout << "count is " << data.size() << std::endl;
+
+    // Next, to generate fatbin invoke
+    // nvcc --fatbin tvm-model.ptx --gpu-architecture=compute_52 --gpu-code=sm_52
 }
 
 void loadmodules(std::string model) {
