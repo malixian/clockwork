@@ -49,8 +49,8 @@ void free_cuda_pages(std::vector<char*> pages) {
     REQUIRE(status == cudaSuccess);
 }
 
-void cuda_synchronize() {
-	cudaError_t status = cudaStreamSynchronize(clockwork::util::Stream());
+void cuda_synchronize(cudaStream_t stream) {
+	cudaError_t status = cudaStreamSynchronize(stream);
 	REQUIRE(status == cudaSuccess);
 }
 

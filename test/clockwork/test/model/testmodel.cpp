@@ -1,5 +1,6 @@
 #include <unistd.h>
 #include <libgen.h>
+#include <fstream>
 
 #include "clockwork/test/util.h"
 #include "clockwork/model/model.h"
@@ -98,7 +99,7 @@ void assert_is_hot(Model* model) {
     REQUIRE_NOTHROW(model->transfer_output_from_device(output, NULL));
     REQUIRE_NOTHROW(model->call(NULL));
 
-    cuda_synchronize();
+    cuda_synchronize(NULL);
 
     REQUIRE_NOTHROW(model->unset_weights_pages());
     REQUIRE_NOTHROW(model->unset_workspace_pages());
@@ -188,4 +189,44 @@ TEST_CASE("Model Lifecycle 2", "[model]") {
 
     delete model;
 
+}
+
+TEST_CASE("Model produces correct output", "[model]") {
+
+    int page_size = 16 * 1024 * 1024;
+    int input_size = 224*224*3*4;
+    int output_size = 1000 * 1 * 4;
+    int num_weights_pages = 5;
+    int num_workspace_pages = 2;
+    std::vector<char*> weights_pages = make_cuda_pages(page_size, num_weights_pages);
+    std::vector<char*> workspace_pages = make_cuda_pages(page_size, num_workspace_pages);
+
+    std::string f = clockwork::util::get_example_model();
+
+    Model* model = Model::loadFromDisk(f+".so", f+".clockwork", f+".clockwork_params");
+    
+    model->instantiate_model_on_host();
+    model->instantiate_model_on_device();
+    model->set_weights_pages(weights_pages);
+    model->set_workspace_pages(workspace_pages);
+    model->transfer_weights_to_device(NULL);
+
+    std::ifstream in(f+".input");
+    std::string input_filename = f+".input";
+    std::string output_filename = f+".output";
+    std::string input, expectedOutput;
+    char actualOutput[output_size];
+    clockwork::util::readFileAsString(input_filename, input);
+    clockwork::util::readFileAsString(output_filename, expectedOutput);
+
+    REQUIRE(input.size() == input_size);
+    model->transfer_input_to_device(input.data(), NULL);
+    model->call(NULL);
+    model->transfer_output_from_device(actualOutput, NULL);
+
+    cuda_synchronize(NULL);
+
+    for (unsigned i = 0; i < output_size; i++) {
+        REQUIRE(actualOutput[i] == expectedOutput[i]);
+    }
 }
