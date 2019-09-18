@@ -108,9 +108,14 @@ std::shared_ptr<Allocation> PageCache::alloc(unsigned n_pages, EvictionCallback*
 
 		alloc = nullptr;
 	} else {
-		// Allocation successful; lock it
+		// Allocation successful; lock it and create page ptrs
 		alloc->usage_count++;
 		alloc->list_position = lockedAllocations.pushBack(alloc);
+
+		alloc->page_pointers.resize(n_pages);
+		for (unsigned i = 0; i < n_pages; i++) {
+			alloc->page_pointers[i] = alloc->pages[i]->ptr;
+		}
 	}
 
 	// Notify eviction handlers

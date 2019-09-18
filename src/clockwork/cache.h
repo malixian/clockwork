@@ -103,6 +103,7 @@ struct Allocation {
 	bool evicted = false;
 	int usage_count = 0;
 	std::vector<Page*> pages;
+	std::vector<char*> page_pointers;
 	EvictionCallback* callback = nullptr;
 	LinkedListElement<std::shared_ptr<Allocation>>* list_position = nullptr;
 };
