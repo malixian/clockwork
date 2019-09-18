@@ -8,9 +8,9 @@
 #include <sstream>
 
 #include "clockwork/runtime.h"
-#include "clockwork/runtime_model.h"
+#include "clockwork/runtime_model2.h"
 #include "clockwork/cache.h"
-#include "clockwork/model.h"
+#include "clockwork/model/model_impl2.h"
 #include "clockwork/telemetry.h"
 #include "clockwork/telemetry_logger.h"
 
@@ -42,22 +42,22 @@ struct LoadModelFromDiskRequest {
 struct LoadModelFromDiskResponse {
 	ResponseHeader header;
 	int model_id;
-	int input_size;
-	int output_size;
+	unsigned input_size;
+	unsigned output_size;
 };
 
 struct InferenceRequest {
 	RequestHeader header;
 	int model_id;
-	int input_size;
+	unsigned input_size;
 	char* input;
-	int output_size;
+	unsigned output_size;
 	char* output;
 };
 
 struct InferenceResponse {
 	ResponseHeader header;
-	int output_size;
+	unsigned output_size;
 	char* output;
 };
 
@@ -87,13 +87,12 @@ public:
 	TelemetryLogger* logger;
 
 	// The model being managed
-	RuntimeModel model;
+	RuntimeModel2 model;
 
 	std::mutex queue_mutex;
 	std::deque<Request*> pending_requests;
-	std::atomic_flag in_use = ATOMIC_FLAG_INIT;	// Only one request can execute at a time for a model
 
-	ModelManager(const int id, Runtime* runtime, PageCache* cache, model::ColdModel* cold, TelemetryLogger* logger);
+	ModelManager(const int id, Runtime* runtime, PageCache* cache, model::Model* cold, TelemetryLogger* logger);
 	std::shared_future<InferenceResponse> add_request(InferenceRequest &request);
 	EvictResponse evict();
 

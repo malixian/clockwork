@@ -5,6 +5,8 @@ using namespace clockwork;
 
 RuntimeModel2::RuntimeModel2(PageCache* cache, model::Model* model) : cache(cache), model(model), in_use(ATOMIC_FLAG_INIT) {
 	model->instantiate_model_on_host();
+	// TODO: remove instantiate_model_on_device and let it be done as part of model exec
+	instantiate_code();
 }
 
 bool RuntimeModel2::try_lock() {
@@ -19,6 +21,7 @@ void RuntimeModel2::lock() {
 
 void RuntimeModel2::unlock() {
 	cache->unlock(weights_pages);
+	cache->unlock(workspace_pages);
 	cache->free(workspace_pages);
 	in_use.clear();
 }

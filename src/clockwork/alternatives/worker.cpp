@@ -9,22 +9,20 @@
 
 using namespace clockwork::alternatives;
 
-ModelManager::ModelManager(const int id, Runtime* runtime, PageCache* cache, model::ColdModel* cold, TelemetryLogger* logger) : id(id), runtime(runtime), model(cache, cold), logger(logger), request_id_seed(0) {
-	model.coldToCool();
-	model.coolToWarm();
+ModelManager::ModelManager(const int id, Runtime* runtime, PageCache* cache, model::Model* model, TelemetryLogger* logger) : id(id), runtime(runtime), model(cache, model), logger(logger), request_id_seed(0) {
 }
 
 EvictResponse ModelManager::evict() {
 	std::lock_guard<std::mutex> lock(queue_mutex);
 
-	if (in_use.test_and_set()) {
+	if (!model.try_lock()) {
 		std::stringstream errorMsg;
 		errorMsg << "Cannot evict model that is in use, model_id=" << id;
 		return EvictResponse{ResponseHeader{clockworkError, errorMsg.str()}};	
 	}
 
-	model.evict();
-	in_use.clear();
+	model.evict_weights();
+	model.unlock();
 
 	return EvictResponse{ResponseHeader{clockworkSuccess, ""}};
 }
@@ -32,18 +30,18 @@ EvictResponse ModelManager::evict() {
 
 std::shared_future<InferenceResponse> ModelManager::add_request(InferenceRequest &request) {
 
-	if (request.input_size != model.inputsize()) {
+	if (request.input_size != model.input_size()) {
 		std::stringstream errorMsg;
-		errorMsg << "Mismatched input size, expected " << model.inputsize() << ", got " << request.input_size;
+		errorMsg << "Mismatched input size, expected " << model.input_size() << ", got " << request.input_size;
 
 		std::promise<InferenceResponse> response;
 		response.set_value(InferenceResponse{ResponseHeader{clockworkError, errorMsg.str()}});
 		return std::shared_future<InferenceResponse>(response.get_future());
 	}
 
-	if (request.output_size != model.outputsize()) {
+	if (request.output_size != model.output_size()) {
 		std::stringstream errorMsg;
-		errorMsg << "Mismatched input size, expected " << model.outputsize() << ", got " << request.output_size;
+		errorMsg << "Mismatched input size, expected " << model.output_size() << ", got " << request.output_size;
 
 		std::promise<InferenceResponse> response;
 		response.set_value(InferenceResponse{ResponseHeader{clockworkError, errorMsg.str()}});
@@ -64,7 +62,7 @@ std::shared_future<InferenceResponse> ModelManager::add_request(InferenceRequest
 		std::lock_guard<std::mutex> lock(queue_mutex);
 
 		pending_requests.push_back(r);
-		if (!in_use.test_and_set()) {
+		if (model.try_lock()) {
 			toSubmit = pending_requests.front();
 			pending_requests.pop_front();
 		}
@@ -78,68 +76,33 @@ std::shared_future<InferenceResponse> ModelManager::add_request(InferenceRequest
 	return std::shared_future<InferenceResponse>(r->promise.get_future());
 }
 
-
-void ModelManager::handle_response(Request* request) {
-	request->telemetry->complete = clockwork::util::hrt();
-
-	Request* toSubmit = nullptr;
-	{
-		std::lock_guard<std::mutex> lock(queue_mutex);
-
-		if (pending_requests.size() > 0) {
-			toSubmit = pending_requests.front();
-			pending_requests.pop_front();
-		} else {
-			in_use.clear();
-		}
-	}
-
-	if (toSubmit != nullptr) {
-		submit(toSubmit);
-	}
-	model.unlock();
-
-	request->promise.set_value(
-		InferenceResponse{
-			ResponseHeader{clockworkSuccess, ""}, 
-			model.outputsize(), 
-			request->output
-		});
-	this->logger->log(request->telemetry);
-	delete request;
-}
-
 void ModelManager::submit(Request* request) {
-	RuntimeModel::State state = model.lock();
-	model.ensureState(state);
-
 	RequestBuilder* builder = runtime->newRequest();
 
 	builder->setTelemetry(request->telemetry);
 	
-	if (state == RuntimeModel::State::Warm) {
-		builder->addTask(TaskType::PCIe_H2D_Weights, [this, request] {
-			this->model.warmToHot();
-	    });
+	if (!model.has_code()) {
+		builder->addTask(TaskType::ModuleLoad, [this] {
+			this->model.instantiate_code();
+		});
 	}
 
-	if (state == RuntimeModel::State::Exec) {
-    	builder->addTask(TaskType::PCIe_H2D_Inputs, [this, request] {
-    		this->model.setInput(request->input);
-    	});
-	} else {
-    	builder->addTask(TaskType::PCIe_H2D_Inputs, [this, request] {
-    		this->model.hotToExec();
-    		this->model.setInput(request->input);
-    	});
+	if (!model.has_weights()) {
+		builder->addTask(TaskType::PCIe_H2D_Weights, [this] {
+			this->model.transfer_weights(util::Stream()); // TODO: pass stream as argument to function
+		});
 	}
+
+	builder->addTask(TaskType::PCIe_H2D_Inputs, [this, request] {
+		this->model.set_input(request->input, util::Stream());
+    });
 
 	builder->addTask(TaskType::GPU, [this] {
-		this->model.call();
+		this->model.call(util::Stream());
 	});
 
 	builder->addTask(TaskType::PCIe_D2H_Output, [this, request] {
-		this->model.getOutput(request->output);
+		this->model.get_output(request->output, util::Stream());
 	});
 
 	// Task is unnecessary since onComplete callback won't run until async part of previous task is completed
@@ -159,19 +122,49 @@ void ModelManager::submit(Request* request) {
 	builder->submit();
 }
 
+
+void ModelManager::handle_response(Request* request) {
+	request->telemetry->complete = clockwork::util::hrt();
+
+	Request* toSubmit = nullptr;
+	{
+		std::lock_guard<std::mutex> lock(queue_mutex);
+
+		if (pending_requests.size() > 0) {
+			toSubmit = pending_requests.front();
+			pending_requests.pop_front();
+		}
+	}
+
+	if (toSubmit != nullptr) {
+		submit(toSubmit);
+	} else {
+		model.unlock();
+	}
+
+	request->promise.set_value(
+		InferenceResponse{
+			ResponseHeader{clockworkSuccess, ""}, 
+			model.output_size(), 
+			request->output
+		});
+	this->logger->log(request->telemetry);
+	delete request;
+}
+
 Worker::Worker(Runtime* runtime, PageCache* cache, TelemetryLogger *logger) : runtime(runtime), cache(cache), logger(logger) {}
 
 std::shared_future<LoadModelFromDiskResponse> Worker::loadModelFromDisk(LoadModelFromDiskRequest &request) {
 	// Synchronous for now since this is not on critical path
 	std::lock_guard<std::mutex> lock(managers_mutex);
 
-	clockwork::model::ColdModel* cold = clockwork::model::FromDisk(
+	model::Model* model = model::Model::loadFromDisk(
 		request.model_path + ".so",
 		request.model_path + ".clockwork",
 		request.model_path + ".clockwork_params"
 	);
 	int id = managers.size();
-	ModelManager* manager = new ModelManager(id, runtime, cache, cold, logger);
+	ModelManager* manager = new ModelManager(id, runtime, cache, model, logger);
 	managers.push_back(manager);
 
 
@@ -180,8 +173,8 @@ std::shared_future<LoadModelFromDiskResponse> Worker::loadModelFromDisk(LoadMode
 		LoadModelFromDiskResponse{
 			ResponseHeader{clockworkSuccess, ""},
 			id,
-			manager->model.inputsize(),
-			manager->model.outputsize()
+			manager->model.input_size(),
+			manager->model.output_size()
 		});
 	return std::shared_future<LoadModelFromDiskResponse>(response.get_future());
 }
