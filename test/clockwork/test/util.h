@@ -19,7 +19,10 @@ std::string get_exe_location() {
 }
 
 std::string get_clockwork_dir() {
-	return dirname(dirname(get_exe_location().data()));
+    int bufsize = 1024;
+    char buf[bufsize];
+    int len = readlink("/proc/self/exe", buf, bufsize);
+	return dirname(dirname(buf));
 }
 
 std::string get_example_model() {
