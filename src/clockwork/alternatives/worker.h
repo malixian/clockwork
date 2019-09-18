@@ -8,9 +8,9 @@
 #include <sstream>
 
 #include "clockwork/runtime.h"
-#include "clockwork/runtime_model2.h"
+#include "clockwork/runtime_model.h"
 #include "clockwork/cache.h"
-#include "clockwork/model/model_impl2.h"
+#include "clockwork/model/model.h"
 #include "clockwork/telemetry.h"
 #include "clockwork/telemetry_logger.h"
 
@@ -87,7 +87,7 @@ public:
 	TelemetryLogger* logger;
 
 	// The model being managed
-	RuntimeModel2 model;
+	RuntimeModel model;
 
 	std::mutex queue_mutex;
 	std::deque<Request*> pending_requests;

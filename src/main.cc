@@ -1,7 +1,6 @@
 #include <iostream>
 #include "tbb/task_scheduler_init.h"
 #include "clockwork/runtime.h"
-#include "clockwork/clockwork.h"
 #include <sstream>
 #include <atomic>
 #include <thread>
@@ -16,17 +15,17 @@
 #include <pods/buffers.h>
 #include <pods/streams.h>
 #include "clockwork/tvm/decoupled_graph_runtime.h"
-#include "clockwork/model.h"
 #include <cuda_runtime.h>
 #include <chrono>
 #include <tvm/runtime/cuda_common.h>
 #include "clockwork/cache.h"
+#include "clockwork/model/model.h"
 #include "clockwork/util.h"
 
 
 struct ProfileData {
-    float params, input, exec, output;
-    std::chrono::high_resolution_clock::time_point cool, warm, hot, submitted, complete, warm2, cool2;
+    float weights, input, exec, output;
+    std::chrono::high_resolution_clock::time_point start, on_host, on_device, weights_on_device, inputs_on_device, call, outputs_from_device, off_device, off_host;
 };
 
 uint64_t nanos(std::chrono::high_resolution_clock::time_point t) {
@@ -34,46 +33,34 @@ uint64_t nanos(std::chrono::high_resolution_clock::time_point t) {
 }
 
 
-void loadmodel() {
+void loadmodel(std::string model_filename) {
     clockwork::util::initializeCudaStream();
     clockwork::util::setCurrentThreadMaxPriority();
     clockwork::util::set_core(7);
 
-	const int dtype_code = kDLFloat;
-	const int dtype_bits = 32;
-	const int dtype_lanes = 1;
-	const int device_type = kDLGPU;
-	const int device_id = 0;
 
-	// std::string model = "/home/jcmace/modelzoo/resnet50/tesla-m40_batchsize1/tvm-model";
-    std::string model = "/home/jcmace/modelzoo/resnet50/tesla-m40-2_batchsize1/tvm-model";
-    // std::string model = "/home/jcmace/modelzoo-test/tvm-model";
-
-
-    clockwork::model::ColdModel* cold = clockwork::model::FromDisk(
-            model + ".so",
-            model + ".clockwork",
-            model + ".clockwork_params"
+    clockwork::model::Model* model = clockwork::model::Model::loadFromDisk(
+            model_filename + ".so",
+            model_filename + ".clockwork",
+            model_filename + ".clockwork_params"
         );
-    clockwork::model::CoolModel* cool = cold->load();
 
 
     int page_size = 16 * 1024 * 1024;
-    std::vector<char*> params_pages;
+    std::vector<char*> weights_pages;
     std::vector<char*> workspace_pages;
 
-    cudaEvent_t prehot, posthot, postinput, postcall, postoutput;
-    CUDA_CALL(cudaEventCreate(&prehot));
-    CUDA_CALL(cudaEventCreate(&posthot));
-    CUDA_CALL(cudaEventCreate(&postinput));
-    CUDA_CALL(cudaEventCreate(&postcall));
-    CUDA_CALL(cudaEventCreate(&postoutput));
+    cudaEvent_t start, weights, input, exec, output;
+    CUDA_CALL(cudaEventCreate(&start));
+    CUDA_CALL(cudaEventCreate(&weights));
+    CUDA_CALL(cudaEventCreate(&input));
+    CUDA_CALL(cudaEventCreate(&exec));
+    CUDA_CALL(cudaEventCreate(&output));
 
     cudaStream_t stream = tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream;
 
-    void* input;
-    void* output;
-
+    void* input_ptr;
+    void* output_ptr;
 
     unsigned runs = 1000;
     std::vector<ProfileData> d(runs);
@@ -85,102 +72,118 @@ void loadmodel() {
             CUDA_CALL(cudaMemGetInfo(&free, &total));
             std::cout << "   GPU " << (total-free) << " used" << std::endl;
         }
-        d[i].cool = std::chrono::high_resolution_clock::now();
 
-        clockwork::model::WarmModel* warm = cool->load();
-        d[i].warm = std::chrono::high_resolution_clock::now();
+        d[i].start = std::chrono::high_resolution_clock::now();
+
+        model->instantiate_model_on_host();
+
+        d[i].on_host = std::chrono::high_resolution_clock::now();
+        
+        model->instantiate_model_on_device();
+
+        d[i].on_device = std::chrono::high_resolution_clock::now();
 
         if (i == 0) {
-            for (unsigned j = 0; j < warm->num_params_pages(page_size); j++) {
+            for (unsigned j = 0; j < model->num_weights_pages(page_size); j++) {
                 void* ptr;
                 CUDA_CALL(cudaMalloc(&ptr, page_size));
-                params_pages.push_back(static_cast<char*>(ptr));
+                weights_pages.push_back(static_cast<char*>(ptr));
             }
-        }
-
-
-            size_t free, total;
-            CUDA_CALL(cudaMemGetInfo(&free, &total));
-            std::cout << "   AGPU " << (total-free) << " used" << std::endl;
-
-        CUDA_CALL(cudaEventRecord(prehot, stream));
-        clockwork::model::HotModel* hot = warm->load(params_pages);
-        //CUDA_CALL(cudaStreamSynchronize(stream));
-        //d[i].hot = std::chrono::high_resolution_clock::now();
-
-            CUDA_CALL(cudaMemGetInfo(&free, &total));
-            std::cout << "   BGPU " << (total-free) << " used" << std::endl;
-
-        if (i == 0) {
-            for (unsigned j = 0; j < hot->num_workspace_pages(page_size); j++) {
+            for (unsigned j = 0; j < model->num_workspace_pages(page_size); j++) {
                 void* ptr;
                 CUDA_CALL(cudaMalloc(&ptr, page_size));
                 workspace_pages.push_back(static_cast<char*>(ptr));
             }
+            CUDA_CALL(cudaMallocHost(&input_ptr, model->input_size()));
+            CUDA_CALL(cudaMallocHost(&output_ptr, model->output_size()));
+
+            model->set_weights_pages(weights_pages);
+            model->set_workspace_pages(workspace_pages);
         }
-        clockwork::model::ExecModel* exec = hot->load(workspace_pages);
 
-        if (i == 0) {
-            CUDA_CALL(cudaMallocHost(&input, exec->inputsize()));
-            CUDA_CALL(cudaMallocHost(&output, exec->outputsize()));
-        }
-        CUDA_CALL(cudaEventRecord(posthot, stream));
-        exec->setinput(input);
+        CUDA_CALL(cudaEventRecord(start, stream));
 
-        CUDA_CALL(cudaEventRecord(postinput, stream));
-        exec->call();
-        //d[i].submitted = std::chrono::high_resolution_clock::now();
+        model->transfer_weights_to_device(stream);
 
-        CUDA_CALL(cudaEventRecord(postcall, stream));
-        exec->getoutput(output);
-        CUDA_CALL(cudaEventRecord(postoutput, stream));
-
-
+        CUDA_CALL(cudaEventRecord(weights, stream));
         CUDA_CALL(cudaStreamSynchronize(stream));
-        d[i].complete = std::chrono::high_resolution_clock::now();
+        d[i].weights_on_device = std::chrono::high_resolution_clock::now();
 
-        exec->unload();
-        hot->unload();
-        d[i].warm2 = std::chrono::high_resolution_clock::now();
+        model->transfer_input_to_device(static_cast<char*>(input_ptr), stream);
 
-        warm->unload();
-        d[i].cool2 = std::chrono::high_resolution_clock::now();
+        CUDA_CALL(cudaEventRecord(input, stream));
+        CUDA_CALL(cudaStreamSynchronize(stream));
+        d[i].inputs_on_device = std::chrono::high_resolution_clock::now();
 
-        CUDA_CALL(cudaEventElapsedTime(&(d[i].params), prehot, posthot));
-        CUDA_CALL(cudaEventElapsedTime(&(d[i].input), posthot, postinput));
-        CUDA_CALL(cudaEventElapsedTime(&(d[i].exec), postinput, postcall));
-        CUDA_CALL(cudaEventElapsedTime(&(d[i].output), postcall, postoutput));
+        model->call(stream);
+
+        CUDA_CALL(cudaEventRecord(exec, stream));
+        CUDA_CALL(cudaStreamSynchronize(stream));
+        d[i].call = std::chrono::high_resolution_clock::now();
+
+        model->transfer_output_from_device(static_cast<char*>(output_ptr), stream);
+
+        CUDA_CALL(cudaEventRecord(output, stream));
+        CUDA_CALL(cudaStreamSynchronize(stream));
+        d[i].outputs_from_device = std::chrono::high_resolution_clock::now();
+
+        model->uninstantiate_model_on_device();
+
+        d[i].off_device = std::chrono::high_resolution_clock::now();
+
+        model->uninstantiate_model_on_host();
+
+        d[i].off_host = std::chrono::high_resolution_clock::now();
+
+        CUDA_CALL(cudaEventElapsedTime(&(d[i].weights), start, weights));
+        CUDA_CALL(cudaEventElapsedTime(&(d[i].input), weights, input));
+        CUDA_CALL(cudaEventElapsedTime(&(d[i].exec), input, exec));
+        CUDA_CALL(cudaEventElapsedTime(&(d[i].output), exec, output));
     }
 
-    for (char* &ptr : params_pages) {
+    for (char* &ptr : weights_pages) {
         CUDA_CALL(cudaFree(ptr));
     }
     for (char* &ptr : workspace_pages) {
         CUDA_CALL(cudaFree(ptr));
     }
 
+
+struct ProfileData {
+    float weights, input, exec, output;
+    std::chrono::high_resolution_clock::time_point start, on_host, on_device, weights_on_device, inputs_on_device, call, outputs_from_device, off_device, off_host;
+};
+
     std::ofstream out("times.out");
     out << "i" << "\t"
         << "t" << "\t"
-        << "cool->warm" << "\t"
-        << "warm:load-model-weights" << "\t"
-        << "hot:load-model-input" << "\t"
-        << "hot:cuda-exec" << "\t"
-        << "hot:retrieve-model-output" << "\t"
-        << "warm->complete" << "\t"
-        << "hot->warm" << "\t"
-        << "warm->cool" << "\n";
+        << "load_host_side" << "\t"
+        << "load_device_code" << "\t"
+        << "transfer_weights" << "\t"
+        << "transfer_weights (cuda)" << "\t"
+        << "transfer_input" << "\t"
+        << "transfer_input (cuda)" << "\t"
+        << "run" << "\t"
+        << "run (cuda)" << "\t"
+        << "transfer_output" << "\t"
+        << "transfer_output (cuda)" << "\t"
+        << "unload_device_code" << "\t"
+        << "unload_host_side" << "\n";
     for (unsigned i = 10; i < d.size(); i++) {
         out << i << "\t"
-            << nanos(d[i].cool) << "\t"
-            << nanos(d[i].warm) - nanos(d[i].cool) << "\t"
-            << uint64_t(d[i].params * 1000000) << "\t"
+            << nanos(d[i].start) << "\t"
+            << nanos(d[i].on_host) - nanos(d[i].start) << "\t"
+            << nanos(d[i].on_device) - nanos(d[i].on_host) << "\t"
+            << nanos(d[i].weights_on_device) - nanos(d[i].on_device) << "\t"
+            << uint64_t(d[i].weights * 1000000) << "\t"
+            << nanos(d[i].inputs_on_device) - nanos(d[i].weights_on_device) << "\t"
             << uint64_t(d[i].input * 1000000) << "\t"
+            << nanos(d[i].call) - nanos(d[i].inputs_on_device) << "\t"
             << uint64_t(d[i].exec * 1000000) << "\t"
+            << nanos(d[i].outputs_from_device) - nanos(d[i].call) << "\t"
             << uint64_t(d[i].output * 1000000) << "\t"
-            << nanos(d[i].complete) - nanos(d[i].warm) << "\t"
-            << nanos(d[i].warm2) - nanos(d[i].complete) << "\t"
-            << nanos(d[i].cool2) - nanos(d[i].warm2) << "\n";
+            << nanos(d[i].off_device) - nanos(d[i].outputs_from_device) << "\t"
+            << nanos(d[i].off_host) - nanos(d[i].off_device) << "\n";
     }
     out.close();
 }
@@ -188,7 +191,12 @@ void loadmodel() {
 int main(int argc, char *argv[]) {
 	std::cout << "begin" << std::endl;
 
-	loadmodel();
+    if (argc != 2) {
+        std::cout << "Expected a model as input" << std::endl;
+        return -1;
+    }
+
+	loadmodel(argv[1]);
 
 	std::cout << "end" << std::endl;
 }

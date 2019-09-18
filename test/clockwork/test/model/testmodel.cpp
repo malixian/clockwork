@@ -2,7 +2,7 @@
 #include <libgen.h>
 
 #include "clockwork/test/util.h"
-#include "clockwork/model/model_impl2.h"
+#include "clockwork/model/model.h"
 #include <catch2/catch.hpp>
 
 using namespace clockwork::model;

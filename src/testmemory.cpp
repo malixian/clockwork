@@ -14,12 +14,14 @@
 #include <tvm/runtime/cuda_common.h>
 #include "clockwork/cache.h"
 #include <dmlc/logging.h>
-#include "clockwork/clockwork.h"
+#include "clockwork/runtime.h"
 #include "clockwork/alternatives/worker.h"
 #include <future>
 #include <unordered_map>
 #include <chrono>
 #include "clockwork/telemetry.h"
+#include "clockwork/model/model.h"
+#include "clockwork/runtime_model.h"
 
 using namespace clockwork;
 

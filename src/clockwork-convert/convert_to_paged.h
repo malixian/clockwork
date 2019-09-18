@@ -1,5 +1,4 @@
 
-#include "clockwork/model.h"
 #include "clockwork/modeldef.h"
 #include <vector>
 #include <algorithm>

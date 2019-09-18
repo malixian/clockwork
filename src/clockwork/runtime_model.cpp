@@ -3,122 +3,88 @@
 
 using namespace clockwork;
 
-RuntimeModel::RuntimeModel(PageCache* cache, model::ColdModel* cold) : cache(cache), cold(cold) {
+RuntimeModel::RuntimeModel(PageCache* cache, model::Model* model) : cache(cache), model(model), in_use(ATOMIC_FLAG_INIT) {
+	model->instantiate_model_on_host();
+	// TODO: remove instantiate_model_on_device and let it be done as part of model exec
+	instantiate_code();
 }
 
-RuntimeModel::State RuntimeModel::lock() {
-	if (!cache->trylock(params_alloc)) return State::Warm;
-	if (!cache->trylock(workspace_alloc)) return State::Hot;
-	return State::Exec;
+bool RuntimeModel::try_lock() {
+	if (in_use.test_and_set()) return false;
+	cache->trylock(weights_pages);
+	return true;
 }
 
-void RuntimeModel::ensureState(State state) {
-	// TODO: don't do this here
-	if (state == State::Exec) return;
-	if (exec != nullptr) execToHot();
-
-	if (state == State::Hot) return;
-	if (hot != nullptr) hotToWarm();
+void RuntimeModel::lock() {
+	while (!try_lock()) {}
 }
 
 void RuntimeModel::unlock() {
-	cache->unlock(workspace_alloc);
-	cache->unlock(params_alloc);
+	cache->unlock(weights_pages);
+	cache->unlock(workspace_pages);
+	cache->free(workspace_pages);
+	in_use.clear();
 }
 
-int RuntimeModel::inputsize() {
-	return warm->inputsize();
+bool RuntimeModel::has_code() {
+	return instantiated_on_device;
 }
 
-int RuntimeModel::outputsize() {
-	return warm->outputsize();
+void RuntimeModel::instantiate_code() {
+	instantiated_on_device = true;
+	model->instantiate_model_on_device();
 }
 
-void RuntimeModel::evict() {
-	cache->free(workspace_alloc); // Triggers transition exec -> hot if workspace_alloc is valid
-	cache->free(params_alloc); // Triggers transition hot -> warm if params_alloc is valid
-}
-
-void RuntimeModel::coldToCool() {
-	CHECK(cold != nullptr) << "Cannot transition cold -> cool, cold == nullptr";
-	CHECK(cool == nullptr) << "Cannot transition cold -> cool, cool already exists";
-	cool = cold->load();
-}
-
-void RuntimeModel::coolToWarm() {
-	CHECK(cool != nullptr) << "Cannot transition cool -> warm, cool == nullptr";
-	CHECK(warm == nullptr) << "Cannot transition cool -> warm, cool already exists";
-	warm = cool->load();
-}
-
-void RuntimeModel::warmToHot() {
-	CHECK(warm != nullptr) << "Cannot transition warm -> hot, warm == nullptr";
-	CHECK(hot == nullptr) << "Cannot transition warm -> hot, hot != nullptr";
-	CHECK(params_alloc == nullptr) << "Cannot transition warm -> hot, params_alloc already allocated";
-	params_alloc = cache->alloc(warm->num_params_pages(cache->page_size), []{});
-	std::vector<char*> page_ptrs(params_alloc->pages.size());
-	for (unsigned i = 0; i < params_alloc->pages.size(); i++) {
-		page_ptrs[i] = params_alloc->pages[i]->ptr;
+void RuntimeModel::uninstantiate_code() {
+	if (instantiated_on_device) {
+		instantiated_on_device = false;
+		model->uninstantiate_model_on_device();
 	}
-	hot = warm->load(page_ptrs);
 }
 
-void RuntimeModel::hotToExec() {
-	CHECK(hot != nullptr) << "Cannot transition hot -> exec, hot == nullptr";
-	CHECK(exec == nullptr) << "Cannot transition hot -> exec, exec != nullptr";
-	CHECK(workspace_alloc == nullptr) << "Cannot transition hot -> exec, workspace_alloc already allocated";
-	workspace_alloc = cache->alloc(hot->num_workspace_pages(cache->page_size), []{});
-	std::vector<char*> page_ptrs(workspace_alloc->pages.size());
-	for (unsigned i = 0; i < workspace_alloc->pages.size(); i++) {
-		page_ptrs[i] = workspace_alloc->pages[i]->ptr;
+bool RuntimeModel::has_weights() {
+	return weights_pages != nullptr;
+}
+
+void RuntimeModel::evict_weights() {
+	cache->unlock(weights_pages);
+	cache->free(weights_pages);
+}
+
+void RuntimeModel::transfer_weights(cudaStream_t stream) {
+	if (weights_pages == nullptr) {
+		weights_pages = cache->alloc(model->num_weights_pages(cache->page_size), [this] {
+			weights_pages = nullptr;
+			model->unset_weights_pages();
+		});
+		model->set_weights_pages(weights_pages->page_pointers);
 	}
-	exec = hot->load(page_ptrs);
+	model->transfer_weights_to_device(stream);
 }
 
-void RuntimeModel::setInput(void* input) {
-	CHECK(exec != nullptr) << "Cannot set input on exec == nullptr";
-	exec->setinput(input);
+unsigned RuntimeModel::input_size() {
+	return model->input_size();
 }
 
-void RuntimeModel::call() {
-	CHECK(exec != nullptr) << "Cannot call exec == nullptr";
-	exec->call();
+void RuntimeModel::set_input(void* input, cudaStream_t stream) {
+	if (workspace_pages == nullptr) {
+		workspace_pages = cache->alloc(model->num_workspace_pages(cache->page_size), [this] {
+			workspace_pages = nullptr;
+			model->unset_workspace_pages();
+		});
+		model->set_workspace_pages(workspace_pages->page_pointers);
+	}
+	model->transfer_input_to_device(static_cast<char*>(input), stream);
 }
 
-void RuntimeModel::getOutput(void* output) {
-	CHECK(exec != nullptr) << "Cannot get output of exec == nullptr";
-	exec->getoutput(output);
+void RuntimeModel::call(cudaStream_t stream) {
+	model->call(stream);
 }
 
-void RuntimeModel::execToHot() {
-	CHECK(exec != nullptr) << "Cannot transition exec -> hot, exec == nullptr";
-	CHECK(workspace_alloc != nullptr) << "Cannot transition exec -> hot, workspace_alloc == nullptr";
-	cache->free(workspace_alloc);
-	workspace_alloc = nullptr;
-	exec->unload();
-	exec = nullptr;
+unsigned RuntimeModel::output_size() {
+	return model->output_size();
 }
 
-void RuntimeModel::hotToWarm() {
-	if (exec != nullptr) execToHot();
-	CHECK(hot != nullptr) << "Cannot transition hot -> warm, hot == nullptr";
-	CHECK(params_alloc != nullptr) << "Cannot transition hot -> warm, params_alloc == nullptr";
-	cache->free(params_alloc);
-	params_alloc = nullptr;
-	hot->unload();
-	hot = nullptr;
-}
-
-void RuntimeModel::warmToCool() {
-	if (hot != nullptr) hotToWarm();
-	CHECK(warm != nullptr) << "Cannot transition warm -> cool, warm == nullptr";
-	warm->unload();
-	warm = nullptr;
-}
-
-void RuntimeModel::coolToCold() {
-	if (warm != nullptr) warmToCool();
-	CHECK(cool != nullptr) << "Cannot transition cool -> cold, cool == nullptr";
-	cool->unload();
-	cool = nullptr;
+void RuntimeModel::get_output(void* output, cudaStream_t stream) {
+	model->transfer_output_from_device(static_cast<char*>(output), stream);
 }

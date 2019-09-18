@@ -1,7 +1,7 @@
 #include <dmlc/logging.h>
 #include <tvm/runtime/cuda_common.h>
 #include "clockwork/util.h"
-#include "clockwork/model/model_impl2.h"
+#include "clockwork/model/model.h"
 
 using namespace clockwork::model;
 

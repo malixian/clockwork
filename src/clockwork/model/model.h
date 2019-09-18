@@ -1,13 +1,8 @@
-#ifndef _CLOCKWORK_MODEL_IMPL_2_H_
-#define _CLOCKWORK_MODEL_IMPL_2_H_
+#ifndef _CLOCKWORK_MODEL_H_
+#define _CLOCKWORK_MODEL_H_
 
 #include <string>
 #include <array>
-// #include <tvm/runtime/ndarray.h>
-// #include <tvm/runtime/packed_func.h>
-// #include <tvm/runtime/registry.h>
-// #include <tvm/runtime/serializer.h>
-#include "clockwork/model.h"
 #include "clockwork/modeldef.h"
 #include "clockwork/model/memfile.h"
 #include "clockwork/model/so.h"

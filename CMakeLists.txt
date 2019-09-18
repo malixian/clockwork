@@ -37,11 +37,9 @@ add_library(clockwork
 	src/clockwork/clockworkruntime.cpp
 	src/clockwork/cache.cpp
 	src/clockwork/runtime_model.cpp
-	src/clockwork/runtime_model2.cpp
 	src/clockwork/util.cpp
 	src/clockwork/model/memfile.cpp
-	src/clockwork/model/model_impl.cpp
-	src/clockwork/model/model_impl2.cpp
+	src/clockwork/model/model.cpp
 	src/clockwork/model/cuda.cpp
 	src/clockwork/model/so.cpp
 	src/clockwork/alternatives/threadpoolruntime.cpp
@@ -79,22 +77,6 @@ add_executable (cudafatbin
 
 target_link_libraries(
 	cudafatbin
-	clockwork
-	Threads::Threads
-	dl
-	cuda
-	cudart
-	tvm_runtime
-	tbb
-)
-
-add_executable (main2
-	src/main2.cc
-	src/clockwork/util.cpp
-)
-
-target_link_libraries(
-	main2
 	clockwork
 	Threads::Threads
 	dl

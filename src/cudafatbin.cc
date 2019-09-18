@@ -8,7 +8,6 @@
 #include <iostream>
 #include "tbb/task_scheduler_init.h"
 #include "clockwork/runtime.h"
-#include "clockwork/clockwork.h"
 #include <sstream>
 #include <atomic>
 #include <thread>
@@ -23,7 +22,6 @@
 #include <pods/buffers.h>
 #include <pods/streams.h>
 #include "clockwork/tvm/decoupled_graph_runtime.h"
-#include "clockwork/model.h"
 #include <cuda_runtime.h>
 #include <chrono>
 #include <tvm/runtime/cuda_common.h>

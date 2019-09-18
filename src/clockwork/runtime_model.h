@@ -1,66 +1,76 @@
 #ifndef _CLOCKWORK_RUNTIME_MODEL_H_
 #define _CLOCKWORK_RUNTIME_MODEL_H_
 
+#include <atomic>
 #include <deque>
 #include <unordered_map>
-#include "clockwork/model.h"
+#include "clockwork/model/model.h"
 #include "clockwork/cache.h"
-
-/*
-
-The runtime model hooks into the model implementation from the model subdiretory.
-It handles state changes between the cold, cool, warm, hot, and exec.
-It also maintains paged memory used by the model implementations.
-
-*/
 
 namespace clockwork {
 
-/** Model is not concurrent, with the exception of the eviction handlers, which may be called
-while holding the cache lock */
-class RuntimeModel {
-public:
 
-	enum State { Warm, Hot, Exec };
+/* The runtime model hooks into a pagecache and handles page evictions.
+
+Calls to the runtime model aren't thread-safe and callers should call
+lock and unlock surrounding any other API calls.  Models can be unlocked
+from different threads to where they are locked.  While a model is locked,
+its pages will not be evicted (unless explicitly done so by calling evict())
+*/
+class RuntimeModel {
 
 private:
 
+	std::atomic_flag in_use;	// Only one request can execute at a time for a model
+
 	PageCache* cache;
+	model::Model* model;
 
-	model::ColdModel* cold;
-	model::CoolModel* cool = nullptr;
-	model::WarmModel* warm = nullptr;
-	model::HotModel* hot = nullptr;
-	model::ExecModel* exec = nullptr;
+	bool instantiated_on_device = false;
 
-	std::shared_ptr<Allocation> params_alloc = nullptr;
-	std::shared_ptr<Allocation> workspace_alloc = nullptr;
+	std::shared_ptr<Allocation> weights_pages = nullptr;
+	std::shared_ptr<Allocation> workspace_pages = nullptr;
 
 public:
 
-	RuntimeModel(PageCache* cache, model::ColdModel* cold);
+	RuntimeModel(PageCache* cache, model::Model* model);
 
-	State lock();
+	bool try_lock();
+	void lock();
 	void unlock();
 
-	void ensureState(State state);
+	/* true if code is already on GPU, false otherwise */
+	bool has_code();
 
-	void evict();
+	/* sets up the model code on the GPU */
+	void instantiate_code();
 
-	int inputsize();
-	int outputsize();
+	/* removes model code from the GPU */
+	void uninstantiate_code();
 
-	void coldToCool();
-	void coolToWarm();
-	void warmToHot();
-	void hotToExec();
-	void setInput(void* input);
-	void call();
-	void getOutput(void* output);
-	void execToHot();
-	void hotToWarm();
-	void warmToCool();
-	void coolToCold();
+	/* true if weights are already on GPU, false otherwise */
+	bool has_weights();
+
+	/* evicts weights from the GPU and frees the associated pages */
+	void evict_weights();
+
+	/* allocate pages on GPU and transfer weights */
+	void transfer_weights(cudaStream_t stream);
+
+	/* input size expected by this model */
+	unsigned input_size();
+
+	/* send input to GPU */
+	void set_input(void* input, cudaStream_t stream);
+
+	/* call model (input is already set with set_input) */
+	void call(cudaStream_t stream);
+
+	/* output size to expect from this model */
+	unsigned output_size();
+
+	/* get output from GPU (can only be called once per invocation) */
+	void get_output(void* output, cudaStream_t stream);
 	
 };
 
