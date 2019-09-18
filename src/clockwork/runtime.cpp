@@ -2,8 +2,8 @@
 
 namespace clockwork {
 
-std::array<TaskType, 7> TaskTypes = {
-	Disk, CPU, PCIe_H2D_Weights, PCIe_H2D_Inputs, GPU, PCIe_D2H_Output, Sync 
+std::array<TaskType, 8> TaskTypes = {
+	Disk, CPU, PCIe_H2D_Weights, PCIe_H2D_Inputs, GPU, PCIe_D2H_Output, Sync, ModuleLoad
 };
 
 std::string TaskTypeName(TaskType type) {
@@ -15,6 +15,7 @@ std::string TaskTypeName(TaskType type) {
 		case GPU: return "GPU";
 		case PCIe_D2H_Output: return "PCIe_D2H_Output";
 		case Sync: return "Sync";
+		case ModuleLoad: return "cuModuleLoad";
 	};
 }
 
