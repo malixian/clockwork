@@ -36,6 +36,7 @@ void readFileAsString(const std::string &filename, std::string &dst);
 
 
 void initializeCudaStream(int priority = 0);
+void SetStream(cudaStream_t stream);
 cudaStream_t Stream();
 
 }

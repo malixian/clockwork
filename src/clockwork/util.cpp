@@ -124,8 +124,12 @@ void initializeCudaStream(int priority) {
   CUDA_CALL(cudaSetDevice(0));
   cudaStream_t stream;  
   CUDA_CALL(cudaStreamCreateWithPriority(&stream, cudaStreamNonBlocking, priority));
+  SetStream(stream);
+}
+
+void SetStream(cudaStream_t stream) {
   tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream = stream;
-  tvm::runtime::CUDAThreadEntry::ThreadLocal()->stream = stream;
+  tvm::runtime::CUDAThreadEntry::ThreadLocal()->stream = stream;  
 }
 
 cudaStream_t Stream() {
