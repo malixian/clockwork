@@ -150,10 +150,12 @@ target_link_libraries(
 	tbb
 )
 
+include_directories(test)
+
 add_executable (tests
 	test/tests.cpp
-	test/clockwork/testcache.cpp
-	test/clockwork/model/testmodel.cpp
+	test/clockwork/test/testcache.cpp
+	test/clockwork/test/model/testmodel.cpp
 )
 
 target_link_libraries(

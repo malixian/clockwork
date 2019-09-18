@@ -57,23 +57,23 @@ private:
 	char* weights_pinned_host_memory; // alloced with cudaMallocHost
 
 	Model(Memfile so_memfile, std::string &serialized_spec, int weights_size, char* weights_pinned_host_memory);
-	~Model();
 
 	// Warm
-	model::PageMappedModelDef* spec;
+	model::PageMappedModelDef* spec = nullptr;
 	unsigned weights_pages_count, workspace_pages_count, total_pages_count;
 
-	std::vector<OpExec>* op_execs;
+	std::vector<OpExec>* op_execs = nullptr;
 	so::TVMWarmSharedObject* warm_so = nullptr;
 
 	// Hot
-	so::TVMHotSharedObject* hot_so;
-	std::vector<char*>* weights_pages;
+	so::TVMHotSharedObject* hot_so = nullptr;
+	std::vector<char*>* weights_pages = nullptr;
 
 	// Exec
-	std::vector<char*>* workspace_pages;
+	std::vector<char*>* workspace_pages = nullptr;
 
 public:
+	~Model();
 
 	/* Preconditions: none */
 	void instantiate_model_on_host();

@@ -179,9 +179,11 @@ void Model::transfer_output_from_device(char* output_ptr, cudaStream_t stream) {
 	)
 }
 
-/* Preconditions: instantiate_model_on_device */
+/* Preconditions: instantiate_model_on_device && set_workspace_pages && set_weights_pages */
 void Model::call(cudaStream_t stream) {
 	CHECK(hot_so != nullptr) << "call hot_so is nullptr";
+	CHECK(weights_pages != nullptr) << "call weights_pages is nullptr";
+	CHECK(workspace_pages != nullptr) << "call workspace_pages is nullptr";
 
 	clockwork::util::SetStream(stream);
 
