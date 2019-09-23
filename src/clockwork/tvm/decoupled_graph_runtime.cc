@@ -34,6 +34,18 @@ void DecoupledGraphRuntime::Run() {
   }
 }
 
+std::vector<std::vector<WorkspaceAlloc>>* DecoupledGraphRuntime::ExtractWorkspaceAllocs() {
+  std::vector<std::vector<WorkspaceAlloc>>* allocs = new std::vector<std::vector<WorkspaceAlloc>>(op_execs_.size());
+  for (size_t i = 0; i < op_execs_.size(); ++i) {
+    ManagedCUDADeviceAPI::Global()->tracker.enabled = true;
+    if (op_execs_[i]) op_execs_[i]();
+    (*allocs)[i] = ManagedCUDADeviceAPI::Global()->tracker.get();
+    ManagedCUDADeviceAPI::Global()->tracker.clear();
+    ManagedCUDADeviceAPI::Global()->tracker.enabled = false;
+  }
+  return allocs;
+}
+
 /*!
  * \brief Initialize the graph executor with graph and context.
  * \param graph_json The execution graph.
@@ -458,17 +470,17 @@ void DecoupledGraphRuntime::SetupStorageContiguous() {
 void DecoupledGraphRuntime::SetupOpExecs() {
   op_execs_.resize(this->GetNumOfNodes());
   // setup the array and requirements.
-  std::cout << "Setting up " << this->GetNumOfNodes() << " OpExecs" << std::endl;
+  // std::cout << "Setting up " << this->GetNumOfNodes() << " OpExecs" << std::endl;
   for (uint32_t nid = 0; nid < this->GetNumOfNodes(); ++nid) {
     const auto& inode = nodes_[nid];
     if (inode.op_type == "null") continue;
     std::vector<DLTensor> args;
-    std::cout << inode.name << std::endl;
-    std::cout << "  " << inode.inputs.size() << " inputs" << std::endl;
+    // std::cout << inode.name << std::endl;
+    // std::cout << "  " << inode.inputs.size() << " inputs" << std::endl;
     for (const auto& e : inode.inputs) {
       args.push_back(*(data_entry_[this->entry_id(e)].operator->()));
     }
-    std::cout << "  " << inode.param.num_outputs << " outputs " << std::endl;
+    // std::cout << "  " << inode.param.num_outputs << " outputs " << std::endl;
     for (uint32_t index = 0; index < inode.param.num_outputs; ++index) {
       uint32_t eid = this->entry_id(nid, index);
       args.push_back(*(data_entry_[eid].operator->()));
@@ -865,6 +877,10 @@ PackedFunc DecoupledGraphRuntime::GetFunction(
   } else if (name == "extract_model_spec") {
     return PackedFunc([sptr_to_self, this](TVMArgs args, TVMRetValue* rv) {
         *rv = this->ExtractModelSpec();
+      });
+  } else if (name == "extract_workspace_allocs") {
+    return PackedFunc([sptr_to_self, this](TVMArgs args, TVMRetValue* rv) {
+        *rv = this->ExtractWorkspaceAllocs();
       });
   } else if (name == "load_to_device") {
     return PackedFunc([sptr_to_self, this, name](TVMArgs args, TVMRetValue* rv) {

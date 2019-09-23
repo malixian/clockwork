@@ -16,7 +16,8 @@
 #include <pods/buffers.h>
 #include <pods/streams.h>
 #include "clockwork/tvm/decoupled_graph_runtime.h"
-#include "clockwork-convert/convert_to_paged.h"
+#include "clockwork-convert/tvm_model.h"
+#include "clockwork-convert/tvm_abstract_model.h"
 
 using namespace clockwork;
 
@@ -29,65 +30,17 @@ but a different params file, and a more efficient alternative to the json.
 
 void convert(int pagesize, std::string model_so, std::string model_json, std::string model_params, std::string clockwork_meta_out, std::string clockwork_params_out) {
 
-	const int dtype_code = kDLFloat;
-	const int dtype_bits = 32;
-	const int dtype_lanes = 1;
-	const int device_type = kDLGPU;
-	const int device_id = 0;
-
-	const tvm::runtime::PackedFunc load_module(*tvm::runtime::Registry::Get("module.loadfile_so"));
-	tvm::runtime::Module mod_syslib = load_module(model_so, "so");
-
-	// Graph structure
-	std::ifstream json_in(model_json, std::ios::in);  // read as text
-	std::string json_data((std::istreambuf_iterator<char>(json_in)), std::istreambuf_iterator<char>());
-	json_in.close();
-
-	// Construct TVM runtime
-	std::shared_ptr<tvm::runtime::DecoupledGraphRuntime> rt = DecoupledGraphRuntimeCreateDirect(json_data, mod_syslib, device_type, device_id);
-	tvm::runtime::Module mod = tvm::runtime::Module(rt);
-	// const tvm::runtime::PackedFunc create_graph_runtime(*tvm::runtime::Registry::Get("tvm.decoupled_graph_runtime.create_contiguous"));
-	// tvm::runtime::Module mod = create_graph_runtime(json_data, mod_syslib, device_type, device_id);
-	
-	// tvm::runtime::Module mod = ClockworkGraphRuntimeCreate(json_data, mod_syslib, device_type, device_id);
+	tvm_model::Model model = tvm_model::Model::LoadFromFile(model_json);
+	tvm_model::Params params = tvm_model::Params::LoadFromFile(model_params);
+	tvm_model::Allocs allocs = tvm_model::Allocs::ProfileModel(model_so, model_json, model_params);
 
 
-    // Read params from file
-    std::ifstream params_in(model_params, std::ios::binary);  // read as binary
-    std::string params_data((std::istreambuf_iterator<char>(params_in)), std::istreambuf_iterator<char>());
-    params_in.close();
+	clockwork_model::Model model2 = clockwork_model::Model::fromTVM(model, params, allocs);
 
-    TVMByteArray params_arr;
-    params_arr.data = params_data.c_str();
-    params_arr.size = params_data.length();
-    tvm::runtime::PackedFunc load_params = mod.GetFunction("load_params");
-    load_params(params_arr);
-
-	  // // Pull out params blob
-	  // tvm::runtime::PackedFunc get_const_params = mod.GetFunction("get_const_params");
-	  // tvm::runtime::PackedFunc set_const_params = mod.GetFunction("set_const_params");
-	  // tvm::runtime::NDArray const_params = get_const_params();
-
-    // load the model onto device
-    tvm::runtime::PackedFunc load_to_device = mod.GetFunction("load_to_device");
-    load_to_device();
-
-
-    tvm::runtime::PackedFunc extract_model = mod.GetFunction("extract_model_spec");
-    clockwork::model::ModelDef* minmodel = static_cast<clockwork::model::ModelDef*>((void*) extract_model());
-
-
-
-
-
-	tvm::runtime::PackedFunc get_const_params = mod.GetFunction("get_const_params");
-	tvm::runtime::NDArray params = get_const_params();
-
-	void* ptr = params.dataptr();
-	uint64_t size = params.Size();
-
-	char* newweights;
-	clockwork::model::PageMappedModelDef pagemappedmodel = processModelDef(*minmodel, pagesize, static_cast<const char*>(ptr), &newweights);
+	clockwork::model::PageMappedModelDef pagemappedmodel;
+	char* weights;
+	int weightsSize;
+	clockwork_model::makeModelDef(model2, pagesize, pagemappedmodel, weights, weightsSize);
 
     std::ofstream outfile;
     outfile.open(clockwork_meta_out);
@@ -105,11 +58,8 @@ void convert(int pagesize, std::string model_so, std::string model_json, std::st
 
 
 	std::ofstream params_out(clockwork_params_out, std::ofstream::binary);
-	params_out.write(newweights, pagemappedmodel.weights_memory);
+	params_out.write(weights, weightsSize);
 	params_out.close();
-
-	// TODO: don't dump the ndarray, dump the actual bytes, 
-	// bypassing NDarray class
 }
 
 void show_usage() {

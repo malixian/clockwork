@@ -15,6 +15,7 @@
 #include <dmlc/json.h>
 #include <tvm/runtime/ndarray.h>
 #include <tvm/runtime/packed_func.h>
+#include <tvm/runtime/managed_cuda_device_api.h>
 #include "clockwork/modeldef.h"
 
 #include <vector>
@@ -407,6 +408,7 @@ class DecoupledGraphRuntime : public ModuleNode {
 
 
   clockwork::model::ModelDef* ExtractModelSpec();
+  std::vector<std::vector<WorkspaceAlloc>>* ExtractWorkspaceAllocs();
 
   /*!
    * \brief Create a executtion function given input.

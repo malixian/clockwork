@@ -1,10 +1,22 @@
 #include <unistd.h>
 #include <libgen.h>
 #include <fstream>
+#include <algorithm>
 
 #include "clockwork/test/util.h"
 #include "clockwork/model/model.h"
 #include <catch2/catch.hpp>
+#include <clockwork/tvm/decoupled_graph_runtime.h>
+#include <tvm/runtime/ndarray.h>
+#include <tvm/runtime/packed_func.h>
+#include <tvm/runtime/registry.h>
+#include <tvm/runtime/serializer.h>
+
+#include <dlpack/dlpack.h>
+#include <dmlc/memory_io.h>
+#include <dmlc/json.h>
+#include <tvm/runtime/ndarray.h>
+#include <tvm/runtime/packed_func.h>
 
 using namespace clockwork::model;
 
@@ -191,7 +203,7 @@ TEST_CASE("Model Lifecycle 2", "[model]") {
 
 }
 
-TEST_CASE("Model produces correct output", "[model]") {
+TEST_CASE("Model produces correct output", "[e2e]") {
 
     int page_size = 16 * 1024 * 1024;
     int input_size = 224*224*3*4;
@@ -224,9 +236,18 @@ TEST_CASE("Model produces correct output", "[model]") {
     model->call(NULL);
     model->transfer_output_from_device(actualOutput, NULL);
 
+    REQUIRE(output_size == expectedOutput.size());
+
     cuda_synchronize(NULL);
 
-    for (unsigned i = 0; i < output_size; i++) {
-        REQUIRE(actualOutput[i] == expectedOutput[i]);
+    float* actualOutputF = static_cast<float*>(static_cast<void*>(actualOutput));
+    float* expectedOutputF = reinterpret_cast<float*>(static_cast<void*>(expectedOutput.data()));
+
+    auto max_index_actual = std::distance(actualOutputF, std::max_element(actualOutputF, actualOutputF + 1000));
+    auto max_index_expect = std::distance(expectedOutputF, std::max_element(expectedOutputF, expectedOutputF + 1000));
+    REQUIRE(max_index_expect == max_index_actual);
+
+    for (unsigned i = 0; i < output_size/4; i++) {
+        REQUIRE(actualOutputF[i] == expectedOutputF[i]);
     }
 }

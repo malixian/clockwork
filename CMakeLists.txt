@@ -86,10 +86,13 @@ target_link_libraries(
 	tbb
 )
 
+include_directories(clockwork-convert)
+
 add_executable (convert
 	src/clockwork/tvm/decoupled_graph_runtime.cc
+	src/clockwork-convert/tvm_model.cpp
+	src/clockwork-convert/tvm_abstract_model.cpp
 	src/clockwork-convert/convert.cpp
-	src/clockwork-convert/convert_to_paged.h
 )
 
 target_link_libraries(
