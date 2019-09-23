@@ -141,6 +141,7 @@ include_directories(test)
 add_executable (tests
 	test/tests.cpp
 	test/clockwork/test/testcache.cpp
+	test/clockwork/test/testclient.cpp
 	test/clockwork/test/model/testmodel.cpp
 )
 
