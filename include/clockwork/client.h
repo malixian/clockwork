@@ -36,12 +36,12 @@ public:
 	void uploadModelAsync(ClockworkModel* model, std::function<void(int)> callback, std::function<void(int, std::string)> errback);
 
 	/** From the client's perspective this is the only API call for inference */
-	void infer(int model_id, int inputSize, void* input, int* outputSize, void** output);
+	void infer(int model_id, size_t inputSize, void* input, size_t* outputSize, void** output);
 
 	/** Asynchronous version of infer.
 	On success, callback will be called with the output.
 	On error, errback will be called with the status code and the error message */
-	void inferAsync(int model_id, int inputSize, void* input, std::function<void(int, void*)> callback, std::function<void(int, std::string)> errback);
+	void inferAsync(int model_id, size_t inputSize, void* input, std::function<void(size_t, void*)> callback, std::function<void(int, std::string)> errback);
 
 	/** Connect to a clockwork instance over the network */
 	static RemoteClient* ConnectTo(std::string hostname, int port);

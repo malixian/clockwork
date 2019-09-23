@@ -1,5 +1,5 @@
-#ifndef _CLOCKWORK_API_COMMON_H_
-#define _CLOCKWORK_API_COMMON_H_
+#ifndef _CLOCKWORK_API_API_COMMON_H_
+#define _CLOCKWORK_API_API_COMMON_H_
 
 #include <functional>
 #include <string>
