@@ -13,8 +13,7 @@ more internal metadata than the frontdoor API.
 */
 
 namespace clockwork {
-namespace api {
-namespace client {
+namespace clientapi {
 
 struct UploadModelRequest {
 	RequestHeader header;
@@ -67,16 +66,15 @@ public:
 	/** The proper way of uploading a model will be to send it an ONNX file,
 	where it will be compiled remotely.  For now we'll pre-compile clockwork
 	models.  This is the synchronous version.  On error, will throw an exception. */
-	void uploadModel(UploadModelRequest &request, std::function<void(UploadModelResponse&)> callback);
+	virtual void uploadModel(UploadModelRequest &request, std::function<void(UploadModelResponse&)> callback) = 0;
 
-	void infer(InferenceRequest &request, std::function<void(InferenceResponse&)> callback);
+	virtual void infer(InferenceRequest &request, std::function<void(InferenceResponse&)> callback) = 0;
 
 	/** This is a 'backdoor' API function for ease of experimentation */
-	void loadRemoteModel(LoadModelFromRemoteDiskRequest &request, std::function<void(LoadModelFromRemoteDiskResponse&)> callback);
+	virtual void loadRemoteModel(LoadModelFromRemoteDiskRequest &request, std::function<void(LoadModelFromRemoteDiskResponse&)> callback) = 0;
 
 };
 
-}
 }
 }
 

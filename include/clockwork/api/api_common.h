@@ -8,7 +8,6 @@ const int clockworkSuccess = 0;
 const int clockworkError = 1;
 
 namespace clockwork {
-namespace api {
 
 struct RequestHeader {
 	int user_id;
@@ -21,7 +20,6 @@ struct ResponseHeader {
 	std::string message;
 };
 
-}
 }
 
 #endif

@@ -10,8 +10,7 @@ This is the API for Clockwork Workers that are controlled by a centralized Clock
 */
 
 namespace clockwork {
-namespace api {
-namespace worker {
+namespace workerapi {
 
 struct UploadModelRequest {
 	RequestHeader header;
@@ -104,20 +103,19 @@ public:
 	/** The proper way of uploading a model will be to send it an ONNX file,
 	where it will be compiled remotely.  For now we'll pre-compile clockwork
 	models.  This is the synchronous version.  On error, will throw an exception. */
-	void uploadModel(UploadModelRequest &request, std::function<void(UploadModelResponse&)> callback);
+	virtual void uploadModel(UploadModelRequest &request, std::function<void(UploadModelResponse&)> callback) = 0;
 
-	void loadWeights(LoadWeightsAction &request, std::function<void(LoadWeightsResponse&)> callback);
+	virtual void loadWeights(LoadWeightsAction &request, std::function<void(LoadWeightsResponse&)> callback) = 0;
 
-	void unloadWeights(UnloadWeightsAction &request, std::function<void(UnloadWeightsResponse&)> callback);
+	virtual void unloadWeights(UnloadWeightsAction &request, std::function<void(UnloadWeightsResponse&)> callback) = 0;
 
-	void execute(ExecuteAction &request, std::function<void(ExecuteResponse&)> callback);
+	virtual void execute(ExecuteAction &request, std::function<void(ExecuteResponse&)> callback) = 0;
 
 	/** This is a 'backdoor' API function for ease of experimentation */
-	void loadRemoteModel(LoadModelFromRemoteDiskRequest &request, std::function<void(LoadModelFromRemoteDiskResponse&)> callback);
+	virtual void loadRemoteModel(LoadModelFromRemoteDiskRequest &request, std::function<void(LoadModelFromRemoteDiskResponse&)> callback) = 0;
 
 };
 
-}
 }
 }
 
