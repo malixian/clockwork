@@ -4,7 +4,7 @@
 
 #include "clockwork/cache.h"
 
-TEST_CASE("Create Page Cache with bad sizes", "[memory]") {
+TEST_CASE("Create Page Cache with bad sizes", "[cache]") {
 
     using namespace clockwork;
     
@@ -16,7 +16,42 @@ TEST_CASE("Create Page Cache with bad sizes", "[memory]") {
     REQUIRE_THROWS(cache = new PageCache(static_cast<char*>(baseptr), total_size, page_size));
 }
 
-TEST_CASE("Cache lock and unlock", "[memory]") {
+TEST_CASE("Evictions disabled", "[cache]") {
+    using namespace clockwork;
+    
+    size_t total_size = 100;
+    size_t page_size = 10;
+    void* baseptr = malloc(total_size);
+    bool allow_evictions = false;
+
+    PageCache* cache = new PageCache(static_cast<char*>(baseptr), total_size, page_size, allow_evictions);
+
+
+    std::shared_ptr<Allocation> alloc1 = cache->alloc(5, []{});
+    REQUIRE(alloc1 != nullptr);
+    cache->unlock(alloc1);
+
+    std::shared_ptr<Allocation> alloc2 = cache->alloc(3, []{});
+    REQUIRE(alloc2 != nullptr);
+    cache->unlock(alloc2);
+
+    std::shared_ptr<Allocation> alloc3 = cache->alloc(3, []{});
+    REQUIRE(alloc3 == nullptr);
+
+    std::shared_ptr<Allocation> alloc4 = cache->alloc(2, []{});
+    REQUIRE(alloc2 != nullptr);
+    cache->unlock(alloc4);
+
+    std::shared_ptr<Allocation> alloc5 = cache->alloc(1, []{});
+    REQUIRE(alloc5 == nullptr);
+
+    cache->free(alloc1);
+
+    std::shared_ptr<Allocation> alloc6 = cache->alloc(5, []{});
+    REQUIRE(alloc6 != nullptr);
+}
+
+TEST_CASE("Cache lock and unlock", "[cache]") {
 
     using namespace clockwork;
     
@@ -74,7 +109,7 @@ TEST_CASE("Cache lock and unlock", "[memory]") {
     REQUIRE( !cache->unlockedAllocations.isEmpty() );  
 }
 
-TEST_CASE("Simple Page alloc", "[memory]") {
+TEST_CASE("Simple Page alloc", "[cache]") {
 
     using namespace clockwork;
     
@@ -99,7 +134,7 @@ TEST_CASE("Simple Page alloc", "[memory]") {
     REQUIRE( cache->unlockedAllocations.isEmpty() );
 
     std::shared_ptr<Allocation> alloc2 = nullptr;
-    REQUIRE_THROWS(alloc2 = cache->alloc(1, []{}));
+    alloc2 = cache->alloc(1, []{});
     REQUIRE(alloc2 == nullptr);
     REQUIRE( alloc1->evicted == false );
     REQUIRE( alloc1->usage_count == 1 );
@@ -109,7 +144,7 @@ TEST_CASE("Simple Page alloc", "[memory]") {
     REQUIRE( cache->unlockedAllocations.isEmpty() );    
 }
 
-TEST_CASE("Alloc too much", "[memory]") {
+TEST_CASE("Alloc too much", "[cache]") {
 
     using namespace clockwork;
     
@@ -125,14 +160,14 @@ TEST_CASE("Alloc too much", "[memory]") {
 
 
     std::shared_ptr<Allocation> alloc1 = nullptr;
-    REQUIRE_THROWS(cache->alloc(2, []{}));
+    REQUIRE(cache->alloc(2, []{}) == nullptr);
     REQUIRE( alloc1 == nullptr);
     REQUIRE( !cache->freePages.isEmpty() );
     REQUIRE( cache->lockedAllocations.isEmpty() );
     REQUIRE( cache->unlockedAllocations.isEmpty() );  
 }
 
-TEST_CASE("Simple Page eviction", "[memory]") {
+TEST_CASE("Simple Page eviction", "[cache]") {
 
     using namespace clockwork;
     
@@ -154,7 +189,7 @@ TEST_CASE("Simple Page eviction", "[memory]") {
     REQUIRE( alloc1->evicted == false );
 
     std::shared_ptr<Allocation> alloc2 = nullptr;
-    REQUIRE_THROWS(cache->alloc(1, []{}));
+    REQUIRE(cache->alloc(1, []{}) == nullptr);
     REQUIRE (alloc2 == nullptr);
     REQUIRE( alloc1->evicted == false );
 
@@ -168,7 +203,7 @@ TEST_CASE("Simple Page eviction", "[memory]") {
     
 }
 
-TEST_CASE("Simple Page free", "[memory]") {
+TEST_CASE("Simple Page free", "[cache]") {
 
     using namespace clockwork;
     
@@ -207,7 +242,7 @@ TEST_CASE("Simple Page free", "[memory]") {
     
 }
 
-TEST_CASE("LRU page eviction", "[memory]") {
+TEST_CASE("LRU page eviction", "[cache]") {
 
     using namespace clockwork;
     

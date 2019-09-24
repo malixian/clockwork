@@ -118,6 +118,7 @@ class PageCache {
 private:
 	std::recursive_mutex mutex;
 	char* baseptr;
+	const bool allowEvictions;
 
 public:
 	const uint64_t size, page_size;
@@ -125,7 +126,7 @@ public:
 	LinkedList<Page*> freePages;
 	LinkedList<std::shared_ptr<Allocation>> lockedAllocations, unlockedAllocations;
 
-	PageCache(char* baseptr, uint64_t total_size, uint64_t page_size);
+	PageCache(char* baseptr, uint64_t total_size, uint64_t page_size, const bool allowEvictions = true);
 
 	/* 
 	Locks the allocation if it hasn't been evicted

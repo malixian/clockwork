@@ -3,7 +3,7 @@
 
 namespace clockwork {
 
-PageCache::PageCache(char* baseptr, uint64_t total_size, uint64_t page_size) : size(total_size), baseptr(baseptr), page_size(page_size), n_pages(total_size/page_size) {
+PageCache::PageCache(char* baseptr, uint64_t total_size, uint64_t page_size, bool allowEvictions) : size(total_size), baseptr(baseptr), page_size(page_size), n_pages(total_size/page_size), allowEvictions(allowEvictions) {
 	CHECK(total_size % page_size == 0) << "Cannot create page cache -- page_size " << page_size << " does not equally divide total_size " << total_size;
 
 	// Construct and link pages
@@ -70,7 +70,7 @@ std::shared_ptr<Allocation> PageCache::alloc(unsigned n_pages, std::function<voi
 	}
 
 	// Start evicting allocations
-	while (alloc->pages.size() < n_pages && !unlockedAllocations.isEmpty()) {
+	while (allowEvictions && alloc->pages.size() < n_pages && !unlockedAllocations.isEmpty()) {
 		std::shared_ptr<Allocation> toEvict = unlockedAllocations.popHead();
 		toEvict->evicted = true;
 		callbacks.push_back(toEvict->eviction_callback);
@@ -103,8 +103,8 @@ std::shared_ptr<Allocation> PageCache::alloc(unsigned n_pages, std::function<voi
 			p->current_allocation = nullptr;
 			freePages.pushBack(p);
 		}
-		// TODO: handle this case gracefully, rather than an error
-		CHECK(false) << "Only " << alloc->pages.size() << "/" << n_pages << " free pages" << std::endl;
+		// TODO: log insufficient pages available for alloc
+		// CHECK(false) << "Only " << alloc->pages.size() << "/" << n_pages << " free pages" << std::endl;
 
 		alloc = nullptr;
 	} else {
