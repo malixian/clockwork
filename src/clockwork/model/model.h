@@ -62,10 +62,6 @@ private:
 
 	// Hot
 	so::TVMHotSharedObject* hot_so = nullptr;
-	std::vector<char*>* weights_pages = nullptr;
-
-	// Exec
-	std::vector<char*>* workspace_pages = nullptr;
 
 public:
 	~Model();
@@ -85,44 +81,31 @@ public:
 	/* Preconditions: instantiate_model_on_host */
 	unsigned num_weights_pages(unsigned page_size);
 
-	/* Preconditions: none */
-	void set_weights_pages(std::vector<char*> &weights_pages);
-
-	/* Preconditions: set_weights_pages */
-	void unset_weights_pages();
-
 	/* Preconditions: instantiate_model_on_host */
 	unsigned num_workspace_pages(unsigned page_size);
 
-	/* Preconditions: none */
-	void set_workspace_pages(std::vector<char*> &workspace_pages);
-
-	/* Preconditions: set_workspace_pages */
-	void unset_workspace_pages();
-
 	/* Preconditions: set_weights_pages */
-	void transfer_weights_to_device(cudaStream_t stream);
+	void transfer_weights_to_device(std::vector<char*> &weights_pages, cudaStream_t stream);
 
 	/* Preconditions: instantiate_model_on_host */
 	unsigned input_size();
 
 	/* Preconditions: instantiate_model_on_host && set_workspace_pages */
-	void transfer_input_to_device(char* input_ptr, cudaStream_t stream);
+	void transfer_input_to_device(char* input_ptr, std::vector<char*> &workspace_pages, cudaStream_t stream);
 
 	/* Preconditions: instantiate_model_on_host */
 	unsigned output_size();
 
 	/* Preconditions: instantiate_model_on_host && set_workspace_pages */
-	void transfer_output_from_device(char* output_ptr, cudaStream_t stream);
+	void transfer_output_from_device(char* output_ptr, std::vector<char*> &workspace_pages, cudaStream_t stream);
 
 	/* Preconditions: instantiate_model_on_device */
-	void call(cudaStream_t stream);
+	void call(std::vector<char*> &weights_pages, std::vector<char*> &workspace_pages, cudaStream_t stream);
 
 private:
 
-	char* getpage(unsigned i);
 	void make_op_exec(PageMappedOpDef &spec, OpExec &op);
-	void call_op_exec(OpExec &op);
+	void call_op_exec(OpExec &op, std::vector<char*> &pages);
 
 public:
 

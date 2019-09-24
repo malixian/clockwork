@@ -55,11 +55,9 @@ void RuntimeModel::transfer_weights(cudaStream_t stream) {
 	if (weights_pages == nullptr) {
 		weights_pages = cache->alloc(model->num_weights_pages(cache->page_size), [this] {
 			weights_pages = nullptr;
-			model->unset_weights_pages();
 		});
-		model->set_weights_pages(weights_pages->page_pointers);
 	}
-	model->transfer_weights_to_device(stream);
+	model->transfer_weights_to_device(weights_pages->page_pointers, stream);
 }
 
 unsigned RuntimeModel::input_size() {
@@ -70,15 +68,13 @@ void RuntimeModel::set_input(void* input, cudaStream_t stream) {
 	if (workspace_pages == nullptr) {
 		workspace_pages = cache->alloc(model->num_workspace_pages(cache->page_size), [this] {
 			workspace_pages = nullptr;
-			model->unset_workspace_pages();
 		});
-		model->set_workspace_pages(workspace_pages->page_pointers);
 	}
-	model->transfer_input_to_device(static_cast<char*>(input), stream);
+	model->transfer_input_to_device(static_cast<char*>(input), workspace_pages->page_pointers, stream);
 }
 
 void RuntimeModel::call(cudaStream_t stream) {
-	model->call(stream);
+	model->call(weights_pages->page_pointers, workspace_pages->page_pointers, stream);
 }
 
 unsigned RuntimeModel::output_size() {
@@ -86,5 +82,5 @@ unsigned RuntimeModel::output_size() {
 }
 
 void RuntimeModel::get_output(void* output, cudaStream_t stream) {
-	model->transfer_output_from_device(static_cast<char*>(output), stream);
+	model->transfer_output_from_device(static_cast<char*>(output), workspace_pages->page_pointers, stream);
 }

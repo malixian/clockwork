@@ -20,13 +20,6 @@ Model::~Model() {
 	CUDA_CALL(cudaFreeHost(weights_pinned_host_memory));
 }
 
-
-char* Model::getpage(unsigned i) {
-	if (i < weights_pages_count) return (*weights_pages)[i];
-	if (i < total_pages_count) return (*workspace_pages)[i - weights_pages_count];
-	return nullptr;
-}
-
 void Model::instantiate_model_on_host() {
 	CHECK(warm_so == nullptr) << "instantiate_model_on_host warm_so is not nullptr";
 	CHECK(spec == nullptr) << "instantiate_model_on_host spec is not nullptr";
@@ -85,17 +78,6 @@ unsigned Model::num_weights_pages(unsigned page_size) {
 	return weights_pages_count;
 }
 
-void Model::set_weights_pages(std::vector<char*> &weights_pages) {
-	CHECK(this->weights_pages == nullptr) << "set_weights_pages current pages are not nullptr";
-	this->weights_pages = new std::vector<char*>(weights_pages);
-}
-
-void Model::unset_weights_pages() {
-	CHECK(this->weights_pages != nullptr) << "unset_weights_pages current pages are nullptr";
-	delete this->weights_pages;
-	this->weights_pages = nullptr;
-}
-
 unsigned Model::num_workspace_pages(unsigned page_size) {
 	CHECK(spec != nullptr) << "num_workspace_pages spec is nullptr";
 	CHECK(spec->configured_page_size == page_size)
@@ -104,25 +86,12 @@ unsigned Model::num_workspace_pages(unsigned page_size) {
 	return workspace_pages_count;
 }
 
-void Model::set_workspace_pages(std::vector<char*> &workspace_pages) {
-	CHECK(this->workspace_pages == nullptr) << "set_workspace_pages workspace_pages are not nullptr";
-	this->workspace_pages = new std::vector<char*>(workspace_pages);
-}
-
-void Model::unset_workspace_pages() {
-	CHECK(this->workspace_pages != nullptr) << "unset_workspace_pages workspace_pages are nullptr";
-	delete this->workspace_pages;
-	this->workspace_pages = nullptr;
-}
-
-void Model::transfer_weights_to_device(cudaStream_t stream) {
-	CHECK(weights_pages != nullptr) << "transfer_weights_to_device weights_pages is nullptr";
-
+void Model::transfer_weights_to_device(std::vector<char*> &weights_pages, cudaStream_t stream) {
 	for (unsigned i = 0; i < weights_pages_count; i++) {
 		PageDef &def = spec->weights_pages[i];
 		CUDA_CALL(
 			cudaMemcpyAsync(
-				(*weights_pages)[i], // dstptr
+				weights_pages[i], // dstptr
 				weights_pinned_host_memory + def.base_offset, // srcptr
 				def.size, // size 
 				cudaMemcpyHostToDevice,
@@ -141,10 +110,9 @@ unsigned Model::input_size() {
 }
 
 /* Preconditions: instantiate_model_on_host && set_workspace_pages */
-void Model::transfer_input_to_device(char* input_ptr, cudaStream_t stream) {
+void Model::transfer_input_to_device(char* input_ptr, std::vector<char*> &workspace_pages, cudaStream_t stream) {
 	CHECK(spec != nullptr) << "transfer_input_to_device spec is nullptr";
-	CHECK(workspace_pages != nullptr) << "transfer_input_to_device workspace_pages are nullptr";
-	void* dst_ptr = getpage(spec->inputs[0].page) + spec->inputs[0].page_offset;
+	void* dst_ptr = workspace_pages[spec->inputs[0].page - weights_pages_count] + spec->inputs[0].page_offset;
 	CUDA_CALL(
 		cudaMemcpyAsync(
 			dst_ptr,
@@ -163,11 +131,10 @@ unsigned Model::output_size() {
 	return spec->outputs[0].size;
 }
 
-/* Preconditions: instantiate_model_on_host && set_workspace_pages */
-void Model::transfer_output_from_device(char* output_ptr, cudaStream_t stream) {
+/* Preconditions: instantiate_model_on_host */
+void Model::transfer_output_from_device(char* output_ptr, std::vector<char*> &workspace_pages, cudaStream_t stream) {
 	CHECK(spec != nullptr) << "transfer_output_from_device spec is nullptr";
-	CHECK(workspace_pages != nullptr) << "transfer_output_from_device workspace_pages are nullptr";
-	void* src_ptr = getpage(spec->outputs[0].page) + spec->outputs[0].page_offset;
+	void* src_ptr = workspace_pages[spec->outputs[0].page - weights_pages_count] + spec->outputs[0].page_offset;
 	CUDA_CALL(
 		cudaMemcpyAsync(
 			output_ptr, 
@@ -180,15 +147,17 @@ void Model::transfer_output_from_device(char* output_ptr, cudaStream_t stream) {
 }
 
 /* Preconditions: instantiate_model_on_device && set_workspace_pages && set_weights_pages */
-void Model::call(cudaStream_t stream) {
+void Model::call(std::vector<char*> &weights_pages, std::vector<char*> &workspace_pages, cudaStream_t stream) {
 	CHECK(hot_so != nullptr) << "call hot_so is nullptr";
-	CHECK(weights_pages != nullptr) << "call weights_pages is nullptr";
-	CHECK(workspace_pages != nullptr) << "call workspace_pages is nullptr";
+	
+	std::vector<char*> pages;
+	pages.insert(pages.end(), weights_pages.begin(), weights_pages.end());
+	pages.insert(pages.end(), workspace_pages.begin(), workspace_pages.end());
 
 	clockwork::util::SetStream(stream);
 
 	for (unsigned i = 0; i < op_execs->size(); i++) {
-		call_op_exec((*op_execs)[i]);
+		call_op_exec((*op_execs)[i], pages);
 		CUDA_CALL(cudaEventSynchronize(rate_limit_events[i % MAX_OUTSTANDING_EVENTS]));
 		CUDA_CALL(cudaEventRecord(rate_limit_events[i % MAX_OUTSTANDING_EVENTS], stream));
 	}
@@ -222,17 +191,17 @@ void Model::make_op_exec(PageMappedOpDef &spec, OpExec &op) {
 	op.f = reinterpret_cast<OpFunc>(warm_so->so.GetSymbol(op.so_function_name.c_str()));
 }
 
-void Model::call_op_exec(OpExec &op) {
+void Model::call_op_exec(OpExec &op, std::vector<char*> &pages) {
 	// Point the inputs to the right place
 	for (unsigned i = 0; i < op.num_inputs; i++) {
 		auto &tensor = op.input_tensors[i];
 		auto &spec = op.spec->inputs[i];
-		tensor.data = getpage(spec.page) + spec.page_offset;
+		tensor.data = pages[spec.page] + spec.page_offset;
 	}
 	// Set the workspace alloc pointers
 	for (unsigned i = 0; i < op.workspace_ptrs.size(); i++) {
 		auto &spec = op.spec->workspace_allocs[i];
-		op.workspace_ptrs[i] = getpage(spec.page) + spec.page_offset;
+		op.workspace_ptrs[i] = pages[spec.page] + spec.page_offset;
 	}
 	clockwork::so::TVMBackendWorkspaceManager::Set(op.workspace_ptrs);
 

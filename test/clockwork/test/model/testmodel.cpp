@@ -30,22 +30,9 @@ void assert_is_cool(Model* model) {
     REQUIRE_THROWS(model->uninstantiate_model_on_host());
     REQUIRE_THROWS(model->num_weights_pages(page_size));
     REQUIRE_THROWS(model->num_workspace_pages(page_size));
-    REQUIRE_THROWS(model->unset_weights_pages());
-    REQUIRE_THROWS(model->unset_workspace_pages());
-    REQUIRE_THROWS(model->transfer_weights_to_device(NULL));
     REQUIRE_THROWS(model->input_size());
     REQUIRE_THROWS(model->output_size());
-    REQUIRE_THROWS(model->transfer_input_to_device(input, NULL));
-    REQUIRE_THROWS(model->transfer_output_from_device(output, NULL));
-    REQUIRE_THROWS(model->call(NULL));
-
-    REQUIRE_NOTHROW(model->set_weights_pages(weights_pages));
-    REQUIRE_NOTHROW(model->set_workspace_pages(workspace_pages));
-    REQUIRE_NOTHROW(model->unset_weights_pages());
-    REQUIRE_NOTHROW(model->unset_workspace_pages());
-
-    REQUIRE_THROWS(model->unset_weights_pages());
-    REQUIRE_THROWS(model->unset_workspace_pages());
+    REQUIRE_THROWS(model->call(weights_pages, workspace_pages, NULL));
 }
 
 void assert_is_warm(Model* model) {
@@ -60,24 +47,12 @@ void assert_is_warm(Model* model) {
     std::vector<char*> workspace_pages;
 
     REQUIRE_THROWS(model->instantiate_model_on_host());
-    REQUIRE_THROWS(model->unset_weights_pages());
-    REQUIRE_THROWS(model->unset_workspace_pages());
-    REQUIRE_THROWS(model->transfer_weights_to_device(NULL));
-    REQUIRE_THROWS(model->transfer_input_to_device(input, NULL));
-    REQUIRE_THROWS(model->transfer_output_from_device(output, NULL));
-    REQUIRE_THROWS(model->call(NULL));
+    REQUIRE_THROWS(model->call(weights_pages, workspace_pages, NULL));
 
     REQUIRE(num_weights_pages == model->num_weights_pages(page_size));
     REQUIRE(num_workspace_pages == model->num_workspace_pages(page_size));
     REQUIRE(input_size == model->input_size());
     REQUIRE(output_size == model->output_size());
-
-    REQUIRE_NOTHROW(model->set_weights_pages(weights_pages));
-    REQUIRE_NOTHROW(model->set_workspace_pages(workspace_pages));
-    REQUIRE_NOTHROW(model->unset_weights_pages());
-    REQUIRE_NOTHROW(model->unset_workspace_pages());
-    
-    REQUIRE_THROWS(model->unset_weights_pages());
 }
 
 void assert_is_hot(Model* model) {
@@ -91,30 +66,17 @@ void assert_is_hot(Model* model) {
     std::vector<char*> weights_pages = make_cuda_pages(page_size, num_weights_pages);
     std::vector<char*> workspace_pages = make_cuda_pages(page_size, num_workspace_pages);
 
-    REQUIRE_THROWS(model->instantiate_model_on_host());
-    REQUIRE_THROWS(model->unset_weights_pages());
-    REQUIRE_THROWS(model->unset_workspace_pages());
-    REQUIRE_THROWS(model->transfer_weights_to_device(NULL));
-    REQUIRE_THROWS(model->transfer_input_to_device(input, NULL));
-    REQUIRE_THROWS(model->transfer_output_from_device(output, NULL));
-    REQUIRE_THROWS(model->call(NULL));
-
     REQUIRE(num_weights_pages == model->num_weights_pages(page_size));
     REQUIRE(num_workspace_pages == model->num_workspace_pages(page_size));
     REQUIRE(input_size == model->input_size());
     REQUIRE(output_size == model->output_size());
 
-    REQUIRE_NOTHROW(model->set_weights_pages(weights_pages));
-    REQUIRE_NOTHROW(model->set_workspace_pages(workspace_pages));
-    REQUIRE_NOTHROW(model->transfer_weights_to_device(NULL));
-    REQUIRE_NOTHROW(model->transfer_input_to_device(input, NULL));
-    REQUIRE_NOTHROW(model->transfer_output_from_device(output, NULL));
-    REQUIRE_NOTHROW(model->call(NULL));
+    REQUIRE_NOTHROW(model->transfer_weights_to_device(weights_pages, NULL));
+    REQUIRE_NOTHROW(model->transfer_input_to_device(input, workspace_pages, NULL));
+    REQUIRE_NOTHROW(model->transfer_output_from_device(output, workspace_pages, NULL));
+    REQUIRE_NOTHROW(model->call(weights_pages, workspace_pages, NULL));
 
     cuda_synchronize(NULL);
-
-    REQUIRE_NOTHROW(model->unset_weights_pages());
-    REQUIRE_NOTHROW(model->unset_workspace_pages());
 
     free_cuda_pages(weights_pages);
     free_cuda_pages(workspace_pages);
@@ -219,9 +181,7 @@ TEST_CASE("Model produces correct output", "[e2e]") {
     
     model->instantiate_model_on_host();
     model->instantiate_model_on_device();
-    model->set_weights_pages(weights_pages);
-    model->set_workspace_pages(workspace_pages);
-    model->transfer_weights_to_device(NULL);
+    model->transfer_weights_to_device(weights_pages, NULL);
 
     std::ifstream in(f+".input");
     std::string input_filename = f+".input";
@@ -232,9 +192,9 @@ TEST_CASE("Model produces correct output", "[e2e]") {
     clockwork::util::readFileAsString(output_filename, expectedOutput);
 
     REQUIRE(input.size() == input_size);
-    model->transfer_input_to_device(input.data(), NULL);
-    model->call(NULL);
-    model->transfer_output_from_device(actualOutput, NULL);
+    model->transfer_input_to_device(input.data(), workspace_pages, NULL);
+    model->call(weights_pages, workspace_pages, NULL);
+    model->transfer_output_from_device(actualOutput, workspace_pages, NULL);
 
     REQUIRE(output_size == expectedOutput.size());
 

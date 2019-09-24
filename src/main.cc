@@ -96,32 +96,29 @@ void loadmodel(std::string model_filename) {
             }
             CUDA_CALL(cudaMallocHost(&input_ptr, model->input_size()));
             CUDA_CALL(cudaMallocHost(&output_ptr, model->output_size()));
-
-            model->set_weights_pages(weights_pages);
-            model->set_workspace_pages(workspace_pages);
         }
 
         CUDA_CALL(cudaEventRecord(start, stream));
 
-        model->transfer_weights_to_device(stream);
+        model->transfer_weights_to_device(weights_pages, stream);
 
         CUDA_CALL(cudaEventRecord(weights, stream));
         CUDA_CALL(cudaStreamSynchronize(stream));
         d[i].weights_on_device = std::chrono::high_resolution_clock::now();
 
-        model->transfer_input_to_device(static_cast<char*>(input_ptr), stream);
+        model->transfer_input_to_device(static_cast<char*>(input_ptr), workspace_pages, stream);
 
         CUDA_CALL(cudaEventRecord(input, stream));
         CUDA_CALL(cudaStreamSynchronize(stream));
         d[i].inputs_on_device = std::chrono::high_resolution_clock::now();
 
-        model->call(stream);
+        model->call(weights_pages, workspace_pages, stream);
 
         CUDA_CALL(cudaEventRecord(exec, stream));
         CUDA_CALL(cudaStreamSynchronize(stream));
         d[i].call = std::chrono::high_resolution_clock::now();
 
-        model->transfer_output_from_device(static_cast<char*>(output_ptr), stream);
+        model->transfer_output_from_device(static_cast<char*>(output_ptr), workspace_pages, stream);
 
         CUDA_CALL(cudaEventRecord(output, stream));
         CUDA_CALL(cudaStreamSynchronize(stream));
