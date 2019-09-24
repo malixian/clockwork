@@ -89,6 +89,30 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 
+
+	// tvm_model::Params params = tvm_model::Params::LoadFromFile(non_argument_strings[0] + ".params");
+	// tvm_model::Params params2 = tvm_model::Params::LoadFromFile(non_argument_strings[1] + ".params");
+
+	// std::unordered_map<std::string, std::string> datamap;
+	// for (auto &p : params.data) {
+	// 	std::string data(static_cast<char*>(p.second->dataptr()), p.second->Size());
+	// 	std::string name = p.first;
+	// 	datamap[data] = name;
+	// }
+	// int found = 0;
+	// int unfound = 0;
+	// for (auto &p : params2.data) {
+	// 	std::string data(static_cast<char*>(p.second->dataptr()), p.second->Size());
+	// 	if (datamap.find(data) == datamap.end()) {
+	// 		std::cout << "Unable to find " << p.first << std::endl;
+	// 		unfound++;
+	// 	} else {
+	// 		found++;
+	// 		// std::cout << p.first << " is " << datamap[data] << std::endl;
+	// 	}
+	// }
+	// std::cout << "found " << found << " unfound " << unfound << std::endl;
+
 	std::string model = non_argument_strings[0];
 	std::string so = model + ".so";
 	std::string json = model + ".json";
