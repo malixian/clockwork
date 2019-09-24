@@ -101,13 +101,11 @@ struct PageMappedWorkspaceAllocDef {
 struct PageMappedOpDef {
     std::vector<PageMappedDLTensorDef> inputs;
     unsigned so_function;
-    std::vector<unsigned> cuda_functions;
     std::vector<PageMappedWorkspaceAllocDef> workspace_allocs;
 
     PODS_SERIALIZABLE(1,         
         PODS_MDR(inputs),
         PODS_MDR(so_function),
-        PODS_MDR(cuda_functions),
         PODS_MDR(workspace_allocs)
     )
 };
@@ -128,7 +126,6 @@ struct PageMappedModelDef {
     uint64_t weights_memory;
 
     std::vector<std::string> so_functions;
-    std::vector<std::string> cuda_functions;
     std::vector<PageMappedOpDef> ops;
     std::vector<PageMappedDLTensorDef> inputs;
     std::vector<PageMappedDLTensorDef> outputs;
@@ -143,7 +140,6 @@ struct PageMappedModelDef {
         PODS_MDR(minimum_required_memory),
         PODS_MDR(weights_memory),
         PODS_MDR(so_functions),
-        PODS_MDR(cuda_functions),
         PODS_MDR(ops),
         PODS_MDR(inputs),
         PODS_MDR(outputs),

@@ -270,7 +270,7 @@ void printNewModel(clockwork::model::PageMappedModelDef model) {
 	std::cout << model.weights_memory << " total weights memory" << std::endl;
 	std::cout << (model.configured_page_size * model.weights_pages.size()) << " total weights paged on " << model.weights_pages.size() << " pages" << std::endl;
 	std::cout << model.total_pages << " pages of size " << model.configured_page_size << " needed" << std::endl;
-	std::cout << model.so_functions.size() << " SO functions and " << model.cuda_functions.size() << " CUDA functions" << std::endl;
+	std::cout << model.so_functions.size() << " SO functions" << std::endl;
 	std::cout << model.ops.size() << " ops:" << std::endl;
 	for (unsigned i = 0; i < model.ops.size(); i++) {
 		printOp(i, model, model.ops[i], "  ");
