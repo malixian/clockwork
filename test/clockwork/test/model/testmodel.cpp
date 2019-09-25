@@ -6,17 +6,6 @@
 #include "clockwork/test/util.h"
 #include "clockwork/model/model.h"
 #include <catch2/catch.hpp>
-#include <clockwork/tvm/decoupled_graph_runtime.h>
-#include <tvm/runtime/ndarray.h>
-#include <tvm/runtime/packed_func.h>
-#include <tvm/runtime/registry.h>
-#include <tvm/runtime/serializer.h>
-
-#include <dlpack/dlpack.h>
-#include <dmlc/memory_io.h>
-#include <dmlc/json.h>
-#include <tvm/runtime/ndarray.h>
-#include <tvm/runtime/packed_func.h>
 
 using namespace clockwork::model;
 
