@@ -17,7 +17,7 @@ Model::Model(Memfile so_memfile, std::string &serialized_spec, int weights_size,
 }
 
 Model::~Model() {
-	CUDA_CALL(cudaFreeHost(weights_pinned_host_memory));
+	// CUDA_CALL(cudaFreeHost(weights_pinned_host_memory));
 }
 
 void Model::instantiate_model_on_host() {

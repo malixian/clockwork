@@ -117,10 +117,10 @@ struct Page {
 class PageCache {
 private:
 	std::recursive_mutex mutex;
-	char* baseptr;
 	const bool allowEvictions;
 
 public:
+	char* baseptr;
 	const uint64_t size, page_size;
 	const unsigned n_pages;
 	LinkedList<Page*> freePages;

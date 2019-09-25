@@ -32,7 +32,15 @@ struct OpExec {
 };
 
 class Model {
-private:
+public:
+
+	// Cool
+	const Memfile so_memfile;
+	std::string serialized_spec;
+	int weights_size;
+	char* weights_pinned_host_memory; // alloced with cudaMallocHost
+
+	Model(Memfile so_memfile, std::string &serialized_spec, int weights_size, char* weights_pinned_host_memory);
 
 
 private:
@@ -45,13 +53,6 @@ private:
 	many outstanding, even those in completely independent streams */
 	std::array<cudaEvent_t, MAX_OUTSTANDING_EVENTS> rate_limit_events;
 
-	// Cool
-	const Memfile so_memfile;
-	std::string serialized_spec;
-	int weights_size;
-	char* weights_pinned_host_memory; // alloced with cudaMallocHost
-
-	Model(Memfile so_memfile, std::string &serialized_spec, int weights_size, char* weights_pinned_host_memory);
 
 	// Warm
 	model::PageMappedModelDef* spec = nullptr;

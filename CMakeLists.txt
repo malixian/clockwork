@@ -4,7 +4,7 @@ project(clockwork)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -O2")
 set(THREADS_PREFER_PTHREAD_FLAG ON)
-#set(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_BUILD_TYPE Debug)
 
 find_package(Threads REQUIRED)
 
@@ -161,6 +161,7 @@ add_executable (profile
 	profile/profile.cpp
 	test/clockwork/test/util.cpp
 	profile/clockwork/profile/model/profilecuda.cpp
+	profile/clockwork/profile/model/profilemodel.cpp
 )
 
 target_link_libraries(

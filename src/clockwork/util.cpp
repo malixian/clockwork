@@ -68,7 +68,7 @@ unsigned get_num_cores() {
 }
 
 void setCudaFlags() {
-  cudaError_t error = cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync);
+  cudaError_t error = cudaSetDeviceFlags(cudaDeviceScheduleSpin);
   if(error != cudaSuccess) {
     // print the CUDA error message and exit
     printf("CUDA error: %s\n", cudaGetErrorString(error));
