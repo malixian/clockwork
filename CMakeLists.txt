@@ -144,11 +144,27 @@ add_executable (tests
 	test/clockwork/test/testcache.cpp
 	test/clockwork/test/testclient.cpp
 	test/clockwork/test/model/testmodel.cpp
-	test/clockwork/test/model/testcuda.cpp
 )
 
 target_link_libraries(
 	tests
+	clockwork
+	Threads::Threads
+	dl
+	cuda
+	cudart
+	tvm_runtime
+	tbb
+)
+
+add_executable (profile
+	profile/profile.cpp
+	test/clockwork/test/util.cpp
+	profile/clockwork/profile/model/profilecuda.cpp
+)
+
+target_link_libraries(
+	profile
 	clockwork
 	Threads::Threads
 	dl

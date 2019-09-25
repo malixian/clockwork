@@ -1,3 +1,4 @@
+#include <cstdlib>
 #include <unistd.h>
 #include <libgen.h>
 #include "clockwork/test/util.h"
@@ -22,6 +23,16 @@ std::string get_clockwork_dir() {
 
 std::string get_example_model(std::string name) {
     return get_clockwork_dir() + "/resources/" + name + "/model";
+}
+
+bool is_cuda_cache_disabled() {
+    std::string v = std::string(std::getenv("CUDA_CACHE_DISABLE"));
+    return v == "1";
+}
+
+bool is_force_ptx_jit_enabled() {
+    std::string v = std::string(std::getenv("CUDA_FORCE_PTX_JIT"));
+    return v == "1";
 }
 
 }
