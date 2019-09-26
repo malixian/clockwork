@@ -136,7 +136,7 @@ clockwork::alternatives::Worker* createWorker(size_t cache_size, size_t page_siz
 	CUDA_CALL(cudaMalloc(&baseptr, cache_size));
 	PageCache* cache = new PageCache(static_cast<char*>(baseptr), cache_size, page_size);
 
-	TelemetryLogger* logger = new TelemetryLogger(telemetry_filename);
+	TelemetryLogger* logger = new TelemetryFileLogger(telemetry_filename);
 
 	return new clockwork::alternatives::Worker(runtime, cache, logger);
 }

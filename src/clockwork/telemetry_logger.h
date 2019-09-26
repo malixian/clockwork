@@ -20,6 +20,12 @@
 namespace clockwork {
 
 class TelemetryLogger {
+public:
+	virtual void log(RequestTelemetry* telemetry) = 0;
+	virtual void shutdown(bool awaitCompletion) = 0;	
+};
+
+class TelemetryFileLogger : public TelemetryLogger {
 private:
 	const std::string output_filename;
 	std::atomic_bool alive;
@@ -27,8 +33,8 @@ private:
 	tbb::concurrent_queue<RequestTelemetry*> queue;
 
 public:	
-	TelemetryLogger(std::string output_filename) : output_filename(output_filename), alive(true) {
-		thread = std::thread(&TelemetryLogger::main, this);
+	TelemetryFileLogger(std::string output_filename) : output_filename(output_filename), alive(true) {
+		thread = std::thread(&TelemetryFileLogger::main, this);
 	}
 
 	void shutdown(bool awaitCompletion) {
