@@ -21,7 +21,7 @@
 #include <chrono>
 #include "clockwork/telemetry.h"
 #include "clockwork/model/model.h"
-#include "clockwork/runtime_model.h"
+#include "clockwork/alternatives/runtime_model.h"
 
 using namespace clockwork;
 

@@ -8,7 +8,7 @@
 #include <sstream>
 
 #include "clockwork/runtime.h"
-#include "clockwork/runtime_model.h"
+#include "clockwork/alternatives/runtime_model.h"
 #include "clockwork/cache.h"
 #include "clockwork/model/model.h"
 #include "clockwork/telemetry.h"

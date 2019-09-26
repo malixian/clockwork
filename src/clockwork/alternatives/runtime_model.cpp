@@ -1,5 +1,5 @@
 #include <dmlc/logging.h>
-#include "clockwork/runtime_model.h"
+#include "clockwork/alternatives/runtime_model.h"
 
 using namespace clockwork;
 

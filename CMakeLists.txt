@@ -4,7 +4,7 @@ project(clockwork)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -O2")
 set(THREADS_PREFER_PTHREAD_FLAG ON)
-set(CMAKE_BUILD_TYPE Debug)
+# set(CMAKE_BUILD_TYPE Debug)
 
 find_package(Threads REQUIRED)
 
@@ -36,12 +36,12 @@ add_library(clockwork
 	src/clockwork/runtime.cpp
 	src/clockwork/clockworkruntime.cpp
 	src/clockwork/cache.cpp
-	src/clockwork/runtime_model.cpp
 	src/clockwork/util.cpp
 	src/clockwork/model/memfile.cpp
 	src/clockwork/model/model.cpp
 	src/clockwork/model/cuda.cpp
 	src/clockwork/model/so.cpp
+	src/clockwork/alternatives/runtime_model.cpp
 	src/clockwork/alternatives/threadpoolruntime.cpp
 	src/clockwork/alternatives/greedyruntime.cpp
 	src/clockwork/alternatives/worker.cpp
