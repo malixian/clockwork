@@ -24,6 +24,7 @@ public:
 	Task* next = nullptr;
 	TaskTelemetry* telemetry;
 	std::function<void(void)> onComplete;
+	std::atomic_int* outstandingCounter;
 
 	Task(TaskType type, std::function<void(void)> f);
 
@@ -54,10 +55,28 @@ public:
 	void executorMain(int executorId);
 };
 
+class TaskCompletionChecker {
+private:
+	GreedyRuntime* runtime;
+	tbb::concurrent_queue<Task*> queue;
+	std::vector<std::thread> threads;
+
+public:
+	std::atomic_bool alive;
+
+	TaskCompletionChecker(GreedyRuntime* runtime, const unsigned numThreads);
+
+	void add(Task* task);
+	void join();
+	void completeTask(Task* task);
+	void checkerMain(int checkerId);
+};
+
 class GreedyRuntime : public clockwork::Runtime {
 private:
 	std::atomic_bool alive;
 	std::atomic_uint coreCount;
+	TaskCompletionChecker* checker;
 	std::vector<Executor*> executors;
 	const unsigned numThreads;
 	const unsigned maxOutstanding;
@@ -66,9 +85,10 @@ public:
 	GreedyRuntime(const unsigned numThreads, const unsigned maxOutstanding);
 	~GreedyRuntime();
 
-	unsigned assignCore(TaskType type, int executorId);
+	unsigned assignCore();
 
 	void enqueue(Task* task);
+	void monitorCompletion(Task* task);
 	void shutdown(bool awaitShutdown);
 	void join();
 	bool isAlive() { return alive.load(); }

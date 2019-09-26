@@ -156,7 +156,7 @@ void testmemory(uint64_t cache_size, uint64_t page_size, std::string model_filen
 	}
 	std::cout << "Loaded " << num_models << " models" << std::endl;
 
-	int iterations = 100;
+	int iterations = 1000;
 	int max_outstanding = 4;
 
 	uint64_t last_print = 0;
@@ -177,7 +177,7 @@ void testmemory(uint64_t cache_size, uint64_t page_size, std::string model_filen
 		// models.evict(j);
 
 		uint64_t now = clockwork::util::now();
-		if ((now - last_print) > 250000000L) {
+		if ((now - last_print) > 100000000L) {
 			last_print = now;
 			std::cout << (iterations - i) << " \r";
 			std::cout.flush();

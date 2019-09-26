@@ -62,12 +62,6 @@ void ModelManager::execute(Request* request) {
 	RequestBuilder* builder = runtime->newRequest();
 
 	builder->setTelemetry(request->telemetry);
-	
-	if (!model.has_code()) {
-		builder->addTask(TaskType::ModuleLoad, [this] {
-			this->model.instantiate_code();
-		});
-	}
 
 	if (!model.has_weights()) {
 		builder->addTask(TaskType::PCIe_H2D_Weights, [this] {

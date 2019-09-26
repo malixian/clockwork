@@ -91,67 +91,109 @@ void Executor::join() {
 }
 
 void Executor::executorMain(int executorId) {
-	unsigned core = runtime->assignCore(type, executorId);
+	unsigned core = runtime->assignCore();
 	util::set_core(core);
 	util::setCurrentThreadMaxPriority();
 	util::initializeCudaStream();
 
 	cudaStream_t execStream = clockwork::util::Stream();
 	cudaStream_t telemetryStream;
-	CUDA_CALL(cudaStreamCreate(&telemetryStream));
-	std::vector<Task*> pending;
+	CUDA_CALL(cudaStreamCreateWithFlags(&telemetryStream, cudaStreamNonBlocking));
 
 	std::stringstream ss;
 	ss << TaskTypeName(type) << "-" << executorId << " core " << core << " streams " << execStream << " " << telemetryStream << std::endl;
 	std::cout << ss.str();
 
+	std::atomic_int outstandingCounter = 0;
+
 	while (runtime->isAlive()) {
-		// Finish any pending tasks that are complete
-		while (pending.size() > 0) {
-			Task* task = pending[0];
-			if (task->isAsyncComplete()) {
-				task->processAsyncCompleteTelemetry();
-				if (task->next != nullptr) {
-					runtime->enqueue(task->next);
-				} else {
-					task->complete();
-					deleteTaskAndPredecessors(task);
-				}
-				pending.erase(pending.begin());
-			} else {
-				continue;
-			}
-		}
+		// Get next queued request
+		Task* next;
+		if (!queue.try_pop(next)) continue;
 
-		// Execute a request if any are queued
-		if (pending.size() < maxOutstanding) {
-			Task* next;
-			if (queue.try_pop(next)) {
-				next->run(execStream, telemetryStream);
-				pending.push_back(next);
-			}
-		}
+		// Execute it
+		next->run(execStream, telemetryStream);
+
+		// Give it to the checker thread
+		next->outstandingCounter = &outstandingCounter;
+		outstandingCounter++;
+		runtime->monitorCompletion(next);
+
+		// Wait if there are too many outstanding requests
+		while (outstandingCounter.load() >= maxOutstanding) {}
 	}
 
-	while (pending.size() > 0) {
-		Task* task = pending[0];
-		if (task->isAsyncComplete()) {
-			task->processAsyncCompleteTelemetry();
-			if (task->next == nullptr) {
-				task->complete();
-				deleteTaskAndPredecessors(task);
-			}
-			pending.erase(pending.begin());
-		}
-	}
+	// Wait for all outstanding requests
+	while (outstandingCounter.load() > 0) {}
 
+	// Dump the rest
 	Task* next;
 	while (queue.try_pop(next)) {
 		deleteTaskAndPredecessors(next);
 	}
 }
 
+TaskCompletionChecker::TaskCompletionChecker(GreedyRuntime* runtime, const unsigned numThreads) : runtime(runtime), alive(true) {
+	for (unsigned i = 0; i < numThreads; i++) {
+		threads.push_back(std::thread(&TaskCompletionChecker::checkerMain, this, i));
+	}
+}
+
+void TaskCompletionChecker::add(Task* task) {
+	queue.push(task);
+}
+
+void TaskCompletionChecker::join() {
+	for (unsigned i = 0; i < threads.size(); i++) {
+		threads[i].join();
+	}
+}
+
+void TaskCompletionChecker::completeTask(Task* task) {
+	(*task->outstandingCounter)--;
+	task->processAsyncCompleteTelemetry();
+	if (task->next == nullptr) {
+		task->complete();
+		deleteTaskAndPredecessors(task);
+	} else if (runtime->isAlive()) {
+		runtime->enqueue(task->next);
+	}
+}
+
+void TaskCompletionChecker::checkerMain(int executorId) {
+	unsigned core = runtime->assignCore();
+	util::set_core(core);
+	util::setCurrentThreadMaxPriority();
+	util::initializeCudaStream();
+
+	std::vector<Task*> pending;
+
+	std::stringstream ss;
+	ss << "TaskCompletionChecker core " << core << std::endl;
+	std::cout << ss.str();
+
+	while (alive) {
+		// Pull any queued tasks
+		Task* next;
+		while (queue.try_pop(next)) {
+			pending.push_back(next);
+		}
+
+		// Complete any tasks that are complete
+		for (unsigned i = 0; i < pending.size(); i++) {
+			Task* task = pending[i];
+
+			if (!task->isAsyncComplete()) continue;
+
+			completeTask(task);
+
+			pending.erase(pending.begin() + i);
+		}
+	}
+}
+
 GreedyRuntime::GreedyRuntime(const unsigned numThreads, const unsigned maxOutstanding) : alive(true), numThreads(numThreads), maxOutstanding(maxOutstanding), executors(TaskTypes.size()), coreCount(0) {
+	checker = new TaskCompletionChecker(this, 1);
 	for (unsigned i = 0; i < TaskTypes.size(); i++) {
 		executors[TaskTypes[i]] = new Executor(this, TaskTypes[i], numThreads, maxOutstanding);
 	}
@@ -161,7 +203,7 @@ GreedyRuntime::~GreedyRuntime() {
 	shutdown(false);
 }
 
-unsigned GreedyRuntime::assignCore(TaskType type, int executorId) {
+unsigned GreedyRuntime::assignCore() {
 	unsigned core = (2 + this->coreCount++) % util::get_num_cores();
 	CHECK(core >= 2) << "GreedyRuntime ran out of cores";
 	return core;
@@ -172,6 +214,10 @@ void GreedyRuntime::enqueue(Task* task) {
 	task->telemetry->enqueued = clockwork::util::hrt();
 	task->telemetry->eligible_for_dequeue = task->telemetry->enqueued; // Not used in greedy
 	executors[task->type]->enqueue(task);
+}
+
+void GreedyRuntime::monitorCompletion(Task* task) {
+	checker->add(task);
 }
 
 void GreedyRuntime::shutdown(bool awaitShutdown) {
@@ -185,6 +231,8 @@ void GreedyRuntime::join() {
 	for (unsigned i = 0; i < executors.size(); i++) {
 		executors[i]->join();
 	}
+	checker->alive = false;
+	checker->join();
 }
 
 clockwork::RequestBuilder* GreedyRuntime::newRequest() {
