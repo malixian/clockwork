@@ -52,7 +52,7 @@ public:
 	bool has_weights();
 
 	/* evicts weights from the GPU and frees the associated pages */
-	void evict_weights();
+	bool evict_weights();
 
 	/* allocate pages on GPU and transfer weights */
 	void transfer_weights(cudaStream_t stream);

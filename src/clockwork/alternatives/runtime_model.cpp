@@ -46,9 +46,16 @@ bool RuntimeModel::has_weights() {
 	return weights_pages != nullptr;
 }
 
-void RuntimeModel::evict_weights() {
-	cache->unlock(weights_pages);
-	cache->free(weights_pages);
+bool RuntimeModel::evict_weights() {
+	if (in_use.test_and_set()) return false;
+	
+	if (cache->trylock(weights_pages)) {
+		cache->unlock(weights_pages);
+		cache->free(weights_pages);
+	}
+
+	in_use.clear();
+	return true;
 }
 
 void RuntimeModel::transfer_weights(cudaStream_t stream) {

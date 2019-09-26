@@ -25,12 +25,7 @@ ModelManager::~ModelManager() {
 bool ModelManager::evict() {
 	std::lock_guard<std::mutex> lock(queue_mutex);
 
-	if (!model.try_lock()) return false;
-
-	model.evict_weights();
-	model.unlock();
-
-	return true;
+	return model.evict_weights();
 }
 
 
