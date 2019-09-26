@@ -98,7 +98,9 @@ void Model::transfer_weights_to_device(std::vector<char*> &weights_pages, cudaSt
 				stream
 			)
 		)
-		CUDA_CALL(cudaEventSynchronize(rate_limit_events[i % MAX_OUTSTANDING_EVENTS]));
+		if (i > MAX_OUTSTANDING_EVENTS) {
+			CUDA_CALL(cudaEventSynchronize(rate_limit_events[i % MAX_OUTSTANDING_EVENTS]));
+		}
 		CUDA_CALL(cudaEventRecord(rate_limit_events[i % MAX_OUTSTANDING_EVENTS], stream));
 	}
 }
@@ -158,7 +160,9 @@ void Model::call(std::vector<char*> &weights_pages, std::vector<char*> &workspac
 
 	for (unsigned i = 0; i < op_execs->size(); i++) {
 		call_op_exec((*op_execs)[i], pages);
-		CUDA_CALL(cudaEventSynchronize(rate_limit_events[i % MAX_OUTSTANDING_EVENTS]));
+		if (i > MAX_OUTSTANDING_EVENTS) {
+			CUDA_CALL(cudaEventSynchronize(rate_limit_events[i % MAX_OUTSTANDING_EVENTS]));
+		}
 		CUDA_CALL(cudaEventRecord(rate_limit_events[i % MAX_OUTSTANDING_EVENTS], stream));
 	}
 }

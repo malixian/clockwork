@@ -1,3 +1,4 @@
+#include <unistd.h>
 #include <shared_mutex>
 #include <algorithm>
 #include <chrono>
@@ -22,11 +23,11 @@ model::Model* duplicate(model::Model* model, bool duplicate_weights) {
 
     void* weights_pinned_host_memory;
     if (duplicate_weights) {
-        weights_pinned_host_memory = malloc(model->weights_size);
+        // weights_pinned_host_memory = malloc(model->weights_size);
+        // REQUIRE(mlock(weights_pinned_host_memory, model->weights_size) == 0);
         // cudaError_t status = cudaHostRegister(weights_pinned_host_memory, model->weights_size, cudaHostRegisterDefault);
         // REQUIRE(status == cudaSuccess);
-        REQUIRE(mlock(weights_pinned_host_memory, model->weights_size) == 0);
-        //CUDA_CALL(cudaMallocHost(&weights_pinned_host_memory, model->weights_size));
+        CUDA_CALL(cudaMallocHost(&weights_pinned_host_memory, model->weights_size));
         std::memcpy(weights_pinned_host_memory, model->weights_pinned_host_memory, model->weights_size);
     } else {
         weights_pinned_host_memory = model->weights_pinned_host_memory;
@@ -44,13 +45,13 @@ public:
 
     Experiment() : progress(0) {
         cudaError_t status;
-        status = cudaStreamCreate(&copy_inputs_stream);
+        status = cudaStreamCreateWithFlags(&copy_inputs_stream, cudaStreamNonBlocking);
         REQUIRE(status == cudaSuccess);
-        status = cudaStreamCreate(&copy_weights_stream);
+        status = cudaStreamCreateWithFlags(&copy_weights_stream, cudaStreamNonBlocking);
         REQUIRE(status == cudaSuccess);
-        status = cudaStreamCreate(&exec_stream);
+        status = cudaStreamCreateWithFlags(&exec_stream, cudaStreamNonBlocking);
         REQUIRE(status == cudaSuccess);
-        status = cudaStreamCreate(&copy_output_stream);
+        status = cudaStreamCreateWithFlags(&copy_output_stream, cudaStreamNonBlocking);
         REQUIRE(status == cudaSuccess);
     }
 };
@@ -115,11 +116,11 @@ struct Series {
 
 };
 
-class ClosedLoopModelExec {
+class ModelExecWithModuleLoad {
 public:
     std::atomic_int iterations;
     std::thread thread;
-    std::atomic_bool alive;
+    std::atomic_bool started, ready, alive;
     PageCache* cache;
     Experiment* experiment;
     std::vector<model::Model*> models;
@@ -128,7 +129,7 @@ public:
 
     std::vector<Measurement> measurements;
 
-    void run() {
+    void run_with_module_load() {
         util::initializeCudaStream();
 
         for (model::Model* model : models) {
@@ -144,6 +145,9 @@ public:
             REQUIRE(status == cudaSuccess);            
         }
 
+        ready = true;
+        while (!started) {}
+
         while (alive) {
             model::Model* model = models[rand() % models.size()];
 
@@ -158,7 +162,129 @@ public:
 
             std::shared_ptr<Allocation> weights = cache->alloc(model->num_weights_pages(cache->page_size), []{});
 
+
+            experiment->copy_weights_mutex.lock();
             experiment->shared.lock_shared();
+            timestamps.push_back(util::hrt());
+            status = cudaEventRecord(events[0], experiment->copy_weights_stream);
+            REQUIRE(status == cudaSuccess);
+            model->transfer_weights_to_device(weights->page_pointers, experiment->copy_weights_stream);
+            status = cudaEventRecord(events[1], experiment->copy_weights_stream);
+            REQUIRE(status == cudaSuccess);
+            experiment->copy_weights_mutex.unlock();
+
+            status = cudaEventSynchronize(events[1]);
+            experiment->shared.unlock_shared();
+            REQUIRE(status == cudaSuccess);
+            timestamps.push_back(util::hrt());
+
+            std::shared_ptr<Allocation> workspace = cache->alloc(model->num_workspace_pages(cache->page_size), []{});
+
+            experiment->copy_inputs_mutex.lock();
+            experiment->shared.lock_shared();
+            timestamps.push_back(util::hrt());
+            status = cudaEventRecord(events[2], experiment->copy_inputs_stream);
+            REQUIRE(status == cudaSuccess);
+            model->transfer_input_to_device(input.data(), workspace->page_pointers, experiment->copy_inputs_stream);
+            status = cudaEventRecord(events[3], experiment->copy_inputs_stream);
+            REQUIRE(status == cudaSuccess);
+            experiment->copy_inputs_mutex.unlock();
+
+            status = cudaEventSynchronize(events[3]);
+            experiment->shared.unlock_shared();
+            REQUIRE(status == cudaSuccess);
+            timestamps.push_back(util::hrt());
+
+            experiment->exec_mutex.lock();
+            experiment->shared.lock_shared();
+            timestamps.push_back(util::hrt());
+            status = cudaEventRecord(events[4], experiment->exec_stream);
+            REQUIRE(status == cudaSuccess);
+            model->call(weights->page_pointers, workspace->page_pointers, experiment->exec_stream);
+            status = cudaEventRecord(events[5], experiment->exec_stream);
+            REQUIRE(status == cudaSuccess);
+            experiment->exec_mutex.unlock();
+
+            REQUIRE(status == cudaSuccess);
+
+            status = cudaEventSynchronize(events[5]);
+            experiment->shared.unlock_shared();
+            REQUIRE(status == cudaSuccess);
+            timestamps.push_back(util::hrt());
+
+            char output[model->output_size()];
+
+            experiment->copy_output_mutex.lock();
+            experiment->shared.lock_shared();
+            timestamps.push_back(util::hrt());
+            status = cudaEventRecord(events[6], experiment->copy_output_stream);
+            REQUIRE(status == cudaSuccess);
+            model->transfer_output_from_device(output, workspace->page_pointers, experiment->copy_output_stream);
+            status = cudaEventRecord(events[7], experiment->copy_output_stream);
+            REQUIRE(status == cudaSuccess);
+            experiment->copy_output_mutex.unlock();
+
+            REQUIRE(status == cudaSuccess);
+
+            status = cudaEventSynchronize(events[7]);
+            experiment->shared.unlock_shared();
+            REQUIRE(status == cudaSuccess);
+            timestamps.push_back(util::hrt());
+
+            cache->unlock(workspace);
+            cache->unlock(weights);
+            cache->free(workspace);
+            cache->free(weights);
+
+
+            experiment->shared.lock();
+            timestamps.push_back(util::hrt());
+            model->uninstantiate_model_on_device(); 
+            experiment->shared.unlock();
+            timestamps.push_back(util::hrt());
+
+            iterations++;
+            experiment->progress++;
+
+            measurements.push_back(Measurement(events, timestamps));
+        }
+
+        for (model::Model* model : models) {
+            model->uninstantiate_model_on_host();
+            delete model;
+        }
+
+    }
+
+
+    void run_without_module_load() {
+        util::initializeCudaStream();
+
+        for (model::Model* model : models) {
+            model->instantiate_model_on_host();
+            model->instantiate_model_on_device();
+        }
+
+
+        cudaError_t status;
+
+        std::vector<cudaEvent_t> events(8);
+        for (unsigned i = 0; i < events.size(); i++) {
+            status = cudaEventCreate(&events[i]);
+            REQUIRE(status == cudaSuccess);            
+        }
+
+        ready = true;
+        while (!started) {}
+
+        while (alive) {
+            model::Model* model = models[rand() % models.size()];
+
+            std::vector<std::chrono::high_resolution_clock::time_point> timestamps;
+            timestamps.reserve(8);
+
+            std::shared_ptr<Allocation> weights = cache->alloc(model->num_weights_pages(cache->page_size), []{});
+
 
             experiment->copy_weights_mutex.lock();
             timestamps.push_back(util::hrt());
@@ -217,9 +343,6 @@ public:
             REQUIRE(status == cudaSuccess);
 
             status = cudaEventSynchronize(events[7]);
-
-            experiment->shared.unlock_shared();
-
             REQUIRE(status == cudaSuccess);
             timestamps.push_back(util::hrt());
 
@@ -228,13 +351,6 @@ public:
             cache->free(workspace);
             cache->free(weights);
 
-
-            experiment->shared.lock();
-            timestamps.push_back(util::hrt());
-            model->uninstantiate_model_on_device(); 
-            experiment->shared.unlock();
-            timestamps.push_back(util::hrt());
-
             iterations++;
             experiment->progress++;
 
@@ -242,20 +358,26 @@ public:
         }
 
         for (model::Model* model : models) {
+            model->uninstantiate_model_on_device();
             model->uninstantiate_model_on_host();
             delete model;
         }
 
     }
 
-    ClosedLoopModelExec(int i, Experiment* experiment, PageCache* cache, std::vector<model::Model*> models, std::string input) :
-            experiment(experiment), cache(cache), models(models), alive(true), input(input), iterations(0) {
+    ModelExecWithModuleLoad(int i, Experiment* experiment, PageCache* cache, std::vector<model::Model*> models, std::string input) :
+            experiment(experiment), cache(cache), models(models), alive(true), input(input), iterations(0),
+            ready(false), started(false) {
         util::set_core((i+7) % util::get_num_cores());
         util::setCurrentThreadMaxPriority();
     }
 
-    void start() {
-        thread = std::thread(&ClosedLoopModelExec::run, this);
+    void start(bool with_module_load) {
+        if (with_module_load) {
+            thread = std::thread(&ModelExecWithModuleLoad::run_with_module_load, this);
+        } else {
+            thread = std::thread(&ModelExecWithModuleLoad::run_without_module_load, this);            
+        }
     }
 
     void stop(bool awaitCompletion) {
@@ -355,7 +477,7 @@ TEST_CASE("Warmup works", "[profile] [warmup]") {
     }
 }
 
-TEST_CASE("Profile resnet50 1 thread", "[profile] [resnet50] [e2e]") {
+void runMultiClientExperiment(int num_execs, int models_per_exec, bool duplicate_weights, int iterations, bool with_module_load) {
     util::setCudaFlags();
     for (unsigned i = 0; i < 3; i++) {
         warmup();
@@ -372,14 +494,13 @@ TEST_CASE("Profile resnet50 1 thread", "[profile] [resnet50] [e2e]") {
 
     Experiment* experiment = new Experiment();
 
-    int num_execs = 10;
-    int models_per_exec = 100;
-    bool duplicate_weights = true;
-    std::vector<ClosedLoopModelExec*> execs;
+    std::vector<ModelExecWithModuleLoad*> execs;
 
     model::Model* model;
     std::string input, output;
     get_model_inputs_and_outputs(model_path, input, output);
+
+    uint64_t started = util::now();
 
     for (unsigned i = 0; i < num_execs; i++) {
         std::vector<model::Model*> models;
@@ -391,28 +512,46 @@ TEST_CASE("Profile resnet50 1 thread", "[profile] [resnet50] [e2e]") {
             }
             models.push_back(model);
 
-            unsigned progress = (100 * ((i * models_per_exec) + j)) / (models_per_exec*num_execs);
-            std::cout << "Creating model: " << ((i * models_per_exec) + j) << " (" << progress << "%) \n";
+            float progress = ((float) ((i * models_per_exec) + j)) / ((float) (models_per_exec * num_execs));
+            uint64_t seconds_left = 1000;
+            if (progress != 0) {
+                seconds_left = (1 - progress) * ((util::now() - started) / progress) / 1000000000;
+            }
+
+            std::cout << "Creating model: " << ((i * models_per_exec) + j) << " (" << ((int) (100*progress)) << "%) (" << seconds_left << ") \r";
             std::cout.flush();
         }
 
-        ClosedLoopModelExec* exec = new ClosedLoopModelExec(i,
+        ModelExecWithModuleLoad* exec = new ModelExecWithModuleLoad(i,
             experiment, cache, models, input);
 
         execs.push_back(exec);
     }
 
-    for (ClosedLoopModelExec* exec : execs) {
-        exec->start();
+    for (ModelExecWithModuleLoad* exec : execs) {
+        exec->start(with_module_load);
     }
+    for (ModelExecWithModuleLoad* exec : execs) {
+        while (!exec->ready) {}
+    }
+    for (ModelExecWithModuleLoad* exec : execs) {
+        exec->started = true;
+    }
+
 
     std::cout << "Exec creation completed, awaiting termination" << std::endl;
 
-    int iterations = 10000;
+    started = util::now();
     int progress;
     while ((progress = experiment->progress.load()) < iterations) {
-        std::cout << progress << " (" << ((progress * 100) / iterations) << "%) \r";
+        float fprogress = progress / ((float) iterations);
+        uint64_t seconds_left = 1000;
+        if (progress != 0) {
+            seconds_left = (1 - fprogress) * ((util::now() - started) / fprogress) / 1000000000;
+        }
+        std::cout << progress << " (" << ((progress * 100) / iterations) << "%) (" << seconds_left << "s) \r";
         std::cout.flush();
+        usleep(250000);
     }
     for (int i = 0; i < execs.size(); i++) {
         execs[i]->stop(false);
@@ -426,10 +565,19 @@ TEST_CASE("Profile resnet50 1 thread", "[profile] [resnet50] [e2e]") {
         measurements.insert(measurements.end(), execs[i]->measurements.begin(), execs[i]->measurements.end());
     }
 
-    std::vector<std::string> series_names = {
-        "cWeights", "cInputs", "cKernel", "cOutputs",
-        "hModuleLoad", "hWeights", "hInputs", "hKernel", "hOutputs", "hModuleUnload"
-    };
+
+    std::vector<std::string> series_names;
+    if (with_module_load) {
+        series_names = {
+            "cWeights", "cInputs", "cKernel", "cOutputs",
+            "hModuleLoad", "hWeights", "hInputs", "hKernel", "hOutputs", "hModuleUnload"
+        };
+    } else {
+        series_names = {
+            "cWeights", "cInputs", "cKernel", "cOutputs",
+            "hWeights", "hInputs", "hKernel", "hOutputs"
+        };
+    }
 
 
     Series series(measurements);
@@ -459,4 +607,13 @@ TEST_CASE("Profile resnet50 1 thread", "[profile] [resnet50] [e2e]") {
 
     delete experiment;
     delete cache;
+}
+
+
+
+TEST_CASE("Profile resnet50 1 thread with module load", "[profile] [resnet50] [e2e-moduleload]") {
+    runMultiClientExperiment(6, 100, true, 20000, true);
+}
+TEST_CASE("Profile resnet50 1 thread without module load", "[profile] [resnet50] [e2e]") {
+    runMultiClientExperiment(1, 500, true, 1000, false);
 }
