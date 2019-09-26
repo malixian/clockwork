@@ -13,98 +13,16 @@
 #include "clockwork/model/model.h"
 #include "clockwork/telemetry.h"
 #include "clockwork/telemetry_logger.h"
-
-
-const int clockworkSuccess = 0;
-const int clockworkError = 1;
+#include "clockwork/api/client_api.h"
+#include "clockwork/alternatives/model_manager.h"
 
 namespace clockwork {
 namespace alternatives {
 
-struct RequestHeader {
-	// Placeholder
-};
-
-struct ResponseHeader {
-	int status;
-	std::string message;
-};
-
-/**
-TODO: loading model across network not included
-**/
-
-struct LoadModelFromDiskRequest {
-	RequestHeader header;
-	std::string model_path;
-};
-
-struct LoadModelFromDiskResponse {
-	ResponseHeader header;
-	int model_id;
-	unsigned input_size;
-	unsigned output_size;
-};
-
-struct InferenceRequest {
-	RequestHeader header;
-	int model_id;
-	unsigned input_size;
-	char* input;
-	unsigned output_size;
-	char* output;
-};
-
-struct InferenceResponse {
-	ResponseHeader header;
-	unsigned output_size;
-	char* output;
-};
-
-struct EvictRequest {
-	RequestHeader header;
-	int model_id;
-};
-
-struct EvictResponse {
-	ResponseHeader header;
-};
-
-
-/** Manages a specific model instance */
-class ModelManager {
-public:
-	struct Request {
-		unsigned id;
-		char* input;
-		char* output;
-		std::promise<InferenceResponse> promise;
-		RequestTelemetry* telemetry;
-	};
-	std::atomic_int request_id_seed;
-	const int id;
-	Runtime* runtime;
-	TelemetryLogger* logger;
-
-	// The model being managed
-	RuntimeModel model;
-
-	std::mutex queue_mutex;
-	std::deque<Request*> pending_requests;
-
-	ModelManager(const int id, Runtime* runtime, PageCache* cache, model::Model* cold, TelemetryLogger* logger);
-	std::shared_future<InferenceResponse> add_request(InferenceRequest &request);
-	EvictResponse evict();
-
-private:
-
-	void handle_response(Request* request);
-	void submit(Request* request);
-
-};
-
-/** The opposite of clockwork; manages everything itself */
-class Worker {
+/** This alternatives::Worker is NOT part of Clockwork; it is a baseline for comparison.
+The alternatives::Worker implements the Client API but not the worker API of clockwork.
+It uses simple threadpools, fair queueing, etc. to execute models */
+class Worker : public clockwork::clientapi::ClientAPI {
 private:
 	Runtime* runtime;
 	PageCache* cache;
@@ -116,10 +34,23 @@ private:
 public:
 
 	Worker(Runtime* runtime, PageCache* cache, TelemetryLogger* logger);
-	std::shared_future<LoadModelFromDiskResponse> loadModelFromDisk(LoadModelFromDiskRequest &request);
-	std::shared_future<InferenceResponse> infer(InferenceRequest &request);
-	std::shared_future<EvictResponse> evict(EvictRequest &request);
+	~Worker();
+
+	void shutdown();
+
+	void uploadModel(clientapi::UploadModelRequest &request, std::function<void(clientapi::UploadModelResponse&)> callback);
+
+	void infer(clientapi::InferenceRequest &request, std::function<void(clientapi::InferenceResponse&)> callback);
+
+	/** This is a 'backdoor' API function for ease of experimentation */
+	void evict(clientapi::EvictRequest &request, std::function<void(clientapi::EvictResponse&)> callback);
+
+	/** This is a 'backdoor' API function for ease of experimentation */
+	void loadRemoteModel(clientapi::LoadModelFromRemoteDiskRequest &request, std::function<void(clientapi::LoadModelFromRemoteDiskResponse&)> callback);
+
 };
+
+
 
 }
 }

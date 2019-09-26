@@ -42,6 +42,7 @@ add_library(clockwork
 	src/clockwork/model/cuda.cpp
 	src/clockwork/model/so.cpp
 	src/clockwork/alternatives/runtime_model.cpp
+	src/clockwork/alternatives/model_manager.cpp
 	src/clockwork/alternatives/threadpoolruntime.cpp
 	src/clockwork/alternatives/greedyruntime.cpp
 	src/clockwork/alternatives/worker.cpp

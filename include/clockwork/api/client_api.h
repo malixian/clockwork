@@ -71,6 +71,17 @@ struct InferenceResponse {
 };
 
 /** This is a 'backdoor' API function for ease of experimentation */
+struct EvictRequest {
+	RequestHeader header;
+	int model_id;
+};
+
+/** This is a 'backdoor' API function for ease of experimentation */
+struct EvictResponse {
+	ResponseHeader header;
+};
+
+/** This is a 'backdoor' API function for ease of experimentation */
 struct LoadModelFromRemoteDiskRequest {
 	RequestHeader header;
 	std::string remote_path;
@@ -90,6 +101,9 @@ public:
 	virtual void uploadModel(UploadModelRequest &request, std::function<void(UploadModelResponse&)> callback) = 0;
 
 	virtual void infer(InferenceRequest &request, std::function<void(InferenceResponse&)> callback) = 0;
+
+	/** This is a 'backdoor' API function for ease of experimentation */
+	virtual void evict(EvictRequest &request, std::function<void(EvictResponse&)> callback) = 0;
 
 	/** This is a 'backdoor' API function for ease of experimentation */
 	virtual void loadRemoteModel(LoadModelFromRemoteDiskRequest &request, std::function<void(LoadModelFromRemoteDiskResponse&)> callback) = 0;

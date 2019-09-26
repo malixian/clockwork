@@ -1,6 +1,7 @@
 #define CUDA_API_PER_THREAD_DEFAULT_STREAM
 
 
+#include <condition_variable>
 #include <iostream>
 #include <sstream>
 #include <atomic>
@@ -9,6 +10,7 @@
 #include <istream>
 #include <cstdlib>
 #include <cuda_runtime.h>
+#include <mutex>
 #include <chrono>
 #include "clockwork/util.h"
 #include <tvm/runtime/cuda_common.h>
@@ -21,6 +23,8 @@
 #include <chrono>
 #include "clockwork/telemetry.h"
 #include "clockwork/model/model.h"
+#include "clockwork/api/api_common.h"
+#include "clockwork/api/client_api.h"
 #include "clockwork/alternatives/runtime_model.h"
 
 using namespace clockwork;
@@ -31,141 +35,169 @@ template<typename R>
 
 struct ModelInfo {
 	int id;
-	int input_size;
-	int output_size;
+	size_t input_size;
+	size_t output_size;
 	char* input;
-	char* output;
 	std::string source;
 };
 
 class LoadedModels {
-public:
-	clockwork::alternatives::Worker* worker;
+private:
 	std::unordered_map<int, ModelInfo> model_infos;
 
-	std::vector<std::shared_future<clockwork::alternatives::InferenceResponse>> pending;
+public:
+	clockwork::alternatives::Worker* worker;
 
-	LoadedModels(clockwork::alternatives::Worker* worker) : worker(worker) {}
+	int user_id = 0;
+	std::atomic_int request_id_seed;
+	std::atomic_int num_pending;
 
-	void checkHeader(clockwork::alternatives::ResponseHeader header) {
-		CHECK(header.status == clockworkSuccess) << "Error inferring model: " << header.message;
+	LoadedModels(clockwork::alternatives::Worker* worker) : worker(worker), num_pending(0), request_id_seed(0) {}
+
+	~LoadedModels() {
+		for (auto &p : model_infos) {
+			free(p.second.input);
+		}
 	}
 
-	void checkResponse(clockwork::alternatives::InferenceResponse rsp) {
+	void checkHeader(clockwork::ResponseHeader &header) {
+		CHECK(header.status == clockworkSuccess) << "Error from worker: " << header.message;
+	}
+
+	void checkResponse(int model_id, clockwork::clientapi::InferenceResponse &rsp) {
 		checkHeader(rsp.header);
-		// std::cout << "Got response of size " << rsp.output_size << std::endl;
+		CHECK(model_infos[model_id].output_size == rsp.output_size);
 	}
 
-	int load(std::string modelPath) {
-		clockwork::alternatives::LoadModelFromDiskRequest request;
-		request.model_path = modelPath;
-		auto rsp = worker->loadModelFromDisk(request).get();
-		CHECK(rsp.header.status == clockworkSuccess) << "Error loading model: " << rsp.header.message;
-		// std::cout << "Loaded " << rsp.model_id << ": [" << rsp.input_size << "] " << modelPath << std::endl;
-		
-		ModelInfo info;
-		info.id = rsp.model_id;
-		info.input_size = rsp.input_size;
-		info.output_size = rsp.output_size;
-		CUDA_CALL(cudaMallocHost(&info.input, info.input_size));
-		CUDA_CALL(cudaMallocHost(&info.output, info.output_size));
-		info.source = modelPath;
+	int load(std::string model_path) {
+		clockwork::clientapi::LoadModelFromRemoteDiskRequest request{
+			clockwork::RequestHeader{user_id, request_id_seed++},
+			model_path
+		};
 
-		model_infos[rsp.model_id] = info;
+		// Expected to be synchronous
+		worker->loadRemoteModel(request, [this, model_path](clockwork::clientapi::LoadModelFromRemoteDiskResponse& response) {
+			this->checkHeader(response.header);
 
-		return rsp.model_id;
+			ModelInfo info{
+				response.model_id,
+				response.input_size,
+				response.output_size,
+				static_cast<char*>(malloc(response.input_size)),
+				model_path
+			};
+
+			model_infos[response.model_id] = info;
+		});
 	}
 
 	void evict(int model_id) {
-		clockwork::alternatives::EvictRequest request;
-		request.model_id = model_id;
-		auto f = worker->evict(request);
-		auto rsp = f.get();
-		checkHeader(rsp.header);
+		clockwork::clientapi::EvictRequest request {
+			clockwork::RequestHeader{user_id, request_id_seed++},
+			model_id
+		};
+
+		// Expected to be synchronous
+		worker->evict(request, [this](clockwork::clientapi::EvictResponse& response) {
+			this->checkHeader(response.header);
+		});
 	}
 
-	std::shared_future<clockwork::alternatives::InferenceResponse> infer(int model_id) {
-		// std::cout << "Inferring on " << model_id << " with input size " << sizes[model_id] << std::endl;
-		
+	void infer(int model_id) {
 		ModelInfo info = model_infos[model_id];
 
-		clockwork::alternatives::InferenceRequest request;
-		request.model_id = model_id;
-		request.input_size = info.input_size;
-		request.input = info.input;
-		request.output_size = info.output_size;
-		request.output = info.output;
-		auto f = worker->infer(request);
-		pending.push_back(f);
-		return f;
+		clockwork::clientapi::InferenceRequest request{
+			clockwork::RequestHeader{user_id, request_id_seed++},
+			model_id,
+			1,
+			info.input_size,
+			info.input
+		};
+
+		this->num_pending++;
+
+		worker->infer(request, [this, model_id](clockwork::clientapi::InferenceResponse &response){
+			this->checkResponse(model_id, response);
+			this->num_pending--;
+		});
 	}
 
-	std::shared_future<clockwork::alternatives::InferenceResponse> awaitOne() {
-		while (true) {
-			for (unsigned i = 0; i < pending.size(); i++) {
-				auto f = pending[i];
-				if (is_ready(f)) {
-					pending.erase(pending.begin() + i);
-					return f;
-				}
-			}
-		}
+	void await(int max_pending) {
+		while (num_pending >= max_pending) {}
 	}
+
 };
 
-void testmemory(uint64_t totalsize, uint64_t pagesize) {
+clockwork::alternatives::Worker* createWorker(size_t cache_size, size_t page_size, std::string telemetry_filename) {
 	
 	Runtime* runtime = clockwork::newGreedyRuntime(1, 1);
 
 	void* baseptr;
-	CUDA_CALL(cudaMalloc(&baseptr, totalsize));
-	PageCache* cache = new PageCache(static_cast<char*>(baseptr), totalsize, pagesize);
+	CUDA_CALL(cudaMalloc(&baseptr, cache_size));
+	PageCache* cache = new PageCache(static_cast<char*>(baseptr), cache_size, page_size);
 
-	TelemetryLogger* logger = new TelemetryLogger("telemetry.out");
+	TelemetryLogger* logger = new TelemetryLogger(telemetry_filename);
 
-	clockwork::alternatives::Worker* worker = new clockwork::alternatives::Worker(runtime, cache, logger);
+	return new clockwork::alternatives::Worker(runtime, cache, logger);
+}
+
+void testmemory(uint64_t cache_size, uint64_t page_size, std::string model_filename, std::string telemetry_filename) {
+
+	clockwork::alternatives::Worker* worker = createWorker(cache_size, page_size, telemetry_filename);
 
 	LoadedModels models(worker);
 
 	int hot_models = 1;
 	int num_models = 10;
 	for (unsigned i = 0; i < num_models; i++) {
-		models.load("/home/jcmace/modelzoo/resnet50/tesla-m40-2_batchsize1/tvm-model");
-		//models.load("/home/jcmace/modelzoo/resnet18/tesla-m40-2_batchsize1/tvm-model");
+		models.load(model_filename);
+		std::cout << "Loading... " << (num_models - i) << " \r";
+		std::cout.flush();
 	}
-
 	std::cout << "Loaded " << num_models << " models" << std::endl;
 
-	int iterations = 10000;
+	int iterations = 100;
 	int max_outstanding = 4;
+
+	uint64_t last_print = 0;
+
 	for (unsigned i = 0; i < iterations; i++) {
 		// Do a hot model
 		{
 			int next = rand() % hot_models;
 			models.infer(next);
-			while (models.pending.size() >= max_outstanding) {
-				models.checkResponse(models.awaitOne().get());						
-			}
+			models.await(max_outstanding);
 		}
 		// Do a random one
 		{
 			int next = hot_models + (rand() % (num_models - hot_models));
 			models.infer(next);
-			while (models.pending.size() >= max_outstanding) {
-				models.checkResponse(models.awaitOne().get());						
-			}
+			models.await(max_outstanding);
 		}
 		// models.evict(j);
+
+		uint64_t now = clockwork::util::now();
+		if ((now - last_print) > 250000000L) {
+			last_print = now;
+			std::cout << (iterations - i) << " \r";
+			std::cout.flush();
+		}
 	}
 
+	models.await(1);
+	worker->shutdown();
+	delete worker;
 }
 
 int main(int argc, char *argv[]) {
 	std::cout << "begin" << std::endl;
 
-    uint64_t pagesize = 16L * 1024 * 1024;
-    uint64_t totalsize = 16L * 50 * 1024 * 1024;
-	testmemory(totalsize, pagesize);
+    uint64_t page_size = 16L * 1024 * 1024;
+    uint64_t cache_size = 16L * 50 * 1024 * 1024;
+    std::string model_filename = "/home/jcmace/modelzoo/resnet50/tesla-m40-2_batchsize1/tvm-model";
+    std::string telemetry_filename = "telemetry.out";
+
+	testmemory(cache_size, page_size, model_filename, telemetry_filename);
 
 	std::cout << "end" << std::endl;
 }

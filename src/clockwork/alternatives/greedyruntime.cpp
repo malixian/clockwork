@@ -96,9 +96,6 @@ void Executor::executorMain(int executorId) {
 	util::setCurrentThreadMaxPriority();
 	util::initializeCudaStream();
 
-
-
-
 	cudaStream_t execStream = clockwork::util::Stream();
 	cudaStream_t telemetryStream;
 	CUDA_CALL(cudaStreamCreate(&telemetryStream));
@@ -134,6 +131,23 @@ void Executor::executorMain(int executorId) {
 				pending.push_back(next);
 			}
 		}
+	}
+
+	while (pending.size() > 0) {
+		Task* task = pending[0];
+		if (task->isAsyncComplete()) {
+			task->processAsyncCompleteTelemetry();
+			if (task->next == nullptr) {
+				task->complete();
+				deleteTaskAndPredecessors(task);
+			}
+			pending.erase(pending.begin());
+		}
+	}
+
+	Task* next;
+	while (queue.try_pop(next)) {
+		deleteTaskAndPredecessors(next);
 	}
 }
 
