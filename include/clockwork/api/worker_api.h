@@ -93,15 +93,20 @@ struct Result {
 	char* output;
 };
 
-/* Model code for a specific batch size */
-struct ModelInstance {
-	/* Each batch size has different code and spec */
-	int batch_size;
-	size_t so_size;
-	char* so;
-	size_t spec_size;
-	char* spec;
+/* The actual request sent from the scheduler to workers, with a set of actions to perform */
+struct ActionSet {
+	RequestHeader header;
+
+	std::vector<Action> actions;
 };
+
+/* A set of results sent back from workers to the scheduler */
+struct ResultSet {
+	ResponseHeader header;
+
+	std::vector<Result> results;
+};
+
 
 /* This is only currently used during setup/tear down phase of Clockwork */
 struct UploadModelRequest {
@@ -109,16 +114,19 @@ struct UploadModelRequest {
 
 	/* Weights are shared across batch sizes */
 	size_t weights_size;
-	void* weights_params;
+	void* weights;
+
+	struct ModelInstance {
+		/* Each batch size has different code and spec */
+		int batch_size;
+		size_t so_size;
+		char* so;
+		size_t spec_size;
+		char* spec;
+	};
 	
 	/* Code and params for different batch sizes */
 	std::vector<ModelInstance> instances;
-};
-
-struct ModelInstanceStats {
-	/* Each batch size has a different execution duration */
-	int batch_size;
-	uint64_t exec_duration;
 };
 
 /* This is only currently used during setup/tear down phase of Clockwork */
@@ -133,21 +141,16 @@ struct UploadModelResponse {
 	/* Size of weights and time to load is independent of batch size */
 	size_t weights_size_in_cache;
 	uint64_t load_weights_duration;
+	
+
+	struct ModelInstanceStats {
+		/* Each batch size has a different execution duration */
+		int batch_size;
+		uint64_t exec_duration;
+	};
 
 	/* Execution duration varies based on batch size */
 	std::vector<ModelInstanceStats> stats;
-};
-
-struct ActionSet {
-	RequestHeader header;
-
-	std::vector<Action> actions;
-};
-
-struct ResultSet {
-	ResponseHeader header;
-
-	std::vector<Result> results;
 };
 
 /** This is a 'backdoor' API function for ease of experimentation.  It returns an UploadModelResponse */

@@ -10,21 +10,38 @@ This is the semi-public API between Clockwork front-end server and the Clockwork
 
 Clockwork clients should use the frontdoor API defined in client.h rather than this API, as this API has
 more internal metadata than the frontdoor API.
+
+For the non-Clockwork runtimes (Threadpool runtime and greedy runtime), workers directly implement
+this API, rather than the API defined in worker_api.h.
 */
 
 namespace clockwork {
 namespace clientapi {
 
+/* This is only currently used during setup/tear down phase of Clockwork.  Currently this
+receives precompiled TVM models; in future we will handle compilation server-side and 
+instead take ONNX files as input. */
 struct UploadModelRequest {
 	RequestHeader header;
-	size_t so_size;
-	void* so;
+
+	/* Weights are shared across batch sizes */
 	size_t weights_size;
-	void* weights_params;
-	size_t clockwork_spec_size;
-	void* clockwork_spec;
+	void* weights;
+
+	struct ModelInstance {
+		/* Each batch size has different code and spec */
+		int batch_size;
+		size_t so_size;
+		char* so;
+		size_t spec_size;
+		char* spec;
+	};
+	
+	/* Code and params for different batch sizes */
+	std::vector<ModelInstance> instances;
 };
 
+/* This is only currently used during setup/tear down phase of Clockwork */
 struct UploadModelResponse {
 	ResponseHeader header;
 	int model_id;
@@ -32,16 +49,23 @@ struct UploadModelResponse {
 	size_t output_size;
 };
 
+/* Make an inference request for a model.  Clients can sent in arbitrary
+batches of inputs.  For now, clockwork does not break down batches into 
+multiple smaller batches, but might combine multiple requests into one
+single batch. */
 struct InferenceRequest {
 	RequestHeader header;
 	int model_id;
+	int batch_size;
 	size_t input_size;
 	void* input;
 };
 
+/* The response to a specific inference request. */
 struct InferenceResponse {
 	ResponseHeader header;
 	int model_id;
+	int batch_size;
 	size_t output_size;
 	void* output;
 };
@@ -63,9 +87,6 @@ struct LoadModelFromRemoteDiskResponse {
 class ClientAPI {
 public:
 
-	/** The proper way of uploading a model will be to send it an ONNX file,
-	where it will be compiled remotely.  For now we'll pre-compile clockwork
-	models.  This is the synchronous version.  On error, will throw an exception. */
 	virtual void uploadModel(UploadModelRequest &request, std::function<void(UploadModelResponse&)> callback) = 0;
 
 	virtual void infer(InferenceRequest &request, std::function<void(InferenceResponse&)> callback) = 0;
