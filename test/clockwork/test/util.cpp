@@ -26,13 +26,15 @@ std::string get_example_model(std::string name) {
 }
 
 bool is_cuda_cache_disabled() {
-    std::string v = std::string(std::getenv("CUDA_CACHE_DISABLE"));
-    return v == "1";
+    const char* v = std::getenv("CUDA_CACHE_DISABLE");
+    if (v != nullptr) return std::string(v) == "1";
+    return false;
 }
 
 bool is_force_ptx_jit_enabled() {
-    std::string v = std::string(std::getenv("CUDA_FORCE_PTX_JIT"));
-    return v == "1";
+    const char* v = std::getenv("CUDA_FORCE_PTX_JIT");
+    if (v != nullptr) return std::string(v) == "1";
+    return false;
 }
 
 }
