@@ -113,6 +113,30 @@ public:
 
 };
 
+class InMemoryTelemetryBuffer : public TelemetryLogger {
+public:
+	tbb::concurrent_queue<RequestTelemetry*> queue;
+
+public:	
+	InMemoryTelemetryBuffer() {}
+
+	void shutdown(bool awaitCompletion) {}
+
+	void log(RequestTelemetry* telemetry) {
+		queue.push(telemetry);
+	}
+
+	std::vector<RequestTelemetry*> take() {
+		std::vector<RequestTelemetry*> telemetry;
+		RequestTelemetry* next;
+		while (queue.try_pop(next)) {
+			telemetry.push_back(next);
+		}
+		return telemetry;
+	}
+
+};
+
 }
 
 #endif
