@@ -8,28 +8,6 @@
 
 using namespace clockwork;
 
-
-void check_environment() {
-    bool environmentIsOK = true;
-    if (!util::is_cuda_cache_disabled()) {
-        std::cout << "✘ CUDA cache is enabled!  It should be disabled by setting environment variable CUDA_CACHE_DISABLE=1" << std::endl;
-        environmentIsOK = false;
-    } else {
-        std::cout << "✔ CUDA cache is disabled" << std::endl;
-    }
-    if (util::is_force_ptx_jit_enabled()) {
-        std::cout << "✘ PTX JIT is being forced!  Unset the CUDA_FORCE_PTX_JIT environment variable" << std::endl;
-        environmentIsOK = false;
-    } else {
-        std::cout << "✔ PTX JIT is not forced" << std::endl;
-    }
-    REQUIRE(environmentIsOK);
-}
-
-TEST_CASE("Check environment variables", "[profile] [check]") {
-    check_environment();
-}
-
 void fill_memory(size_t &total_malloced, size_t &peak_usage) {
     size_t cudaMallocSize = 16 * 1024 * 1024;
     total_malloced = 0;

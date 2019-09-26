@@ -161,6 +161,7 @@ target_link_libraries(
 add_executable (profile
 	profile/profile.cpp
 	test/clockwork/test/util.cpp
+	profile/clockwork/profile/check.cpp
 	profile/clockwork/profile/alternatives/profilegreedy.cpp
 	profile/clockwork/profile/model/profilecuda.cpp
 	profile/clockwork/profile/model/profilemodel.cpp
