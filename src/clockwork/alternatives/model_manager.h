@@ -48,6 +48,8 @@ public:
 	std::mutex queue_mutex;
 	std::deque<Request*> pending_requests;
 
+	char* output;
+
 	ModelManager(const int id, Runtime* runtime, PageCache* cache, model::Model* cold, TelemetryLogger* logger);
 	~ModelManager();
 

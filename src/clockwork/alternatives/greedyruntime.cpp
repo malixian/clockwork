@@ -4,6 +4,7 @@
 #include "clockwork/util.h"
 #include <array>
 #include <sstream>
+#include "tbb/concurrent_queue.h"
 
 namespace clockwork {
 
@@ -13,12 +14,38 @@ Runtime* newGreedyRuntime(const unsigned numThreadsPerExecutor, const unsigned m
 
 namespace greedyruntime {
 
+class CudaEventPool {
+public:
+	tbb::concurrent_queue<cudaEvent_t> events;
+
+	cudaEvent_t get_or_create() {
+		cudaEvent_t event;
+		if (!events.try_pop(event)) {
+			CUDA_CALL(cudaEventCreate(&event));
+		}
+		return event;
+	}
+
+	void release(cudaEvent_t event) {
+		events.push(event);
+	}
+
+};
+
+CudaEventPool event_pool;
+
 Task::Task(TaskType type, std::function<void(void)> f) : type(type), f(f) {
-	CUDA_CALL(cudaEventCreate(&asyncSubmit));
-	CUDA_CALL(cudaEventCreate(&asyncStart));
-	CUDA_CALL(cudaEventCreate(&asyncComplete));
+	asyncSubmit = event_pool.get_or_create();
+	asyncStart = event_pool.get_or_create();
+	asyncComplete = event_pool.get_or_create();
 	this->telemetry = new TaskTelemetry();
 	this->telemetry->created = clockwork::util::hrt();
+}
+
+Task::~Task() {
+	event_pool.release(asyncSubmit);
+	event_pool.release(asyncStart);
+	event_pool.release(asyncComplete);
 }
 
 void Task::awaitCompletion() {
@@ -41,7 +68,7 @@ bool Task::isAsyncComplete() {
 void Task::run(cudaStream_t execStream, cudaStream_t telemetryStream) {
 	telemetry->dequeued = clockwork::util::hrt();
 
-	CUDA_CALL(cudaEventRecord(asyncSubmit, telemetryStream))
+	// CUDA_CALL(cudaEventRecord(asyncSubmit, telemetryStream))
 	CUDA_CALL(cudaEventRecord(asyncStart, execStream));
 
 	f();
@@ -56,7 +83,7 @@ void Task::run(cudaStream_t execStream, cudaStream_t telemetryStream) {
 
 void Task::processAsyncCompleteTelemetry() {
 	telemetry->async_complete = clockwork::util::hrt();
-	CUDA_CALL(cudaEventElapsedTime(&telemetry->async_wait, asyncSubmit, asyncStart));
+	// CUDA_CALL(cudaEventElapsedTime(&telemetry->async_wait, asyncSubmit, asyncStart));
 	CUDA_CALL(cudaEventElapsedTime(&telemetry->async_duration, asyncStart, asyncComplete));
 }
 

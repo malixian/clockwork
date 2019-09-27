@@ -11,6 +11,7 @@
 using namespace clockwork::alternatives;
 
 ModelManager::ModelManager(const int id, Runtime* runtime, PageCache* cache, model::Model* model, TelemetryLogger* logger) : id(id), runtime(runtime), model(cache, model), logger(logger), request_id_seed(0) {
+	CUDA_CALL(cudaMallocHost(&output, model->output_size()));
 }
 
 ModelManager::~ModelManager() {
@@ -32,7 +33,7 @@ bool ModelManager::evict() {
 void ModelManager::submit(Request* r) {
 	r->id = request_id_seed++;
 	r->output_size = model.output_size();
-	r->output = static_cast<char*>(malloc(r->output_size)); // TODO: later don't use malloc?
+	r->output = output; // TODO: should be allocated per request from a host-pinned buffer pool
 	r->telemetry = new RequestTelemetry();
 	r->telemetry->model_id = id;
 	r->telemetry->arrived = clockwork::util::hrt();
@@ -115,6 +116,5 @@ void ModelManager::handle_response(Request* r) {
 
 	r->callback();
 	this->logger->log(r->telemetry);
-	free(r->output);
 	delete r;
 }

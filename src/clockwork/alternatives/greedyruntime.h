@@ -27,6 +27,7 @@ public:
 	std::atomic_int* outstandingCounter;
 
 	Task(TaskType type, std::function<void(void)> f);
+	~Task();
 
 	void awaitCompletion();
 	bool isAsyncComplete();
