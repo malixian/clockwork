@@ -190,7 +190,7 @@ TEST_CASE("Model produces correct output", "[e2e]") {
     cuda_synchronize(NULL);
 
     float* actualOutputF = static_cast<float*>(static_cast<void*>(actualOutput));
-    float* expectedOutputF = reinterpret_cast<float*>(static_cast<void*>(expectedOutput.data()));
+    const float* expectedOutputF = reinterpret_cast<const float*>(expectedOutput.data());
 
     auto max_index_actual = std::distance(actualOutputF, std::max_element(actualOutputF, actualOutputF + 1000));
     auto max_index_expect = std::distance(expectedOutputF, std::max_element(expectedOutputF, expectedOutputF + 1000));
