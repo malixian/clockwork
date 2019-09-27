@@ -78,12 +78,20 @@ public:
     std::atomic_int tokens;
     std::vector<ModelManager*> managers;
     std::vector<ManagerLock*> managers_in_use;
+    char* input = nullptr;
 
     Exec(int max_outstanding, std::vector<ModelManager*> managers) 
         : tokens(max_outstanding), managers(managers), in_use(ATOMIC_FLAG_INIT) {
         for (unsigned i = 0; i < managers.size(); i++) {
             managers_in_use.push_back(new ManagerLock());
         }
+        CUDA_CALL(cudaMallocHost(&input, managers[0]->model.input_size()));
+    }
+
+    void releaseToken() {
+        while (in_use.test_and_set()); // spin
+        this->tokens++;
+        in_use.clear();
     }
 
     void submitSome() {
@@ -100,13 +108,13 @@ public:
             r->user_request_id = 0;
             r->model_id = 0;
             r->input_size = managers[i]->model.input_size();
-            r->input = static_cast<char*>(malloc(r->input_size));
+            r->input = input;
             r->batch_size = 1;
             r->callback = [this, i] {
                 managers[i]->evict();
                 managers_in_use[i]->unlock();
+                this->releaseToken();
                 if (--this->remaining > 0) {
-                    this->tokens++;
                     this->submitSome();
                 }
             };
@@ -114,8 +122,8 @@ public:
                 std::cout << "ERROR: " << message << std::endl;
                 managers[i]->evict();
                 managers_in_use[i]->unlock();
+                this->releaseToken();
                 if (--this->remaining > 0) {
-                    this->tokens++;
                     this->submitSome();
                 }
             };
@@ -156,16 +164,16 @@ PageCache* make_cache(size_t size, size_t page_size) {
 struct Series {
     std::vector<std::vector<float>> data;
 
-    Series(std::vector<RequestTelemetry*> &measurements) {
+    Series(std::vector<RequestTelemetry*> &measurements, int warmups) {
         data.resize(measurements[0]->tasks.size());
 
         for (unsigned i = 0; i < data.size(); i++) {
-            data[i].resize(measurements.size());
+            data[i].resize(measurements.size() - warmups);
         }
 
-        for (unsigned i = 0; i < measurements.size(); i++) {
+        for (unsigned i = warmups; i < measurements.size(); i++) {
             for (unsigned j = 0; j < measurements[i]->tasks.size(); j++) {
-                data[j][i] = measurements[i]->tasks[j]->async_duration;
+                data[j][i-warmups] = measurements[i]->tasks[j]->async_duration;
             }
         }
     }
@@ -223,7 +231,7 @@ void runMultiClientExperiment(int num_execs, int models_per_exec, int requests_p
     size_t cache_size = 512L * page_size;
     PageCache* cache = make_cache(cache_size, page_size);
 
-    Runtime* runtime = clockwork::newGreedyRuntime(1, 2);
+    Runtime* runtime = clockwork::newGreedyRuntime(1, 3);
 
     InMemoryTelemetryBuffer* logger = new InMemoryTelemetryBuffer();
 
@@ -265,14 +273,24 @@ void runMultiClientExperiment(int num_execs, int models_per_exec, int requests_p
         execs.push_back(exec);
     }
 
+    std::cout << "Created " << execs.size() << " execs.  Doing warmups" << std::endl;
+
+    // Do some warmups first but only one of the execs
+    int warmups = 0;
+    execs[0]->run(warmups);
+    while (execs[0]->remaining > 0) {
+        std::cout << execs[0]->remaining << "      \r";
+        std::cout.flush();
+    }
+
 
     uint64_t started = util::now();
 
     for (Exec* exec : execs) {
         exec->run(iterations / execs.size());
     }
+    std::cout << "Warmups complete.  Running" << std::endl;
 
-    std::cout << "Created " << execs.size() << " execs.  Now awaiting termination" << std::endl;
 
     started = util::now();
     int progress;
@@ -285,7 +303,7 @@ void runMultiClientExperiment(int num_execs, int models_per_exec, int requests_p
             break;
         }
 
-        std::cout << remaining << " \r";
+        std::cout << remaining << "     \r";
         std::cout.flush();
         usleep(100000);
     }
@@ -297,8 +315,7 @@ void runMultiClientExperiment(int num_execs, int models_per_exec, int requests_p
         "cWeights", "cInputs", "cKernel", "cOutputs"
     };
 
-
-    Series series(telemetry);
+    Series series(telemetry, 0);
 
     std::vector<float> medians = series.percentiles(0.5);
     std::vector<float> p99 = series.percentiles(0.99);
@@ -325,11 +342,9 @@ TEST_CASE("Profile cudaMallocHost limits", "[cudaMallocHost]") {
     get_cudaMallocHost_max();
 }
 
-// TEST_CASE("Profile resnet50 1 thread with module load", "[profile] [resnet50] [e2e-moduleload]") {
-//     runMultiClientExperiment(6, 100, true, 20000, true);
-// }
 TEST_CASE("Profile resnet50 greedy runtime", "[greedy]") {
-    runMultiClientExperiment(100, 100, 1, true, 10000);
+    runMultiClientExperiment(40, 100, 1, true, 1000000);
+    // runMultiClientExperiment(100, 1, 1, true, 100);
 }
 
 }
