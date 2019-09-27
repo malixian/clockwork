@@ -35,12 +35,6 @@ source ~/.bashrc
 
 Optionally you can add $TVM_HOME to your LD_LIBRARY_PATH and DYLD_LIBRARY_PATH environment variables
 
-
-Intel Threading Building Blocks
-```
-apt-get install libtbb-dev
-```
-
 ## Apt packages
 
 The following apt packages pre-requisites:
@@ -64,14 +58,16 @@ sudo make install
 
 Clockwork is a high-performance system that depends upon predictability.  There are various tweaks to your environment that will make executions more predictable:
 
-## Disable CPU frequency autoscaling
+## 1. Disable CPU frequency autoscaling
 
 Set the "performance" governor to prevent CPU clock scaling
 ```
 echo performance | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
 ```
 
-## Increase file and memlock limits
+## 2. Increase file and memlock limits
+
+Limits on the number of open files, and the amount of page-locked memory, reduce the total number of DNNs clockwork can keep in memory at any point in time.
 
 Limits can be checked with the `ulimit` command (`ulimit -aH` lists hard limits, `ulimit -a` lists current)
 
@@ -90,7 +86,7 @@ DefaultLimitNOFILE=65535
 ```
 4. Restart
 
-## Disable CUDA JIT
+## 3. Disable CUDA JIT
 
 None of the models we feed to Clockwork should have CUDA PTX code (JIT'able code) -- to make sure, set the CUDA_CACHE_DISABLE environment variable
 
