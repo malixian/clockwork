@@ -231,7 +231,7 @@ GreedyRuntime::~GreedyRuntime() {
 }
 
 unsigned GreedyRuntime::assignCore() {
-	unsigned core = (2 + this->coreCount++) % util::get_num_cores();
+	unsigned core = (2 * (1 + this->coreCount++)) % util::get_num_cores();
 	CHECK(core >= 2) << "GreedyRuntime ran out of cores";
 	return core;
 }

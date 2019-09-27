@@ -74,6 +74,7 @@ public:
 class Exec {
 public:
     std::atomic_flag in_use;
+    std::atomic_int remainingToSubmit;
     std::atomic_int remaining;
     std::atomic_int tokens;
     std::vector<ModelManager*> managers;
@@ -88,16 +89,10 @@ public:
         CUDA_CALL(cudaMallocHost(&input, managers[0]->model.input_size()));
     }
 
-    void releaseToken() {
-        while (in_use.test_and_set()); // spin
-        this->tokens++;
-        in_use.clear();
-    }
-
     void submitSome() {
         while (in_use.test_and_set()); // spin
 
-        while (tokens.load() > 0) {
+        while (remainingToSubmit.load() > 0 && tokens.load() > 0) {
             int i;
             while (true) {
                 i = rand() % managers.size();
@@ -113,22 +108,21 @@ public:
             r->callback = [this, i] {
                 managers[i]->evict();
                 managers_in_use[i]->unlock();
-                this->releaseToken();
-                if (--this->remaining > 0) {
-                    this->submitSome();
-                }
+                this->remaining--;
+                this->tokens++;
+                this->submitSome();
             };
             r->errback = [this, i] (std::string message) {
                 std::cout << "ERROR: " << message << std::endl;
                 managers[i]->evict();
                 managers_in_use[i]->unlock();
-                this->releaseToken();
-                if (--this->remaining > 0) {
-                    this->submitSome();
-                }
+                this->remaining--;
+                this->tokens++;
+                this->submitSome();
             };
             managers[i]->submit(r);
 
+            remainingToSubmit--;
             tokens--;
         }
 
@@ -137,6 +131,7 @@ public:
 
     void run(int iterations) {
         remaining = iterations;
+        remainingToSubmit = iterations;
         submitSome();
     }
 
@@ -343,8 +338,11 @@ TEST_CASE("Profile cudaMallocHost limits", "[cudaMallocHost]") {
 }
 
 TEST_CASE("Profile resnet50 greedy runtime", "[greedy]") {
-    runMultiClientExperiment(40, 100, 1, true, 1000000);
-    // runMultiClientExperiment(100, 1, 1, true, 100);
+    // runMultiClientExperiment(40, 100, 1, true, 1000000);
+    // runMultiClientExperiment(40, 100, 1, true, 10000);
+    // runMultiClientExperiment(10, 100, 1, true, 1000);
+    // runMultiClientExperiment(1000, 1, 1, true, 1000);
+    runMultiClientExperiment(1, 1000, 4, true, 1000);
 }
 
 }
