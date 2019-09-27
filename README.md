@@ -6,11 +6,11 @@ If this README hasn't been updated, it means the system is still a work-in-progr
 
 # Pre-requisites
 
-## CUDA
+## 1. CUDA
 
 Make sure CUDA is installed and on your PATH
 
-## Installing TVM
+## 2. Installing TVM
 
 Clone our modified TVM and check out our modified branch:
 ```
@@ -35,7 +35,7 @@ source ~/.bashrc
 
 Optionally you can add $TVM_HOME to your LD_LIBRARY_PATH and DYLD_LIBRARY_PATH environment variables
 
-## Apt packages
+## 3. Apt packages
 
 The following apt packages pre-requisites:
 
@@ -50,8 +50,7 @@ apt-get install libtbb-dev
 mkdir build
 cd build
 cmake ..
-make
-sudo make install
+make -j40
 ```
 
 # Highly Recommended Environment Modifications
@@ -90,7 +89,7 @@ DefaultLimitNOFILE=65535
 
 None of the models we feed to Clockwork should have CUDA PTX code (JIT'able code) -- to make sure, set the CUDA_CACHE_DISABLE environment variable
 
-## Disable GPU frequency autoscaling
+## 4. Disable GPU frequency autoscaling
 
 Enable persistence mode
 ```
@@ -120,7 +119,10 @@ nvidia-smi -ac 3004,1114
 nvidia-smi -lgc 1114
 ```
 
-## Check
+FYI:
+Graphics cards have CPU core affinity, and this can be checked with `nvidia-smi topo -m`
+
+## 5. Check
 
 Some of these values can be checked by running the Clockwork profiler with:
 ```
