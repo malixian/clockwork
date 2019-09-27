@@ -131,7 +131,7 @@ void Executor::executorMain(int executorId) {
 	ss << TaskTypeName(type) << "-" << executorId << " core " << core << " streams " << execStream << " " << telemetryStream << std::endl;
 	std::cout << ss.str();
 
-	std::atomic_int outstandingCounter = 0;
+	std::atomic_int outstandingCounter(0);
 
 	while (runtime->isAlive()) {
 		// Get next queued request
