@@ -27,13 +27,13 @@ cmake ..
 make -j40
 ```
 
-Set TVM_HOME environment variable
+Set `TVM_HOME` environment variable
 ```
 echo "export TVM_HOME=`pwd`" >> ~/.bashrc
 source ~/.bashrc
 ```
 
-Optionally you can add $TVM_HOME to your LD_LIBRARY_PATH and DYLD_LIBRARY_PATH environment variables
+Optionally you can add `$TVM_HOME` to your `LD_LIBRARY_PATH` and `DYLD_LIBRARY_PATH` environment variables
 
 ## 3. Apt packages
 
@@ -70,8 +70,8 @@ Limits on the number of open files, and the amount of page-locked memory, reduce
 
 Limits can be checked with the `ulimit` command (`ulimit -aH` lists hard limits, `ulimit -a` lists current)
 
-Increase the RLIMIT_NOFILE (number of open files) and RLIMIT_MEMLOCK (amount of page-locked memory) to unlimited:
-1. Open /etc/security/limits.conf
+Increase the `RLIMIT_NOFILE` (number of open files) and `RLIMIT_MEMLOCK` (amount of page-locked memory) to unlimited:
+1. Open `/etc/security/limits.conf`
 2. Add the following lines:
 ```
 *            hard   memlock           unlimited
@@ -79,7 +79,7 @@ Increase the RLIMIT_NOFILE (number of open files) and RLIMIT_MEMLOCK (amount of 
 *            hard   nofile            unlimited
 *            soft   nofile            unlimited
 ```
-3. Modify /etc/systemd/user.conf and /etc/systemd/system.conf to add:
+3. Modify `/etc/systemd/user.conf` and `/etc/systemd/system.conf` to add:
 ```
 DefaultLimitNOFILE=65535
 ```
@@ -87,7 +87,7 @@ DefaultLimitNOFILE=65535
 
 ## 3. Disable CUDA JIT
 
-None of the models we feed to Clockwork should have CUDA PTX code (JIT'able code) -- to make sure, set the CUDA_CACHE_DISABLE environment variable
+None of the models we feed to Clockwork should have CUDA PTX code (JIT'able code) -- to make sure, set the `CUDA_CACHE_DISABLE=1` environment variable
 
 ## 4. Disable GPU frequency autoscaling
 
