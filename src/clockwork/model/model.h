@@ -94,7 +94,7 @@ public:
 	unsigned input_size();
 
 	/* Preconditions: instantiate_model_on_host && set_workspace_pages */
-	void transfer_input_to_device(char* input_ptr, std::vector<char*> &workspace_pages, cudaStream_t stream);
+	void transfer_input_to_device(const char* input_ptr, std::vector<char*> &workspace_pages, cudaStream_t stream);
 
 	/* Preconditions: instantiate_model_on_host */
 	unsigned output_size();

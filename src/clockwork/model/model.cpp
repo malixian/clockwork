@@ -112,7 +112,7 @@ unsigned Model::input_size() {
 }
 
 /* Preconditions: instantiate_model_on_host && set_workspace_pages */
-void Model::transfer_input_to_device(char* input_ptr, std::vector<char*> &workspace_pages, cudaStream_t stream) {
+void Model::transfer_input_to_device(const char* input_ptr, std::vector<char*> &workspace_pages, cudaStream_t stream) {
 	CHECK(spec != nullptr) << "transfer_input_to_device spec is nullptr";
 	void* dst_ptr = workspace_pages[spec->inputs[0].page - weights_pages_count] + spec->inputs[0].page_offset;
 	CUDA_CALL(
