@@ -22,7 +22,7 @@ std::string TaskTypeName(TaskType type);
 class RequestBuilder {
 public:
 	virtual RequestBuilder* setTelemetry(RequestTelemetry* telemetry) = 0;;
-	virtual RequestBuilder* addTask(TaskType type, std::function<void(void)> operation) = 0;
+	virtual RequestBuilder* addTask(TaskType type, std::function<void(void)> operation, uint64_t eligible) = 0;
 	virtual RequestBuilder* setCompletionCallback(std::function<void(void)> onComplete) = 0;
 	virtual void submit() = 0;
 };
@@ -33,25 +33,6 @@ public:
 	virtual void shutdown(bool awaitShutdown) = 0;
 	virtual void join() = 0;
 };
-
-/**
-The threadpool runtime has a fixed-size threadpool for executing requests.
-Each thread executes the entirety of a request at a time, e.g. all the tasks
-of the request.
-**/
-Runtime* newFIFOThreadpoolRuntime(const unsigned numThreads);
-
-/**
-The Greedy runtime has an executor for each resource type.
-
-An executor consists of a self-contained threadpool and queue.
-
-numThreadsPerExecutor specifies the size of the threadpool
-
-Threadpools do not block on asynchronous cuda work.  Use maxOutstandingPerExecutor to specify
-a maximum number of incomplete asynchronous tasks before an executor will block.
-**/
-Runtime* newGreedyRuntime(const unsigned numThreadsPerExecutor, const unsigned maxOutstandingPerExecutor);
 
 /**
 The Clockwork runtime has an executor for each resource type.
@@ -68,7 +49,7 @@ Tasks are assigned a priority, and each executor uses a priority queue.
 Each task has an eligibility time, which represents the earliest point they are allowed to execute.
 If a task becomes eligible, is dequeued by an executor, but its predecessor task hasn't completed, then the executor blocks.
 **/
-Runtime* newClockworkRuntime(const unsigned numThreadsPerExecutor, const unsigned maxOutstandingPerExecutor);
+Runtime* newRuntime(const unsigned numThreadsPerExecutor, const unsigned maxOutstandingPerExecutor);
 
 
 

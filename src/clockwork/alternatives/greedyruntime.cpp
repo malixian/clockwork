@@ -7,6 +7,7 @@
 #include "tbb/concurrent_queue.h"
 
 namespace clockwork {
+namespace alternatives {
 
 Runtime* newGreedyRuntime(const unsigned numThreadsPerExecutor, const unsigned maxOutstandingPerExecutor) {
 	return new greedyruntime::GreedyRuntime(numThreadsPerExecutor, maxOutstandingPerExecutor);
@@ -262,7 +263,7 @@ void GreedyRuntime::join() {
 	checker->join();
 }
 
-clockwork::RequestBuilder* GreedyRuntime::newRequest() {
+clockwork::alternatives::RequestBuilder* GreedyRuntime::newRequest() {
 	return new RequestBuilder(this);
 }
 
@@ -303,5 +304,6 @@ void RequestBuilder::submit() {
 	delete this;
 }
 
+}
 }
 }

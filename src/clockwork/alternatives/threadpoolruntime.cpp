@@ -4,6 +4,7 @@
 #include <dmlc/logging.h>
 
 namespace clockwork {
+namespace alternatives {
 
 Runtime* newFIFOThreadpoolRuntime(const unsigned numThreads) {
 	return new threadpoolruntime::ThreadpoolRuntime(numThreads, new threadpoolruntime::FIFOQueue());
@@ -82,7 +83,7 @@ void ThreadpoolRuntime::join() {
 	}
 }
 
-clockwork::RequestBuilder* ThreadpoolRuntime::newRequest() {
+clockwork::alternatives::RequestBuilder* ThreadpoolRuntime::newRequest() {
 	return new RequestBuilder(this);
 }
 
@@ -90,5 +91,6 @@ void ThreadpoolRuntime::submit(Request* request) {
 	queue->enqueue(request);
 }
 
+}
 }
 }

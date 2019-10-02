@@ -30,8 +30,8 @@ public:
 	TaskTelemetry* telemetry;
 	std::function<void(void)> onComplete;
 
-	Task(TaskType type, std::function<void(void)> f);
 	Task(TaskType type, std::function<void(void)> f, uint64_t eligible);
+	~Task();
 
 	void awaitCompletion();
 	bool isSyncComplete();
@@ -174,7 +174,6 @@ public:
 	RequestBuilder(ClockworkRuntime *runtime);
 
 	RequestBuilder* setTelemetry(RequestTelemetry* telemetry);
-	RequestBuilder* addTask(TaskType type, std::function<void(void)> operation);
 	RequestBuilder* addTask(TaskType type, std::function<void(void)> operation, uint64_t eligible);
 	RequestBuilder* setCompletionCallback(std::function<void(void)> onComplete);
 

@@ -16,7 +16,7 @@
 #include <tvm/runtime/cuda_common.h>
 #include "clockwork/cache.h"
 #include <dmlc/logging.h>
-#include "clockwork/runtime.h"
+#include "clockwork/alternatives.h"
 #include "clockwork/alternatives/worker.h"
 #include <future>
 #include <unordered_map>
@@ -130,7 +130,7 @@ public:
 
 clockwork::alternatives::Worker* createWorker(size_t cache_size, size_t page_size, std::string telemetry_filename) {
 	
-	Runtime* runtime = clockwork::newGreedyRuntime(1, 1);
+	alternatives::Runtime* runtime = clockwork::alternatives::newGreedyRuntime(1, 1);
 
 	void* baseptr;
 	CUDA_CALL(cudaMalloc(&baseptr, cache_size));

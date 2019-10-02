@@ -5,9 +5,10 @@
 #include <thread>
 #include <atomic>
 #include "tbb/concurrent_queue.h"
-#include "clockwork/runtime.h"
+#include "clockwork/alternatives.h"
 
 namespace clockwork {
+namespace alternatives {
 
 namespace threadpoolruntime {
 
@@ -38,7 +39,7 @@ public:
 
 /** A simple manager based on a threadpool.
 Each threadpool thread executes the request in its entirety */
-class ThreadpoolRuntime : public clockwork::Runtime {
+class ThreadpoolRuntime : public clockwork::alternatives::Runtime {
 private:
 	const int numThreads;
 	Queue* queue;
@@ -52,12 +53,12 @@ public:
 	void threadpoolMain(int threadNumber);
 	void shutdown(bool awaitShutdown);
 	void join();
-	virtual clockwork::RequestBuilder* newRequest();
+	virtual clockwork::alternatives::RequestBuilder* newRequest();
 	void submit(Request* request);
 
 };
 
-class RequestBuilder : public clockwork::RequestBuilder {
+class RequestBuilder : public clockwork::alternatives::RequestBuilder {
 private:
 	RequestTelemetry* telemetry = nullptr;
 	std::function<void(void)> onComplete = nullptr;
@@ -72,6 +73,7 @@ public:
 	void submit();
 };
 
+}
 }
 }
 

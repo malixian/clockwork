@@ -5,11 +5,12 @@
 #include <functional>
 #include <thread>
 #include <atomic>
-#include "clockwork/runtime.h"
+#include "clockwork/alternatives.h"
 #include "tbb/concurrent_queue.h"
 #include "clockwork/telemetry.h"
 
 namespace clockwork {
+namespace alternatives {
 	
 namespace greedyruntime {
 
@@ -73,7 +74,7 @@ public:
 	void checkerMain(int checkerId);
 };
 
-class GreedyRuntime : public clockwork::Runtime {
+class GreedyRuntime : public clockwork::alternatives::Runtime {
 private:
 	std::atomic_bool alive;
 	std::atomic_uint coreCount;
@@ -93,10 +94,10 @@ public:
 	void shutdown(bool awaitShutdown);
 	void join();
 	bool isAlive() { return alive.load(); }
-	virtual clockwork::RequestBuilder* newRequest();
+	virtual clockwork::alternatives::RequestBuilder* newRequest();
 };
 
-class RequestBuilder : public clockwork::RequestBuilder {
+class RequestBuilder : public clockwork::alternatives::RequestBuilder {
 private:
 	GreedyRuntime* runtime;
 	RequestTelemetry* telemetry = nullptr;
@@ -112,6 +113,7 @@ public:
 	void submit();
 };
 
+}
 }
 }
 

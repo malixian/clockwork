@@ -226,7 +226,7 @@ void runMultiClientExperiment(int num_execs, int models_per_exec, int requests_p
     size_t cache_size = 512L * page_size;
     PageCache* cache = make_cache(cache_size, page_size);
 
-    Runtime* runtime = clockwork::newGreedyRuntime(1, 3);
+    Runtime* runtime = clockwork::alternatives::newGreedyRuntime(1, 3);
 
     InMemoryTelemetryBuffer* logger = new InMemoryTelemetryBuffer();
 
