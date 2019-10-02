@@ -37,6 +37,7 @@ add_library(clockwork
 	src/clockwork/clockworkruntime.cpp
 	src/clockwork/cache.cpp
 	src/clockwork/util.cpp
+	src/clockwork/worker.cpp
 	src/clockwork/model/memfile.cpp
 	src/clockwork/model/model.cpp
 	src/clockwork/model/cuda.cpp
@@ -53,6 +54,7 @@ target_link_libraries(clockwork PUBLIC
 	cudart
 	tvm_runtime
 	tbb
+	nvidia-ml
 )
 
 add_executable (main
@@ -69,6 +71,7 @@ target_link_libraries(
 	cudart
 	tvm_runtime
 	tbb
+	nvidia-ml
 )
 
 add_executable (cudafatbin
@@ -85,6 +88,7 @@ target_link_libraries(
 	cudart
 	tvm_runtime
 	tbb
+	nvidia-ml
 )
 
 include_directories(clockwork-convert)
@@ -105,6 +109,7 @@ target_link_libraries(
 	cudart
 	tvm_runtime
 	tbb
+	nvidia-ml
 )
 
 add_executable (inflate
@@ -120,6 +125,7 @@ target_link_libraries(
 	cudart
 	tvm_runtime
 	tbb
+	nvidia-ml
 )
 
 add_executable (testmemory
@@ -135,6 +141,7 @@ target_link_libraries(
 	cudart
 	tvm_runtime
 	tbb
+	nvidia-ml
 )
 
 include_directories(test)
@@ -143,6 +150,7 @@ add_executable (tests
 	test/tests.cpp
 	test/clockwork/test/util.cpp
 	test/clockwork/test/testcache.cpp
+	test/clockwork/test/testpriorityqueue.cpp
 	test/clockwork/test/testclient.cpp
 	test/clockwork/test/model/testmodel.cpp
 )
@@ -156,6 +164,7 @@ target_link_libraries(
 	cudart
 	tvm_runtime
 	tbb
+	nvidia-ml
 )
 
 add_executable (profile
@@ -176,4 +185,5 @@ target_link_libraries(
 	cudart
 	tvm_runtime
 	tbb
+	nvidia-ml
 )

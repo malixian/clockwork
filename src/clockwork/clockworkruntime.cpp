@@ -60,58 +60,6 @@ void Task::run() {
 	syncComplete.store(true);
 }
 
-void TaskPriorityQueue::enqueue(Task* task) {
-	std::unique_lock<std::mutex> lock(mutex);
-	queue.push(TaskContainer{task});
-	condition.notify_all();
-}
-
-bool TaskPriorityQueue::try_dequeue(Task* &task) {
-	std::unique_lock<std::mutex> lock(mutex);
-	if (!alive || queue.empty()) {
-		return false;
-	}
-
-	task = queue.top().task;
-	if (task->eligible > util::now()) {
-		return false;
-	}
-
-	queue.pop();
-	return true;
-}
-
-Task* TaskPriorityQueue::dequeue() {
-	// TODO: add predicates to condition for shutdown
-	std::unique_lock<std::mutex> lock(mutex);
-	while (alive && queue.empty()) {
-		condition.wait(lock);
-	}
-	if (!alive) return nullptr;
-
-	Task* task = nullptr;
-	uint64_t now;
-	while (alive) {
-		task = queue.top().task;
-		now = util::now();
-		if (task->eligible < now) {
-			break;
-		}
-		const std::chrono::nanoseconds timeout(task->eligible - now);
-		condition.wait_for(lock, timeout);
-	}
-	if (!alive) return nullptr;
-
-	queue.pop();
-	return task;
-}
-
-void TaskPriorityQueue::shutdown() {
-	std::unique_lock<std::mutex> lock(mutex);
-	alive = false;
-	condition.notify_all();
-}
-
 Executor::Executor(TaskType type, const unsigned numThreads, const unsigned maxOutstanding) : alive(true), type(type), maxOutstanding(maxOutstanding) {
 	for (unsigned i = 0; i < numThreads; i++) {
 		threads.push_back(std::thread(&Executor::executorMain, this, i));
@@ -119,7 +67,7 @@ Executor::Executor(TaskType type, const unsigned numThreads, const unsigned maxO
 }
 
 void Executor::enqueue(Task* task) {
-	queue.enqueue(task);
+	queue.enqueue(task, task->eligible);
 }
 
 void Executor::shutdown() {
