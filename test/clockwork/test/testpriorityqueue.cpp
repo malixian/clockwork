@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <iostream>
 
+#include "clockwork/util.h"
 #include "clockwork/clockworkruntime.h"
 
 TEST_CASE("Priority Queue Simple Dequeue Order", "[queue]") {
@@ -98,36 +99,26 @@ TEST_CASE("Priority Queue Multiple Identical Priorities", "[queue]") {
 }
 
 TEST_CASE("Priority Queue Eligible Time", "[queue]") {
-    // using namespace clockwork;
-    
-    // size_t total_size = 100;
-    // size_t page_size = 10;
-    // void* baseptr = malloc(total_size);
-    // bool allow_evictions = false;
+    using namespace clockwork::clockworkruntime;
 
-    // PageCache* cache = new PageCache(static_cast<char*>(baseptr), total_size, page_size, allow_evictions);
+    time_release_priority_queue<int> q;
+
+    uint64_t now = clockwork::util::now();
+    std::vector<int*> elements;
+    std::vector<uint64_t> priorities;
 
 
-    // std::shared_ptr<Allocation> alloc1 = cache->alloc(5, []{});
-    // REQUIRE(alloc1 != nullptr);
-    // cache->unlock(alloc1);
+    for (int i = -10; i < 10; i++) {
+        int* e = new int();
+        uint64_t priority = now + i * 200000000L; // 200ms * i
+        q.enqueue(e, priority);
+        elements.push_back(e);
+        priorities.push_back(priority);
+    }
 
-    // std::shared_ptr<Allocation> alloc2 = cache->alloc(3, []{});
-    // REQUIRE(alloc2 != nullptr);
-    // cache->unlock(alloc2);
-
-    // std::shared_ptr<Allocation> alloc3 = cache->alloc(3, []{});
-    // REQUIRE(alloc3 == nullptr);
-
-    // std::shared_ptr<Allocation> alloc4 = cache->alloc(2, []{});
-    // REQUIRE(alloc2 != nullptr);
-    // cache->unlock(alloc4);
-
-    // std::shared_ptr<Allocation> alloc5 = cache->alloc(1, []{});
-    // REQUIRE(alloc5 == nullptr);
-
-    // cache->free(alloc1);
-
-    // std::shared_ptr<Allocation> alloc6 = cache->alloc(5, []{});
-    // REQUIRE(alloc6 != nullptr);
+    for (int i = 0; i < elements.size(); i++) {
+        int* e = q.dequeue();
+        REQUIRE(e == elements[i]);
+        REQUIRE(clockwork::util::now() >= priorities[i]);
+    }
 }
