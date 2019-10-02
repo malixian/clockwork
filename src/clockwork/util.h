@@ -5,6 +5,7 @@
 #include <string>
 #include <cuda_runtime.h>
 #include <chrono>
+#include <vector>
 
 
 namespace clockwork {
@@ -19,9 +20,14 @@ std::uint64_t nanos(std::chrono::high_resolution_clock::time_point t);
 
 std::string nowString();
 
+unsigned get_num_cores();
+
 void set_core(unsigned core);
 
-unsigned get_num_cores();
+unsigned get_num_gpus();
+
+// Returns which cores the specified GPU has affinity with
+std::vector<unsigned> get_gpu_core_affinity(unsigned deviceId);
 
 void setCudaFlags();
 

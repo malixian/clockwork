@@ -3,6 +3,8 @@
 #include <libgen.h>
 #include "clockwork/test/util.h"
 #include <catch2/catch.hpp>
+#include <nvml.h>
+#include <iostream>
 
 namespace clockwork{
 namespace util {
@@ -35,6 +37,74 @@ bool is_force_ptx_jit_enabled() {
     const char* v = std::getenv("CUDA_FORCE_PTX_JIT");
     if (v != nullptr) return std::string(v) == "1";
     return false;
+}
+
+bool is_gpu_exclusive(int deviceId) {
+    nvmlReturn_t status;
+
+    status = nvmlInit();
+    CHECK(status == NVML_SUCCESS);
+
+    nvmlDevice_t device;
+    status = nvmlDeviceGetHandleByIndex(deviceId, &device);
+    CHECK(status == NVML_SUCCESS);
+
+    nvmlComputeMode_t computeMode;
+    status = nvmlDeviceGetComputeMode(device, &computeMode);
+    CHECK(status == NVML_SUCCESS);
+
+    status = nvmlShutdown();
+    CHECK(status == NVML_SUCCESS);
+
+    return computeMode == NVML_COMPUTEMODE_EXCLUSIVE_PROCESS;
+}
+
+std::pair<int, int> get_compute_capability(unsigned device_id) {
+    nvmlReturn_t status;
+
+    status = nvmlInit();
+    CHECK(status == NVML_SUCCESS);
+
+    nvmlDevice_t device;
+    status = nvmlDeviceGetHandleByIndex(device_id, &device);
+    CHECK(status == NVML_SUCCESS);
+
+    int major, minor;
+    status = nvmlDeviceGetCudaComputeCapability(device, &major, &minor);
+
+    status = nvmlShutdown();
+    CHECK(status == NVML_SUCCESS);
+
+    return std::make_pair(major, minor);
+}
+
+void nvml() {
+    nvmlReturn_t status;
+
+    status = nvmlInit();
+    CHECK(status == NVML_SUCCESS);
+
+    nvmlDevice_t device;
+    status = nvmlDeviceGetHandleByIndex(0, &device);
+    CHECK(status == NVML_SUCCESS);
+    std::cout << " got device " << 0 << std::endl;
+
+    nvmlComputeMode_t computeMode;
+    status = nvmlDeviceGetComputeMode(device, &computeMode);
+    CHECK(status == NVML_SUCCESS);
+    std::cout << "compute mode is " << computeMode << std::endl;
+
+    unsigned linkWidth;
+    status = nvmlDeviceGetCurrPcieLinkWidth(device, &linkWidth);
+    CHECK(status == NVML_SUCCESS);
+    std::cout << "link width is " << linkWidth << std::endl;
+
+    int major, minor;
+    status = nvmlDeviceGetCudaComputeCapability(device, &major, &minor);
+    std::cout << "Compute " << major << " " << minor << std::endl;
+
+    status = nvmlShutdown();
+    CHECK(status == NVML_SUCCESS);
 }
 
 }

@@ -7,6 +7,7 @@
 #include "clockwork/test/util.h"
 #include "clockwork/model/so.h"
 #include "clockwork/model/cuda.h"
+#include <nvml.h>
 
 using namespace clockwork;
 
@@ -43,9 +44,55 @@ void check_environment() {
         std::cout << "✔ RLIMIT_MEMLOCK is " << rlim.rlim_cur << std::endl;
     }
 
+    unsigned num_gpus = util::get_num_gpus();
+    std::cout << "Found " << num_gpus << " GPUs" << std::endl;
+    for (unsigned i = 0; i < num_gpus; i++) {
+
+        if (!util::is_gpu_exclusive(i)) { // TODO: check all GPUs
+            std::cout << "  ✘ GPU " << i << " is not in exclusive mode; set with `nvidia-smi -i " << i << " -c 3` or set for all GPUs with `nvndia-smi -c 3`" << std::endl;
+        } else {
+            std::cout << "  ✔ GPU " << i << " is in exclusive mode" << std::endl;
+        }
+
+
+    }
+
+    util::nvml();
+
     REQUIRE(environmentIsOK);
 }
 
 TEST_CASE("Check environment variables", "[profile] [check]") {
     check_environment();
+}
+
+void print_system_status() {
+    unsigned num_gpus = util::get_num_gpus();
+    std::cout << num_gpus << " attached GPUs" << std::endl;
+
+    std::cout << "GPU compute capability:" << std::endl;
+    for (unsigned i = 0; i < num_gpus; i++) {
+        std::pair<int, int> v = util::get_compute_capability(i);
+        std::cout << "  GPU " << i << " = " << v.first << ", " << v.second << std::endl;
+    }
+
+    std::cout << "GPU core affinity:" << std::endl;
+    for (unsigned i = 0; i < num_gpus; i++) {
+        std::vector<unsigned> cores = util::get_gpu_core_affinity(i);
+        std::cout << "  GPU " << i << " =";
+        for (unsigned &core : cores) {
+            std::cout << " " << core;
+        }
+        std::cout << std::endl;
+    }
+
+
+
+
+
+}
+
+
+TEST_CASE("Print system status", "[profile] [status]") {
+    print_system_status();
 }

@@ -17,6 +17,7 @@
 #include "tvm/runtime/cuda_common.h"
 #include <cuda_runtime.h>
 #include <dmlc/logging.h>
+#include <nvml.h>
 
 
 namespace clockwork {
@@ -52,6 +53,9 @@ std::string nowString() {
   return ss.str();
 }
 
+unsigned get_num_cores() {
+  return std::thread::hardware_concurrency();
+}
 
 void set_core(unsigned core) {
   cpu_set_t cpuset;
@@ -63,8 +67,56 @@ void set_core(unsigned core) {
   }
 }
 
-unsigned get_num_cores() {
-  return std::thread::hardware_concurrency();
+unsigned get_num_gpus() {
+  nvmlReturn_t status;
+
+  status = nvmlInit();
+  CHECK(status == NVML_SUCCESS);
+
+  unsigned deviceCount;
+  status = nvmlDeviceGetCount(&deviceCount);
+  CHECK(status == NVML_SUCCESS);
+
+  status = nvmlShutdown();
+  CHECK(status == NVML_SUCCESS);
+
+  return deviceCount;
+}
+
+std::vector<unsigned> get_gpu_core_affinity(unsigned deviceId) {
+
+  unsigned len = (get_num_cores() + 63) / 64;
+
+  std::vector<uint64_t> bitmaps(len);
+
+  nvmlReturn_t status;
+
+  status = nvmlInit();
+  CHECK(status == NVML_SUCCESS);
+
+  nvmlDevice_t device;
+  status = nvmlDeviceGetHandleByIndex(deviceId, &device);
+  CHECK(status == NVML_SUCCESS);
+
+  status = nvmlDeviceGetCpuAffinity(device, bitmaps.size(), bitmaps.data());
+  CHECK(status == NVML_SUCCESS);
+
+  std::vector<unsigned> cores;
+
+  unsigned core = 0;
+  for (unsigned i = 0; i < bitmaps.size(); i++) {
+    for (unsigned j = 0; j < 64; j++) {
+      if (((bitmaps[i] >> j) & 0x01) == 0x01) {
+        cores.push_back(core);
+      }
+      core++;
+    }
+  }
+
+  status = nvmlShutdown();
+  CHECK(status == NVML_SUCCESS);
+
+  return cores;
 }
 
 void setCudaFlags() {
