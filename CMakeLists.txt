@@ -7,6 +7,7 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 # set(CMAKE_BUILD_TYPE Debug)
 
 find_package(Threads REQUIRED)
+find_package(Boost REQUIRED)
 
 # Introduce variables:
 # * CMAKE_INSTALL_LIBDIR
@@ -22,6 +23,7 @@ include_directories(
 	$ENV{TVM_HOME}/3rdparty/dmlc-core/include
 	$ENV{TVM_HOME}/3rdparty/dlpack/include
 	/usr/local/cuda/include
+	${Boost_INCLUDE_DIR}
 	${CMAKE_CURRENT_BINARY_DIR}
 )
 
@@ -187,3 +189,52 @@ target_link_libraries(
 	tbb
 	nvidia-ml
 )
+
+# protobuf imports
+find_package(Protobuf REQUIRED)
+include_directories(${Protobuf_INCLUDE_DIR})
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
+protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS src/network/clockwork.proto)
+add_library(proto ${PROTO_HDRS} ${PROTO_SRCS})
+target_link_libraries(proto INTERFACE ${Protobuf_LIBRARIES})
+
+
+add_executable (worker_net
+        src/network/worker_net.cpp
+        src/network/message_rx.cc
+        src/network/message_tx.cc
+        src/network/message_conn.cc
+        )
+
+target_link_libraries(
+        worker_net
+        clockwork
+        Threads::Threads
+        dl
+        cuda
+        cudart
+        tvm_runtime
+        proto
+        ${Boost_SYSTEM_LIBRARY}
+)
+
+
+add_executable (client_net
+        src/network/client_net.cpp
+        src/network/message_rx.cc
+        src/network/message_tx.cc
+        src/network/message_conn.cc
+        )
+
+target_link_libraries(
+        client_net
+        clockwork
+        Threads::Threads
+        dl
+        cuda
+        cudart
+        tvm_runtime
+        proto
+        ${Boost_SYSTEM_LIBRARY}
+)
+
