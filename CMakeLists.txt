@@ -34,12 +34,14 @@ link_directories(
 )
 
 add_library(clockwork
+	src/clockwork/logging.cpp
+	src/clockwork/task.cpp
 	src/clockwork/modeldef.cpp
 	src/clockwork/runtime.cpp
 	src/clockwork/clockworkruntime.cpp
 	src/clockwork/cache.cpp
 	src/clockwork/util.cpp
-	src/clockwork/worker.cpp
+#	src/clockwork/worker.cpp
 	src/clockwork/model/memfile.cpp
 	src/clockwork/model/model.cpp
 	src/clockwork/model/cuda.cpp
@@ -151,6 +153,7 @@ include_directories(test)
 add_executable (tests
 	test/tests.cpp
 	test/clockwork/test/util.cpp
+	test/clockwork/test/testtask.cpp
 	test/clockwork/test/testcache.cpp
 	test/clockwork/test/testpriorityqueue.cpp
 	test/clockwork/test/testclient.cpp
@@ -199,42 +202,42 @@ add_library(proto ${PROTO_HDRS} ${PROTO_SRCS})
 target_link_libraries(proto INTERFACE ${Protobuf_LIBRARIES})
 
 
-add_executable (worker_net
-        src/network/worker_net.cpp
-        src/network/message_rx.cc
-        src/network/message_tx.cc
-        src/network/message_conn.cc
-        )
+# add_executable (worker_net
+#         src/network/worker_net.cpp
+#         src/network/message_rx.cc
+#         src/network/message_tx.cc
+#         src/network/message_conn.cc
+#         )
 
-target_link_libraries(
-        worker_net
-        clockwork
-        Threads::Threads
-        dl
-        cuda
-        cudart
-        tvm_runtime
-        proto
-        ${Boost_SYSTEM_LIBRARY}
-)
+# target_link_libraries(
+#         worker_net
+#         clockwork
+#         Threads::Threads
+#         dl
+#         cuda
+#         cudart
+#         tvm_runtime
+#         proto
+#         ${Boost_SYSTEM_LIBRARY}
+# )
 
 
-add_executable (client_net
-        src/network/client_net.cpp
-        src/network/message_rx.cc
-        src/network/message_tx.cc
-        src/network/message_conn.cc
-        )
+# add_executable (client_net
+#         src/network/client_net.cpp
+#         src/network/message_rx.cc
+#         src/network/message_tx.cc
+#         src/network/message_conn.cc
+#         )
 
-target_link_libraries(
-        client_net
-        clockwork
-        Threads::Threads
-        dl
-        cuda
-        cudart
-        tvm_runtime
-        proto
-        ${Boost_SYSTEM_LIBRARY}
-)
+# target_link_libraries(
+#         client_net
+#         clockwork
+#         Threads::Threads
+#         dl
+#         cuda
+#         cudart
+#         tvm_runtime
+#         proto
+#         ${Boost_SYSTEM_LIBRARY}
+# )
 
