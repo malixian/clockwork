@@ -3,6 +3,7 @@
 
 #include <functional>
 #include <string>
+#include <memory>
 #include "clockwork/api/api_common.h"
 
 /**
@@ -13,12 +14,20 @@ execute at specific times.
 */
 
 const int actionSuccess = 0; // Action completed successfully
-const int actionErrorUnknownModel = 1; // Action requested an unknown model
-const int actionErrorCouldNotStartInTime = 2; // Action dropped because it could not be executed in time
-const int actionErrorModelWeightsNotPresent = 3; // Infer or Evict action could not happen because no weights
-const int actionErrorWeightsAlreadyLoaded = 4; // LoadWeightsAction failed because weights already loaded
-const int actionErrorInvalidInput = 5; // Invalid input to an inference action
-const int actionCancelled = 6; // Action cancelled for some other reason
+const int actionCancelled = 1; // Action cancelled for some other reason
+const int actionErrorRuntimeError = 2; // Action cancelled due to runtime error
+
+const int actionErrorUnknownModel = 10; // Action requested an unknown model
+const int actionErrorCouldNotStartInTime = 11; // Action dropped because it could not be executed in time
+const int actionErrorInvalidAction = 12; // An invalid action type was specified
+const int actionErrorInvalidGPU = 13; // An invalid GPU device id was specified
+
+const int actionErrorModelWeightsNotPresent = 20; // Infer or Evict action could not happen because no weights
+const int actionErrorWeightsAlreadyLoaded = 21; // LoadWeightsAction failed because weights already loaded
+const int actionErrorWeightsInUse = 22; // LoadWeightsAction failed because weights are being actively used (e.g. for transfer)
+const int actionErrorWeightsChanged = 23; // Infer action failed because weights changed while executing
+
+const int actionErrorInvalidInput = 30; // Invalid input to an inference action
 
 
 namespace clockwork {
@@ -100,6 +109,10 @@ struct ActionSet {
 	std::vector<Action> actions;
 };
 
+struct Ack {
+	ResponseHeader header;
+};
+
 /* A set of results sent back from workers to the scheduler */
 struct ResultSet {
 	ResponseHeader header;
@@ -160,16 +173,28 @@ struct LoadModelFromRemoteDiskRequest {
 	std::string remote_path;
 };
 
-class WorkerAPI {
+class Worker {
 public:
 
-	virtual void uploadModel(UploadModelRequest &request, std::function<void(UploadModelResponse&)> callback) = 0;
+	virtual void uploadModel(UploadModelRequest &request) = 0;
 
-	virtual void addActions(ActionSet &actions, std::function<void(ResultSet&)> callback) = 0;
+	virtual void sendActions(ActionSet &actionset) = 0;
 
 	/** This is a 'backdoor' API function for ease of experimentation.  It is similar to uploadModel only it
 	loads a model from the worker's filesystem rather than using what was sent */
-	virtual void loadRemoteModel(LoadModelFromRemoteDiskRequest &request, std::function<void(UploadModelResponse&)> callback) = 0;
+	virtual void loadRemoteModel(LoadModelFromRemoteDiskRequest &request) = 0;
+
+};
+
+class Controller {
+public:
+
+	virtual void uploadModelResponse(UploadModelResponse &response) = 0;
+
+	virtual void sendResults(ResultSet &resultset) = 0;
+
+	/* Use the same return type as uploadModel */
+	virtual void loadRemoteModelResponse(UploadModelResponse &response) = 0;
 
 };
 
