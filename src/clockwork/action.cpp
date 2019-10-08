@@ -1,4 +1,3 @@
-#include <iostream>
 #include "clockwork/action.h"
 
 namespace clockwork {
@@ -69,7 +68,6 @@ void AsyncTaskChecker::join() {
 void AsyncTaskChecker::executorMain(int executorId) {
 	// TODO: acquire core, bind to core, set thread priority
 	util::initializeCudaStream();
-	cudaStream_t stream = util::Stream();
 
 	std::vector<AsyncTask*> pending_tasks;
 	while (alive.load()) {
@@ -100,7 +98,7 @@ LoadWeightsAction::LoadWeightsTaskImpl::LoadWeightsTaskImpl(LoadWeightsAction* a
 
 void LoadWeightsAction::LoadWeightsTaskImpl::run(cudaStream_t stream) {
 	LoadWeightsTask::run(stream);
-	action->runtime->checker->enqueue(this);
+	if (!has_error) action->runtime->checker->enqueue(this);
 }
 
 void LoadWeightsAction::LoadWeightsTaskImpl::success(RuntimeModel* rm) {
@@ -130,25 +128,27 @@ uint64_t InferAction::copy_input_earliest() {
 	return copy_input_lead_in > earliest ? 0 : earliest - copy_input_lead_in;
 }
 
-InferAction::CopyOutputTaskImpl::CopyOutputTaskImpl(InferAction* action) : CopyOutputTask(
-		action->rm,
-		action->runtime->manager,
-		0,
-		18446744073709551615UL,
-		action->output,
-		action->workspace), action(action) {
+InferAction::CopyInputTaskImpl::CopyInputTaskImpl(InferAction* action) : CopyInputTask(
+		action->runtime->manager, 
+		action->model_id,
+		action->copy_input_earliest(),
+		action->latest,
+		action->input), action(action) {
 }
 
-void InferAction::CopyOutputTaskImpl::run(cudaStream_t stream) {
-	CopyOutputTask::run(stream);
-	action->runtime->checker->enqueue(this);
+void InferAction::CopyInputTaskImpl::run(cudaStream_t stream) {
+	CopyInputTask::run(stream);
+	if (!has_error) action->runtime->checker->enqueue(this);
 }
 
-void InferAction::CopyOutputTaskImpl::success() {
-	action->success();
+void InferAction::CopyInputTaskImpl::success(RuntimeModel* rm, std::shared_ptr<Allocation> workspace) {
+	action->rm = rm;
+	action->workspace = workspace;
+	action->infer = new InferTaskImpl(action);
+	action->runtime->gpu_executor->enqueue(action->infer);
 }
 
-void InferAction::CopyOutputTaskImpl::error(int status_code, std::string message) {
+void InferAction::CopyInputTaskImpl::error(int status_code, std::string message) {
 	action->error(status_code, message);
 }
 
@@ -162,7 +162,7 @@ InferAction::InferTaskImpl::InferTaskImpl(InferAction* action) : InferTask(
 
 void InferAction::InferTaskImpl::run(cudaStream_t stream) {
 	InferTask::run(stream);
-	action->runtime->checker->enqueue(this);
+	if (!has_error) action->runtime->checker->enqueue(this);
 }
 
 void InferAction::InferTaskImpl::success() {
@@ -174,27 +174,25 @@ void InferAction::InferTaskImpl::error(int status_code, std::string message) {
 	action->error(status_code, message);
 }
 
-InferAction::CopyInputTaskImpl::CopyInputTaskImpl(InferAction* action) : CopyInputTask(
-		action->runtime->manager, 
-		action->model_id,
-		action->copy_input_earliest(),
-		action->latest,
-		action->input), action(action) {
+InferAction::CopyOutputTaskImpl::CopyOutputTaskImpl(InferAction* action) : CopyOutputTask(
+		action->rm,
+		action->runtime->manager,
+		0,
+		18446744073709551615UL,
+		action->output,
+		action->workspace), action(action) {
 }
 
-void InferAction::CopyInputTaskImpl::run(cudaStream_t stream) {
-	CopyInputTask::run(stream);
-	action->runtime->checker->enqueue(this);
+void InferAction::CopyOutputTaskImpl::run(cudaStream_t stream) {
+	CopyOutputTask::run(stream);
+	if (!has_error) action->runtime->checker->enqueue(this);
 }
 
-void InferAction::CopyInputTaskImpl::success(RuntimeModel* rm, std::shared_ptr<Allocation> workspace) {
-	action->rm = rm;
-	action->workspace = workspace;
-	action->infer = new InferTaskImpl(action);
-	action->runtime->gpu_executor->enqueue(action->infer);
+void InferAction::CopyOutputTaskImpl::success() {
+	action->success();
 }
 
-void InferAction::CopyInputTaskImpl::error(int status_code, std::string message) {
+void InferAction::CopyOutputTaskImpl::error(int status_code, std::string message) {
 	action->error(status_code, message);
 }
 

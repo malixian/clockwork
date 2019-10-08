@@ -36,6 +36,97 @@ public:
 
 };
 
+class TestEvictWeightsTask : public EvictWeightsTask {
+public:
+    bool is_success = false;
+    bool is_error = false;
+    RuntimeModel* rm;
+    int status_code;
+    std::string error_message;
+
+    TestEvictWeightsTask(MemoryManager* cache, int model_id, uint64_t earliest, uint64_t latest) : EvictWeightsTask(cache, model_id, earliest, latest) {}
+
+    void success(RuntimeModel* rm) {
+        is_success = true;
+        this->rm = rm;
+    }
+
+    void error(int status_code, std::string message) {
+        is_error = true;
+        this->status_code = status_code;
+        this->error_message = message;
+    }
+
+};
+
+
+class TestCopyInputTask : public CopyInputTask {
+public:
+    bool is_success = false;
+    bool is_error = false;
+    int status_code;
+    std::string error_message;
+    RuntimeModel* rm;
+    std::shared_ptr<Allocation> workspace;
+
+    TestCopyInputTask(MemoryManager* cache, int model_id, uint64_t earliest, uint64_t latest, char* input) : CopyInputTask(cache, model_id, earliest, latest, input), workspace(nullptr) {}
+
+    void success(RuntimeModel* rm, std::shared_ptr<Allocation> workspace) {
+        is_success = true;
+        this->rm = rm;
+        this->workspace = workspace;
+    }
+
+    void error(int status_code, std::string message) {
+        is_error = true;
+        this->status_code = status_code;
+        this->error_message = message;
+    }
+
+};
+
+class TestInferTask : public InferTask {
+public:
+    bool is_success = false;
+    bool is_error = false;
+    int status_code;
+    std::string error_message;
+
+    TestInferTask(RuntimeModel* rm, MemoryManager* cache, uint64_t earliest, uint64_t latest, std::shared_ptr<Allocation> workspace) : InferTask(rm, cache, earliest, latest, workspace) {}
+
+    void success() {
+        is_success = true;
+    }
+
+    void error(int status_code, std::string message) {
+        is_error = true;
+        this->status_code = status_code;
+        this->error_message = message;
+    }
+
+};
+
+class TestCopyOutputTask : public CopyOutputTask {
+public:
+    bool is_success = false;
+    bool is_error = false;
+    int status_code;
+    std::string error_message;
+
+    TestCopyOutputTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, char* output, std::shared_ptr<Allocation> workspace) : CopyOutputTask(rm, manager, earliest, latest, output, workspace) {}
+
+    void success() {
+        is_success = true;
+    }
+
+    void error(int status_code, std::string message) {
+        is_error = true;
+        this->status_code = status_code;
+        this->error_message = message;
+    }
+
+};
+
 Model* make_model() {
     std::string f = clockwork::util::get_example_model();
 
@@ -273,29 +364,6 @@ TEST_CASE("Double Load Weights", "[task]") {
 }
 
 
-class TestEvictWeightsTask : public EvictWeightsTask {
-public:
-    bool is_success = false;
-    bool is_error = false;
-    RuntimeModel* rm;
-    int status_code;
-    std::string error_message;
-
-    TestEvictWeightsTask(MemoryManager* cache, int model_id, uint64_t earliest, uint64_t latest) : EvictWeightsTask(cache, model_id, earliest, latest) {}
-
-    void success(RuntimeModel* rm) {
-        is_success = true;
-        this->rm = rm;
-    }
-
-    void error(int status_code, std::string message) {
-        is_error = true;
-        this->status_code = status_code;
-        this->error_message = message;
-    }
-
-};
-
 
 TEST_CASE("Evict Weights", "[task]") {
     Model* model = make_model();
@@ -416,30 +484,6 @@ TEST_CASE("Evict Weights Nonexistent Model", "[task]") {
 
 
 
-class TestCopyInputTask : public CopyInputTask {
-public:
-    bool is_success = false;
-    bool is_error = false;
-    int status_code;
-    std::string error_message;
-    RuntimeModel* rm;
-    std::shared_ptr<Allocation> workspace;
-
-    TestCopyInputTask(MemoryManager* cache, int model_id, uint64_t earliest, uint64_t latest, char* input) : CopyInputTask(cache, model_id, earliest, latest, input) {}
-
-    void success(RuntimeModel* rm, std::shared_ptr<Allocation> workspace) {
-        is_success = true;
-        this->rm = rm;
-        this->workspace = workspace;
-    }
-
-    void error(int status_code, std::string message) {
-        is_error = true;
-        this->status_code = status_code;
-        this->error_message = message;
-    }
-
-};
 
 
 TEST_CASE("Copy Input", "[task]") {
@@ -488,28 +532,6 @@ TEST_CASE("Copy Input Nonexistent Model", "[task]") {
     REQUIRE(task->status_code == actionErrorUnknownModel);
 }
 
-
-class TestInferTask : public InferTask {
-public:
-    bool is_success = false;
-    bool is_error = false;
-    int status_code;
-    std::string error_message;
-    std::shared_ptr<Allocation> workspace;
-
-    TestInferTask(RuntimeModel* rm, MemoryManager* cache, uint64_t earliest, uint64_t latest, std::shared_ptr<Allocation> workspace) : InferTask(rm, cache, earliest, latest, workspace) {}
-
-    void success() {
-        is_success = true;
-    }
-
-    void error(int status_code, std::string message) {
-        is_error = true;
-        this->status_code = status_code;
-        this->error_message = message;
-    }
-
-};
 
 TEST_CASE("Input and Infer", "[task]") {
     Model* model = make_model();
@@ -598,27 +620,6 @@ TEST_CASE("Infer Without Weights", "[task]") {
 
 
 
-class TestCopyOutputTask : public CopyOutputTask {
-public:
-    bool is_success = false;
-    bool is_error = false;
-    int status_code;
-    std::string error_message;
-
-    TestCopyOutputTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, char* output, std::shared_ptr<Allocation> workspace) : CopyOutputTask(rm, manager, earliest, latest, output, workspace) {}
-
-    void success() {
-        is_success = true;
-    }
-
-    void error(int status_code, std::string message) {
-        is_error = true;
-        this->status_code = status_code;
-        this->error_message = message;
-    }
-
-};
-
 
 
 TEST_CASE("Input Infer and Output", "[task]") {
@@ -650,6 +651,7 @@ TEST_CASE("Input Infer and Output", "[task]") {
 
     REQUIRE(copyinput->is_success);
     REQUIRE(!copyinput->is_error);
+    REQUIRE(copyinput->workspace != nullptr);
 
     TestInferTask* infer = new TestInferTask(rm, cache, 0, util::now() + 1000000000, copyinput->workspace);
     infer->run(stream);
@@ -663,7 +665,7 @@ TEST_CASE("Input Infer and Output", "[task]") {
 
     char* output = static_cast<char*>(malloc(model->output_size()));
 
-    TestCopyOutputTask* copyoutput = new TestCopyOutputTask(rm, cache, 0, util::now() + 1000000000, output, infer->workspace);
+    TestCopyOutputTask* copyoutput = new TestCopyOutputTask(rm, cache, 0, util::now() + 1000000000, output, copyinput->workspace);
     copyoutput->run(stream);
     REQUIRE(!copyoutput->is_error);
 

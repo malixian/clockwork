@@ -5,7 +5,7 @@
 #include <functional>
 #include <thread>
 #include <atomic>
-#include "clockwork/alternatives.h"
+#include "clockwork/alternatives/alternatives.h"
 #include "tbb/concurrent_queue.h"
 #include "clockwork/telemetry.h"
 

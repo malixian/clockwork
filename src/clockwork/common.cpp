@@ -1,4 +1,4 @@
-#include "clockwork/runtime.h"
+#include "clockwork/common.h"
 
 namespace clockwork {
 

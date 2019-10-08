@@ -16,7 +16,7 @@
 #include <tvm/runtime/cuda_common.h>
 #include "clockwork/cache.h"
 #include <dmlc/logging.h>
-#include "clockwork/alternatives.h"
+#include "clockwork/alternatives/alternatives.h"
 #include "clockwork/alternatives/worker.h"
 #include <future>
 #include <unordered_map>

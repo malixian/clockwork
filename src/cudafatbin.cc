@@ -7,7 +7,7 @@
 #include "clockwork/util.h"
 #include <iostream>
 #include "tbb/task_scheduler_init.h"
-#include "clockwork/runtime.h"
+#include "clockwork/common.h"
 #include <sstream>
 #include <atomic>
 #include <thread>

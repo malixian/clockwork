@@ -78,99 +78,69 @@ public:
 	virtual void process_completion() = 0;
 };
 
-class CopyOutputTask : public Task, public AsyncTask {
+
+class CudaAsyncTask : public AsyncTask {
 private:
-	bool submitted;
-	RuntimeModel* rm;
-	MemoryManager* manager;
-	uint64_t earliest, latest;
-	char* output;
-
-	std::shared_ptr<Allocation> workspace;
-
-	cudaEvent_t copy_output_begin, copy_output_end;
-
+	std::atomic_bool async_begin_submitted, async_end_submitted;
+	cudaEvent_t async_begin_event, async_end_event;
 public:
-	CopyOutputTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, char* output, std::shared_ptr<Allocation> workspace);
-	~CopyOutputTask();
+	CudaAsyncTask();
+	~CudaAsyncTask();
 
-	// Task
-	uint64_t eligible();
-	void run(cudaStream_t stream);
+	void record_async_begin(cudaStream_t stream);
+	void record_async_end(cudaStream_t stream);
+	float async_duration();
 
 	// AsyncTask
 	bool is_complete();
-	void process_completion();
-
-	// Callbacks
-	virtual void error(int status_code, std::string message) = 0;
-	virtual void success() = 0;
+	virtual void process_completion() = 0;
 };
 
-class InferTask : public Task, public AsyncTask {
-private:
-	bool submitted;
-	RuntimeModel* rm;
-	MemoryManager* manager;
-	uint64_t earliest, latest;
-	char* output;
-
-	int weights_version;
-	std::shared_ptr<Allocation> weights;
-	std::shared_ptr<Allocation> workspace;
-
-	cudaEvent_t infer_begin, infer_end;
-
+class WithError {
 public:
+	std::atomic_bool has_error;
 
-	InferTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, std::shared_ptr<Allocation> workspace);
-	~InferTask();
+	WithError() : has_error(false) {}
 
-	// Task
-	uint64_t eligible();
-	void run(cudaStream_t stream);
-
-	// AsyncTask
-	bool is_complete();
-	void process_completion();
-
-	// Callbacks
+	// Callback
 	virtual void error(int status_code, std::string message) = 0;
-	virtual void success() = 0;
+
+
+	void set_error(int status_code, std::string message) {
+		has_error.store(true);
+		this->error(status_code, message);
+	}
 };
 
-class CopyInputTask : public Task, public AsyncTask {
+class LoadWeightsTask : public Task, public CudaAsyncTask, public WithError {
 private:
-	bool submitted;
 	int model_id;
 	RuntimeModel* rm;
 	MemoryManager* manager;
 	uint64_t earliest, latest;
-	char* input;
 
-	std::shared_ptr<Allocation> workspace;
-
-	cudaEvent_t copy_input_begin, copy_input_end;
+	int new_version;
+	std::shared_ptr<Allocation> new_weights;
 
 public:
 
-	CopyInputTask(MemoryManager* manager, int model_id, uint64_t earliest, uint64_t latest, char* input);
-	~CopyInputTask();
+	LoadWeightsTask(MemoryManager* manager, int model_id, uint64_t earliest, uint64_t latest);
+	~LoadWeightsTask();
 
 	// Task
 	uint64_t eligible();
 	void run(cudaStream_t stream);
 
-	// AsyncTask
-	bool is_complete();
+	// CudaAsyncTask
 	void process_completion();
 
 	// Callbacks
-	virtual void success(RuntimeModel* rm, std::shared_ptr<Allocation> workspace) = 0;
+	virtual void success(RuntimeModel* rm) = 0;
 	virtual void error(int status_code, std::string message) = 0;
+
 };
 
-class EvictWeightsTask : public Task {
+class EvictWeightsTask : public Task, public WithError {
 private:
 	int model_id;
 	RuntimeModel* rm;
@@ -191,37 +161,86 @@ public:
 
 };
 
-class LoadWeightsTask : public Task, public AsyncTask {
+class CopyInputTask : public Task, public CudaAsyncTask, public WithError {
 private:
-	bool submitted;
-	int model_id;
-	RuntimeModel* rm;
 	MemoryManager* manager;
+
+	int model_id;
 	uint64_t earliest, latest;
+	char* input;
 
-	int new_version;
-	std::shared_ptr<Allocation> new_weights;
-
-	cudaEvent_t load_weights_begin;
-	cudaEvent_t load_weights_end;
+	RuntimeModel* rm;
+	std::shared_ptr<Allocation> workspace;
 
 public:
 
-	LoadWeightsTask(MemoryManager* manager, int model_id, uint64_t earliest, uint64_t latest);
-	~LoadWeightsTask();
+	CopyInputTask(MemoryManager* manager, int model_id, uint64_t earliest, uint64_t latest, char* input);
+	~CopyInputTask();
 
 	// Task
 	uint64_t eligible();
 	void run(cudaStream_t stream);
 
-	// AsyncTask
-	bool is_complete();
+	// CudaAsyncTask
 	void process_completion();
 
 	// Callbacks
-	virtual void success(RuntimeModel* rm) = 0;
+	virtual void success(RuntimeModel* rm, std::shared_ptr<Allocation> workspace) = 0;
 	virtual void error(int status_code, std::string message) = 0;
+};
 
+class InferTask : public Task, public CudaAsyncTask, public WithError {
+private:
+	RuntimeModel* rm;
+	MemoryManager* manager;
+	uint64_t earliest, latest;
+	char* output;
+
+	int weights_version;
+	std::shared_ptr<Allocation> weights;
+	std::shared_ptr<Allocation> workspace;
+
+public:
+
+	InferTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, std::shared_ptr<Allocation> workspace);
+	~InferTask();
+
+	// Task
+	uint64_t eligible();
+	void run(cudaStream_t stream);
+
+	// CudaAsyncTask
+	void process_completion();
+
+	// Callbacks
+	virtual void error(int status_code, std::string message) = 0;
+	virtual void success() = 0;
+};
+
+class CopyOutputTask : public Task, public CudaAsyncTask, public WithError {
+private:
+	RuntimeModel* rm;
+	MemoryManager* manager;
+
+	uint64_t earliest, latest;
+	char* output;
+
+	std::shared_ptr<Allocation> workspace;
+
+public:
+	CopyOutputTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, char* output, std::shared_ptr<Allocation> workspace);
+	~CopyOutputTask();
+
+	// Task
+	uint64_t eligible();
+	void run(cudaStream_t stream);
+
+	// CudaAsyncTask
+	void process_completion();
+
+	// Callbacks
+	virtual void error(int status_code, std::string message) = 0;
+	virtual void success() = 0;
 };
 
 }

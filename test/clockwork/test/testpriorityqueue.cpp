@@ -6,10 +6,10 @@
 #include <iostream>
 
 #include "clockwork/util.h"
-#include "clockwork/clockworkruntime.h"
+#include "clockwork/priority_queue.h"
 
 TEST_CASE("Priority Queue Simple Dequeue Order", "[queue]") {
-    using namespace clockwork::clockworkruntime;
+    using namespace clockwork;
 
     time_release_priority_queue<int> q;
 
@@ -27,7 +27,7 @@ TEST_CASE("Priority Queue Simple Dequeue Order", "[queue]") {
 }
 
 TEST_CASE("Priority Queue Reverse Dequeue Order", "[queue]") {
-    using namespace clockwork::clockworkruntime;
+    using namespace clockwork;
 
     time_release_priority_queue<int> q;
 
@@ -45,7 +45,7 @@ TEST_CASE("Priority Queue Reverse Dequeue Order", "[queue]") {
 }
 
 TEST_CASE("Priority Queue ZigZag Dequeue Order", "[queue]") {
-    using namespace clockwork::clockworkruntime;
+    using namespace clockwork;
 
     time_release_priority_queue<int> q;
 
@@ -68,7 +68,7 @@ TEST_CASE("Priority Queue ZigZag Dequeue Order", "[queue]") {
 }
 
 TEST_CASE("Priority Queue Multiple Identical Priorities", "[queue]") {
-    using namespace clockwork::clockworkruntime;
+    using namespace clockwork;
 
     time_release_priority_queue<int> q;
 
@@ -99,7 +99,7 @@ TEST_CASE("Priority Queue Multiple Identical Priorities", "[queue]") {
 }
 
 TEST_CASE("Priority Queue Eligible Time", "[queue]") {
-    using namespace clockwork::clockworkruntime;
+    using namespace clockwork;
 
     time_release_priority_queue<int> q;
 

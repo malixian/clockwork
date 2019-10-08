@@ -7,7 +7,7 @@
 #include <future>
 #include <sstream>
 
-#include "clockwork/runtime.h"
+#include "clockwork/common.h"
 #include "clockwork/alternatives/runtime_model.h"
 #include "clockwork/cache.h"
 #include "clockwork/model/model.h"

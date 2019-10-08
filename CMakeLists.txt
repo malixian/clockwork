@@ -36,8 +36,7 @@ link_directories(
 add_library(clockwork
 	src/clockwork/task.cpp
 	src/clockwork/modeldef.cpp
-	src/clockwork/runtime.cpp
-	src/clockwork/clockworkruntime.cpp
+	src/clockwork/common.cpp
 	src/clockwork/cache.cpp
 	src/clockwork/util.cpp
 	src/clockwork/action.cpp

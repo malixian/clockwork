@@ -5,7 +5,7 @@
 #include <thread>
 #include <atomic>
 #include "tbb/concurrent_queue.h"
-#include "clockwork/alternatives.h"
+#include "clockwork/alternatives/alternatives.h"
 
 namespace clockwork {
 namespace alternatives {

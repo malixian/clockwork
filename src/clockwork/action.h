@@ -1,6 +1,7 @@
 #ifndef _CLOCKWORK_ACTION_H_
 #define _CLOCKWORK_ACTION_H_
 
+#include <thread>
 #include <limits>
 #include <algorithm>
 #include <memory>
@@ -11,6 +12,7 @@
 #include "clockwork/cache.h"
 #include "clockwork/model/model.h"
 #include "clockwork/priority_queue.h"
+#include "clockwork/common.h"
 #include "tbb/concurrent_queue.h"
 #include "clockwork/task.h"
 
@@ -104,7 +106,6 @@ private:
 		void error(int status_code, std::string message);
 	};
 
-
 	ClockworkRuntime* runtime;
 	int model_id;
 	uint64_t earliest, latest;
@@ -175,7 +176,6 @@ private:
 	uint64_t copy_input_earliest();
 
 public:
-
 	InferAction(ClockworkRuntime* runtime, int model_id, uint64_t earliest, uint64_t latest, char* input, char* output);
 	~InferAction();
 

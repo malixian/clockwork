@@ -3,7 +3,7 @@
 #include <unordered_map>
 #include <iostream>
 #include "clockwork/telemetry.h"
-#include "clockwork/runtime.h"
+#include "clockwork/common.h"
 #include <fstream>
 #include <sstream>
 #include <pods/pods.h>

@@ -1,17 +1,10 @@
 #ifndef _CLOCKWORK_PRIORITY_QUEUE_H_
 #define _CLOCKWORK_PRIORITY_QUEUE_H_
 
-#include <iostream>
-#include <cuda_runtime.h>
-#include <functional>
-#include <thread>
 #include <atomic>
 #include <mutex>
 #include <condition_variable>
 #include <queue>
-#include "clockwork/runtime.h"
-#include "clockwork/util.h"
-#include "tbb/concurrent_queue.h"
 
 namespace clockwork {
 	/* This is a priority queue, but one where priorities also define a minimum

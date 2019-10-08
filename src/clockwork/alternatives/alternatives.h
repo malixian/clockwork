@@ -1,9 +1,9 @@
-#ifndef _CLOCKWORK_ALTERNATIVES_RUNTIME_H_
-#define _CLOCKWORK_ALTERNATIVES_RUNTIME_H_
+#ifndef _CLOCKWORK_ALTERNATIVES_ALTERNATIVES_H_
+#define _CLOCKWORK_ALTERNATIVES_ALTERNATIVES_H_
 
 #include <functional>
 #include <array>
-#include "clockwork/runtime.h"
+#include "clockwork/common.h"
 #include "clockwork/telemetry.h"
 
 /*
