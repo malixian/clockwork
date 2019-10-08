@@ -31,6 +31,34 @@ public:
 	virtual void error(int status_code, std::string message) = 0;
 };
 
+class LoadModelFromDiskAction : public Action {
+private:
+
+	class LoadModelFromDiskTaskImpl : public LoadModelFromDiskTask {
+	public:
+		LoadModelFromDiskAction* action;
+
+		LoadModelFromDiskTaskImpl(LoadModelFromDiskAction* action);
+
+		void run(cudaStream_t stream);
+		void success(RuntimeModel* rm);
+		void error(int status_code, std::string message);
+	};
+
+	ClockworkRuntime* runtime;
+	int model_id;
+	std::string model_path;
+	uint64_t earliest, latest;
+	LoadModelFromDiskTaskImpl* task;
+
+public:
+	LoadModelFromDiskAction(ClockworkRuntime* runtime, int model_id, std::string model_path, uint64_t earliest, uint64_t latest);
+	~LoadModelFromDiskAction();
+	void submit();
+	virtual void success() = 0;
+	virtual void error(int status_code, std::string message) = 0;
+};
+
 class LoadWeightsAction : public Action {
 private:
 

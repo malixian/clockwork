@@ -49,6 +49,21 @@ public:
     }
 };
 
+class TestLoadModelFromDiskAction : public LoadModelFromDiskAction, public TestAction {
+public:
+    TestLoadModelFromDiskAction(ClockworkRuntime* runtime, int model_id, std::string model_path, uint64_t earliest, uint64_t latest) : 
+        LoadModelFromDiskAction(runtime, model_id, model_path, earliest, latest) {}
+
+    void success() {
+        setsuccess();
+    }
+
+    void error(int status_code, std::string message) {
+        seterror(status_code, message);
+    }
+
+};
+
 class TestLoadWeightsAction : public LoadWeightsAction, public TestAction {
 public:
     TestLoadWeightsAction(ClockworkRuntime* runtime, int model_id, uint64_t earliest, uint64_t latest) : 
@@ -111,6 +126,24 @@ Model* make_model_for_action() {
     model->instantiate_model_on_host();
     model->instantiate_model_on_device();
     return model;
+}
+
+TEST_CASE("Load Model From Disk Action", "[action] [loadmodel_action]") {
+    ClockworkRuntime* clockwork = make_runtime();
+
+    std::string model_path = clockwork::util::get_example_model();
+    TestLoadModelFromDiskAction* action = 
+        new TestLoadModelFromDiskAction(clockwork, 0, model_path, util::now(), util::now()+1000000000);
+
+    action->submit();
+
+    while ((!action->is_success) && (!action->is_error));
+
+    INFO(action->status_code << ": " << action->error_message);
+    REQUIRE(!action->is_error);
+    REQUIRE(action->is_success);
+
+    delete_runtime(clockwork);
 }
 
 TEST_CASE("Load Weights Action", "[action] [loadweights_action]") {

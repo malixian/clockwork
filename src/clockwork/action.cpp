@@ -2,6 +2,40 @@
 
 namespace clockwork {
 
+LoadModelFromDiskAction::LoadModelFromDiskTaskImpl::LoadModelFromDiskTaskImpl(LoadModelFromDiskAction* action) : LoadModelFromDiskTask(
+		action->runtime->manager, 
+		action->model_id,
+		action->model_path,
+		action->earliest, 
+		action->latest), action(action) {
+}
+
+void LoadModelFromDiskAction::LoadModelFromDiskTaskImpl::run(cudaStream_t stream) {
+	LoadModelFromDiskTask::run(stream);
+}
+
+void LoadModelFromDiskAction::LoadModelFromDiskTaskImpl::success(RuntimeModel* rm) {
+	action->success();
+}
+
+void LoadModelFromDiskAction::LoadModelFromDiskTaskImpl::error(int status_code, std::string message) {
+	action->error(status_code, message);
+}
+
+LoadModelFromDiskAction::LoadModelFromDiskAction(ClockworkRuntime* runtime, int model_id, std::string model_path, uint64_t earliest, uint64_t latest) :
+	runtime(runtime), model_id(model_id), model_path(model_path), earliest(earliest), latest(latest), task(nullptr) {
+}
+
+LoadModelFromDiskAction::~LoadModelFromDiskAction() {
+	if (task != nullptr) delete task;
+}
+
+void LoadModelFromDiskAction::submit() {
+	task = new LoadModelFromDiskTaskImpl(this);
+	runtime->weights_executor->enqueue(task);
+};
+
+
 LoadWeightsAction::LoadWeightsTaskImpl::LoadWeightsTaskImpl(LoadWeightsAction* action) : LoadWeightsTask(
 		action->runtime->manager, 
 		action->model_id, 
