@@ -243,6 +243,45 @@ TEST_CASE("Infer Action Multiple", "[action] [infer_action]") {
     }
 }
 
+TEST_CASE("Infer Action Multiple Concurrent", "[action] [infer_action]") {
+    Model* model = make_model_for_action();
+    ClockworkRuntime* clockwork = make_runtime();
+    clockwork->manager->models->put(0, new RuntimeModel(model));
+
+    TestLoadWeightsAction* load_weights = 
+        new TestLoadWeightsAction(clockwork, 0, util::now(), util::now()+1000000000);
+
+    load_weights->submit();
+    load_weights->await();
+    load_weights->check_success(true);
+
+    delete load_weights;
+
+    std::vector<TestInferAction*> infers;
+
+    for (unsigned i = 0; i < 10; i++) {
+
+        char* input = static_cast<char*>(malloc(model->input_size()));
+        char* output = static_cast<char*>(malloc(model->output_size()));
+
+        TestInferAction* infer = 
+            new TestInferAction(clockwork, 0, util::now(), util::now()+1000000000, input, output);
+
+        infers.push_back(infer);
+    }
+
+    for (TestInferAction* infer : infers) {
+        infer->submit();
+    }
+
+    for (TestInferAction* infer : infers) {
+        infer->await();
+        infer->check_success(true);
+
+        delete infer;
+    }
+}
+
 TEST_CASE("Infer after Evict Action", "[action] [evict_action]") {
     Model* model = make_model_for_action();
     ClockworkRuntime* clockwork = make_runtime();
