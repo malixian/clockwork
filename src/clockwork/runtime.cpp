@@ -2,9 +2,8 @@
 
 namespace clockwork {
 
-Executor::Executor(TaskType type) : alive(true), type(type){
-	unsigned numThreads = 1;
-	for (unsigned i = 0; i < numThreads; i++) {
+Executor::Executor(TaskType type, int num_threads) : alive(true), type(type){
+	for (unsigned i = 0; i < num_threads; i++) {
 		threads.push_back(std::thread(&Executor::executorMain, this, i));
 	}
 }

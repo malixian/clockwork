@@ -27,7 +27,7 @@ private:
 public:
 	const TaskType type;
 
-	Executor(TaskType type);
+	Executor(TaskType type, int num_threads = 1);
 
 	void enqueue(Task* task);
 	void shutdown();
