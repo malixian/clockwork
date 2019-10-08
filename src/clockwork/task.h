@@ -8,8 +8,11 @@
 #include "clockwork/cache.h"
 #include "clockwork/model/model.h"
 
-namespace clockwork {
+/*
+This file contains logic for executing models directly
+*/
 
+namespace clockwork {
 
 class RuntimeModel {
 public:

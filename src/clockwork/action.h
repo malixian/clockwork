@@ -17,6 +17,11 @@
 #include "clockwork/task.h"
 #include "clockwork/runtime.h"
 
+/*
+This file defines how to execute tasks (defined in task.h) within the clockwork scheduling
+and thread-pool framework (defined in runtime.h).
+*/
+
 namespace clockwork {
 
 class Action {

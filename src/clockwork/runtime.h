@@ -16,6 +16,11 @@
 #include "tbb/concurrent_queue.h"
 #include "clockwork/task.h"
 
+/*
+This file contains the clockwork scheduling and thread pool logic for executing tasks, asynchronous
+tasks, and checking async task completion.
+*/
+
 namespace clockwork {
 
 class Executor {

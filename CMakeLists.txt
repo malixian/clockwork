@@ -41,6 +41,7 @@ add_library(clockwork
 	src/clockwork/util.cpp
 	src/clockwork/action.cpp
 	src/clockwork/runtime.cpp
+	src/clockwork/worker.cpp
 	src/clockwork/model/memfile.cpp
 	src/clockwork/model/model.cpp
 	src/clockwork/model/cuda.cpp
