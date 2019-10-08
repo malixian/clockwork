@@ -16,6 +16,7 @@
 #include "tbb/concurrent_queue.h"
 #include "clockwork/task.h"
 #include "clockwork/runtime.h"
+#include "clockwork/api/worker_api.h"
 
 /*
 This file defines how to execute tasks (defined in task.h) within the clockwork scheduling
@@ -24,158 +25,152 @@ and thread-pool framework (defined in runtime.h).
 
 namespace clockwork {
 
-class Action {
-public:
-	virtual void submit() = 0;
-	virtual void success() = 0;
-	virtual void error(int status_code, std::string message) = 0;
-};
-
-class LoadModelFromDiskAction : public Action {
-private:
+class LoadModelFromDiskAction {
+protected:
 
 	class LoadModelFromDiskTaskImpl : public LoadModelFromDiskTask {
 	public:
-		LoadModelFromDiskAction* action;
+		LoadModelFromDiskAction* load_model;
 
-		LoadModelFromDiskTaskImpl(LoadModelFromDiskAction* action);
+		LoadModelFromDiskTaskImpl(LoadModelFromDiskAction* load_model);
 
 		void run(cudaStream_t stream);
 		void success(RuntimeModel* rm);
-		void error(int status_code, std::string message);
 	};
 
 	ClockworkRuntime* runtime;
-	int model_id;
-	std::string model_path;
-	uint64_t earliest, latest;
+	std::shared_ptr<workerapi::LoadModelFromDisk> action;
 	LoadModelFromDiskTaskImpl* task;
 
 public:
-	LoadModelFromDiskAction(ClockworkRuntime* runtime, int model_id, std::string model_path, uint64_t earliest, uint64_t latest);
+	LoadModelFromDiskAction(ClockworkRuntime* runtime, std::shared_ptr<workerapi::LoadModelFromDisk> action);
 	~LoadModelFromDiskAction();
+
 	void submit();
-	virtual void success() = 0;
-	virtual void error(int status_code, std::string message) = 0;
+	void handle_error(TaskError &error);
+
+	virtual void success(std::shared_ptr<workerapi::LoadModelFromDiskResult> result) = 0;
+	virtual void error(std::shared_ptr<workerapi::ErrorResult> result) = 0;
 };
 
-class LoadWeightsAction : public Action {
-private:
+class LoadWeightsAction {
+protected:
 
 	class LoadWeightsTaskImpl : public LoadWeightsTask {
 	public:
-		LoadWeightsAction* action;
+		LoadWeightsAction* load_weights;
 
-		LoadWeightsTaskImpl(LoadWeightsAction* action);
+		LoadWeightsTaskImpl(LoadWeightsAction* load_weights);
 
 		void run(cudaStream_t stream);
+		void process_completion();
 		void success(RuntimeModel* rm);
-		void error(int status_code, std::string message);
 	};
 
 	ClockworkRuntime* runtime;
-	int model_id;
-	uint64_t earliest, latest;
+	std::shared_ptr<workerapi::LoadWeights> action;
 	LoadWeightsTaskImpl* task;
 
 public:
-	LoadWeightsAction(ClockworkRuntime* runtime, int model_id, uint64_t earliest, uint64_t latest);
+	LoadWeightsAction(ClockworkRuntime* runtime, std::shared_ptr<workerapi::LoadWeights> action);
 	~LoadWeightsAction();
+
 	void submit();
-	virtual void success() = 0;
-	virtual void error(int status_code, std::string message) = 0;
+	void handle_error(TaskError &error);
+
+	virtual void success(std::shared_ptr<workerapi::LoadWeightsResult> result) = 0;
+	virtual void error(std::shared_ptr<workerapi::ErrorResult> result) = 0;
 };
 
-class EvictWeightsAction : public Action {
+class EvictWeightsAction {
 private:
 
 	class EvictWeightsTaskImpl : public EvictWeightsTask {
 	public:
-		EvictWeightsAction* action;
+		EvictWeightsAction* evict_weights;
 
-		EvictWeightsTaskImpl(EvictWeightsAction* action);
+		EvictWeightsTaskImpl(EvictWeightsAction* evict_weights);
 
 		void run(cudaStream_t stream);
 		void success(RuntimeModel* rm);
-		void error(int status_code, std::string message);
 	};
 
 	ClockworkRuntime* runtime;
-	int model_id;
-	uint64_t earliest, latest;
+	std::shared_ptr<workerapi::EvictWeights> action;
 	EvictWeightsTaskImpl* task;
 
 public:
-	EvictWeightsAction(ClockworkRuntime* runtime, int model_id, uint64_t earliest, uint64_t latest);
+	EvictWeightsAction(ClockworkRuntime* runtime, std::shared_ptr<workerapi::EvictWeights> action);
 	~EvictWeightsAction();
+
 	void submit();
-	virtual void success() = 0;
-	virtual void error(int status_code, std::string message) = 0;
+	void handle_error(TaskError &error);
+
+	virtual void success(std::shared_ptr<workerapi::EvictWeightsResult> result) = 0;
+	virtual void error(std::shared_ptr<workerapi::ErrorResult> result) = 0;
 };
 
 
-class InferAction : public Action {
+class InferAction {
 private:
-
-	class CopyOutputTaskImpl : public CopyOutputTask {
-	public:
-		InferAction* action;
-
-		CopyOutputTaskImpl(InferAction* action);
-
-		void run(cudaStream_t stream);
-		void success();
-		void error(int status_code, std::string message);
-	};
-
-
-	class InferTaskImpl : public InferTask {
-	public:
-		InferAction* action;
-
-		InferTaskImpl(InferAction* action);
-
-		void run(cudaStream_t stream);
-		void success();
-		void error(int status_code, std::string message);
-	};
-
 
 	class CopyInputTaskImpl : public CopyInputTask {
 	public:
-		InferAction* action;
+		InferAction* infer;
 
-		CopyInputTaskImpl(InferAction* action);
+		CopyInputTaskImpl(InferAction* infer);
 
 		void run(cudaStream_t stream);
+		void process_completion();
 		void success(RuntimeModel* rm, std::shared_ptr<Allocation> workspace);
-		void error(int status_code, std::string message);
+	};
+
+	class ExecTaskImpl : public ExecTask {
+	public:
+		InferAction* infer;
+
+		ExecTaskImpl(InferAction* infer);
+
+		void run(cudaStream_t stream);
+		void process_completion();
+		void success();
+	};
+
+	class CopyOutputTaskImpl : public CopyOutputTask {
+	public:
+		InferAction* infer;
+
+		CopyOutputTaskImpl(InferAction* infer);
+
+		void run(cudaStream_t stream);
+		void process_completion();
+		void success(char* output);
 	};
 
 	ClockworkRuntime* runtime;
 
-	int model_id;
-	uint64_t earliest, latest;
-	char* input;
-	char* output;
+	std::shared_ptr<workerapi::Infer> action;
 
 	RuntimeModel* rm;
 	std::shared_ptr<Allocation> workspace;
 
 	CopyInputTaskImpl* copy_input = nullptr;
-	InferTaskImpl* infer = nullptr;
+	ExecTaskImpl* exec = nullptr;
 	CopyOutputTaskImpl* copy_output = nullptr;
 	
 
 	uint64_t copy_input_earliest();
 
 public:
-	InferAction(ClockworkRuntime* runtime, int model_id, uint64_t earliest, uint64_t latest, char* input, char* output);
+	InferAction(ClockworkRuntime* runtime, std::shared_ptr<workerapi::Infer> action);
 	~InferAction();
 
 	void submit();
-	virtual void success() = 0;
-	virtual void error(int status_code, std::string message) = 0;
+	void handle_completion(char* output);
+	void handle_error(TaskError &error);
+
+	virtual void success(std::shared_ptr<workerapi::InferResult> result) = 0;
+	virtual void error(std::shared_ptr<workerapi::ErrorResult> result) = 0;
 
 };
 

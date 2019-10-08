@@ -140,24 +140,15 @@ public:
 	virtual void process_completion() = 0;
 };
 
-class WithError {
+class TaskError {
 public:
-	std::atomic_bool has_error;
-
-	WithError() : has_error(false) {}
-
-	// Callback
-	virtual void error(int status_code, std::string message) = 0;
-
-
-	void set_error(int status_code, std::string message) {
-		has_error.store(true);
-		this->error(status_code, message);
-	}
+	int status_code;
+	std::string message;
+	TaskError(int status_code, std::string message) : status_code(status_code), message(message) {}
 };
 
 /* For now, load, deserialize, and instantiate on host and device all in one.  TODO: split up. */
-class LoadModelFromDiskTask : public Task, public WithError {
+class LoadModelFromDiskTask : public Task {
 private:
 	int model_id;
 	std::string model_path;
@@ -176,11 +167,10 @@ public:
 
 	// Callbacks
 	virtual void success(RuntimeModel* rm) = 0;
-	virtual void error(int status_code, std::string message) = 0;
 
 };
 
-class LoadWeightsTask : public Task, public CudaAsyncTask, public WithError {
+class LoadWeightsTask : public Task, public CudaAsyncTask {
 private:
 	int model_id;
 	RuntimeModel* rm;
@@ -204,11 +194,10 @@ public:
 
 	// Callbacks
 	virtual void success(RuntimeModel* rm) = 0;
-	virtual void error(int status_code, std::string message) = 0;
 
 };
 
-class EvictWeightsTask : public Task, public WithError {
+class EvictWeightsTask : public Task {
 private:
 	int model_id;
 	RuntimeModel* rm;
@@ -225,11 +214,10 @@ public:
 
 	// Callbacks
 	virtual void success(RuntimeModel* rm) = 0;
-	virtual void error(int status_code, std::string message) = 0;
 
 };
 
-class CopyInputTask : public Task, public CudaAsyncTask, public WithError {
+class CopyInputTask : public Task, public CudaAsyncTask {
 private:
 	MemoryManager* manager;
 
@@ -254,15 +242,13 @@ public:
 
 	// Callbacks
 	virtual void success(RuntimeModel* rm, std::shared_ptr<Allocation> workspace) = 0;
-	virtual void error(int status_code, std::string message) = 0;
 };
 
-class InferTask : public Task, public CudaAsyncTask, public WithError {
+class ExecTask : public Task, public CudaAsyncTask {
 private:
 	RuntimeModel* rm;
 	MemoryManager* manager;
 	uint64_t earliest, latest;
-	char* output;
 
 	int weights_version;
 	std::shared_ptr<Allocation> weights;
@@ -270,8 +256,8 @@ private:
 
 public:
 
-	InferTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, std::shared_ptr<Allocation> workspace);
-	~InferTask();
+	ExecTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, std::shared_ptr<Allocation> workspace);
+	~ExecTask();
 
 	// Task
 	uint64_t eligible();
@@ -281,11 +267,10 @@ public:
 	void process_completion();
 
 	// Callbacks
-	virtual void error(int status_code, std::string message) = 0;
 	virtual void success() = 0;
 };
 
-class CopyOutputTask : public Task, public CudaAsyncTask, public WithError {
+class CopyOutputTask : public Task, public CudaAsyncTask {
 private:
 	RuntimeModel* rm;
 	MemoryManager* manager;
@@ -296,7 +281,7 @@ private:
 	std::shared_ptr<Allocation> workspace;
 
 public:
-	CopyOutputTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, char* output, std::shared_ptr<Allocation> workspace);
+	CopyOutputTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, std::shared_ptr<Allocation> workspace);
 	~CopyOutputTask();
 
 	// Task
@@ -307,8 +292,7 @@ public:
 	void process_completion();
 
 	// Callbacks
-	virtual void error(int status_code, std::string message) = 0;
-	virtual void success() = 0;
+	virtual void success(char* output) = 0;
 };
 
 }

@@ -25,6 +25,14 @@ public:
             LoadModelFromDiskTask(cache, model_id, model_path, earliest, latest) {
     }
 
+    void run(cudaStream_t stream) {
+        try {
+            LoadModelFromDiskTask::run(stream);
+        } catch (TaskError &error) {
+            this->error(error.status_code, error.message);
+        }
+    }
+
     void success(RuntimeModel* rm) {
         is_success = true;
         this->rm = rm;
@@ -48,6 +56,22 @@ public:
 
     TestLoadWeightsTask(MemoryManager* cache, int model_id, uint64_t earliest, uint64_t latest) : LoadWeightsTask(cache, model_id, earliest, latest) {}
 
+    void run(cudaStream_t stream) {
+        try {
+            LoadWeightsTask::run(stream);
+        } catch (TaskError &error) {
+            this->error(error.status_code, error.message);
+        }
+    }
+
+    void process_completion() {
+        try {
+            LoadWeightsTask::process_completion();
+        } catch (TaskError &error) {
+            this->error(error.status_code, error.message);
+        }    
+    }
+
     void success(RuntimeModel* rm) {
         is_success = true;
         this->rm = rm;
@@ -70,6 +94,14 @@ public:
     std::string error_message;
 
     TestEvictWeightsTask(MemoryManager* cache, int model_id, uint64_t earliest, uint64_t latest) : EvictWeightsTask(cache, model_id, earliest, latest) {}
+
+    void run(cudaStream_t stream) {
+        try {
+            EvictWeightsTask::run(stream);
+        } catch (TaskError &error) {
+            this->error(error.status_code, error.message);
+        }
+    }
 
     void success(RuntimeModel* rm) {
         is_success = true;
@@ -96,6 +128,22 @@ public:
 
     TestCopyInputTask(MemoryManager* cache, int model_id, uint64_t earliest, uint64_t latest, char* input) : CopyInputTask(cache, model_id, earliest, latest, input), workspace(nullptr) {}
 
+    void run(cudaStream_t stream) {
+        try {
+            CopyInputTask::run(stream);
+        } catch (TaskError &error) {
+            this->error(error.status_code, error.message);
+        }
+    }
+
+    void process_completion() {
+        try {
+            CopyInputTask::process_completion();
+        } catch (TaskError &error) {
+            this->error(error.status_code, error.message);
+        }    
+    }
+
     void success(RuntimeModel* rm, std::shared_ptr<Allocation> workspace) {
         is_success = true;
         this->rm = rm;
@@ -110,14 +158,30 @@ public:
 
 };
 
-class TestInferTask : public InferTask {
+class TestInferTask : public ExecTask {
 public:
     bool is_success = false;
     bool is_error = false;
     int status_code;
     std::string error_message;
 
-    TestInferTask(RuntimeModel* rm, MemoryManager* cache, uint64_t earliest, uint64_t latest, std::shared_ptr<Allocation> workspace) : InferTask(rm, cache, earliest, latest, workspace) {}
+    TestInferTask(RuntimeModel* rm, MemoryManager* cache, uint64_t earliest, uint64_t latest, std::shared_ptr<Allocation> workspace) : ExecTask(rm, cache, earliest, latest, workspace) {}
+
+    void run(cudaStream_t stream) {
+        try {
+            ExecTask::run(stream);
+        } catch (TaskError &error) {
+            this->error(error.status_code, error.message);
+        }
+    }
+
+    void process_completion() {
+        try {
+            ExecTask::process_completion();
+        } catch (TaskError &error) {
+            this->error(error.status_code, error.message);
+        }    
+    }
 
     void success() {
         is_success = true;
@@ -138,9 +202,25 @@ public:
     int status_code;
     std::string error_message;
 
-    TestCopyOutputTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, char* output, std::shared_ptr<Allocation> workspace) : CopyOutputTask(rm, manager, earliest, latest, output, workspace) {}
+    TestCopyOutputTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, std::shared_ptr<Allocation> workspace) : CopyOutputTask(rm, manager, earliest, latest, workspace) {}
 
-    void success() {
+    void run(cudaStream_t stream) {
+        try {
+            CopyOutputTask::run(stream);
+        } catch (TaskError &error) {
+            this->error(error.status_code, error.message);
+        }
+    }
+
+    void process_completion() {
+        try {
+            CopyOutputTask::process_completion();
+        } catch (TaskError &error) {
+            this->error(error.status_code, error.message);
+        }    
+    }
+
+    void success(char* output) {
         is_success = true;
     }
 
@@ -780,9 +860,7 @@ TEST_CASE("Input Infer and Output", "[task]") {
     REQUIRE(infer->is_success);
     REQUIRE(!infer->is_error);
 
-    char* output = static_cast<char*>(malloc(model->output_size()));
-
-    TestCopyOutputTask* copyoutput = new TestCopyOutputTask(rm, cache, 0, util::now() + 1000000000, output, copyinput->workspace);
+    TestCopyOutputTask* copyoutput = new TestCopyOutputTask(rm, cache, 0, util::now() + 1000000000, copyinput->workspace);
     copyoutput->run(stream);
     REQUIRE(!copyoutput->is_error);
 
@@ -794,7 +872,6 @@ TEST_CASE("Input Infer and Output", "[task]") {
 
 
     free(input);
-    free(output);
     delete loadmodel;
     delete loadweights;
     delete copyinput;

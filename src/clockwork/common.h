@@ -9,9 +9,9 @@
 namespace clockwork {
 	
 enum TaskType {
-	PCIe_H2D_Weights, PCIe_H2D_Inputs, GPU, PCIe_D2H_Output
+	CPU, PCIe_H2D_Weights, PCIe_H2D_Inputs, GPU, PCIe_D2H_Output
 };
-extern std::array<TaskType, 4> TaskTypes;
+extern std::array<TaskType, 5> TaskTypes;
 
 // enum TaskType {
 // 	Disk, CPU, PCIe_H2D_Weights, PCIe_H2D_Inputs, GPU, PCIe_D2H_Output, Sync, ModuleLoad

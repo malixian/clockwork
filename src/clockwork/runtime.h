@@ -60,6 +60,7 @@ class ClockworkRuntime {
 public:
 	MemoryManager* manager;
 
+	Executor* load_model_executor;
 	Executor* weights_executor;
 	Executor* inputs_executor;
 	Executor* gpu_executor;
@@ -80,6 +81,7 @@ public:
 	    manager->workspace_cache = cache;
 	    manager->models = new ModelStore();
 
+	    load_model_executor = new Executor(CPU);
 		weights_executor = new Executor(PCIe_H2D_Weights);
 		inputs_executor = new Executor(PCIe_H2D_Inputs);
 		gpu_executor = new Executor(GPU);
@@ -91,6 +93,7 @@ public:
 		delete manager->models;
 		CUDA_CALL(cudaFree(manager->weights_cache->baseptr));
 		delete manager->weights_cache;
+		delete load_model_executor;
 		delete weights_executor;
 		delete inputs_executor;
 		delete gpu_executor;
@@ -99,6 +102,7 @@ public:
 	}
 
 	void shutdown() {
+		load_model_executor->shutdown();
 		weights_executor->shutdown();
 		inputs_executor->shutdown();
 		gpu_executor->shutdown();
@@ -107,6 +111,7 @@ public:
 	}
 
 	void join() {
+		load_model_executor->join();
 		weights_executor->join();
 		inputs_executor->join();
 		gpu_executor->join();
