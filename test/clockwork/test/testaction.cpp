@@ -296,32 +296,32 @@ TEST_CASE("Infer Action", "[action] [infer_action]") {
     delete_runtime(clockwork);
 }
 
-TEST_CASE("Infer Action Multiple", "[action] [infer_action_multiple]") {
-    Model* model = make_model_for_action();
-    ClockworkRuntime* clockwork = make_runtime();
-    clockwork->manager->models->put(0, new RuntimeModel(model));
+// TEST_CASE("Infer Action Multiple", "[action] [infer_action_multiple]") {
+//     Model* model = make_model_for_action();
+//     ClockworkRuntime* clockwork = make_runtime();
+//     clockwork->manager->models->put(0, new RuntimeModel(model));
 
-    auto load_weights = new TestLoadWeightsAction(clockwork, load_weights_action());
+//     auto load_weights = new TestLoadWeightsAction(clockwork, load_weights_action());
 
-    load_weights->submit();
-    load_weights->await();
-    load_weights->check_success(true);
+//     load_weights->submit();
+//     load_weights->await();
+//     load_weights->check_success(true);
 
-    delete load_weights;
+//     delete load_weights;
 
-    for (unsigned i = 0; i < 10; i++) {
-        auto infer = new TestInferAction(clockwork, infer_action(model));
+//     for (unsigned i = 0; i < 10; i++) {
+//         auto infer = new TestInferAction(clockwork, infer_action(model));
 
-        infer->submit();
-        infer->await();
-        infer->check_success(true);
+//         infer->submit();
+//         infer->await();
+//         infer->check_success(true);
 
-        delete infer;
-    }
+//         delete infer;
+//     }
 
-    delete load_weights;
-    delete_runtime(clockwork);
-}
+//     delete load_weights;
+//     delete_runtime(clockwork);
+// }
 
 TEST_CASE("Make Many Models", "[action] [models]") {
     std::vector<Model*> models;
