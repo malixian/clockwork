@@ -98,6 +98,12 @@ ClockworkRuntime* make_runtime() {
     return new ClockworkRuntime();
 }
 
+void delete_runtime(ClockworkRuntime* runtime) {
+    runtime->shutdown();
+    runtime->join();
+    delete runtime;
+}
+
 Model* make_model_for_action() {
     std::string f = clockwork::util::get_example_model();
 
@@ -122,6 +128,8 @@ TEST_CASE("Load Weights Action", "[action] [loadweights_action]") {
     INFO(action->status_code << ": " << action->error_message);
     REQUIRE(!action->is_error);
     REQUIRE(action->is_success);
+
+    delete_runtime(clockwork);
 }
 
 TEST_CASE("Load Weights Action Multiple", "[action] [loadweights_multiple]") {
@@ -139,6 +147,8 @@ TEST_CASE("Load Weights Action Multiple", "[action] [loadweights_multiple]") {
 
         delete action;
     }
+
+    delete_runtime(clockwork);
 }
 
 TEST_CASE("Load Weights Action Invalid Model", "[action]") {
@@ -155,6 +165,8 @@ TEST_CASE("Load Weights Action Invalid Model", "[action]") {
     REQUIRE(!action->is_success);
     REQUIRE(action->is_error);
     REQUIRE(action->status_code == actionErrorUnknownModel);
+
+    delete_runtime(clockwork);
 }
 
 TEST_CASE("Load Evict Weights Action", "[action] [evict_action]") {
@@ -175,6 +187,8 @@ TEST_CASE("Load Evict Weights Action", "[action] [evict_action]") {
     evict_weights->submit();
     evict_weights->await();
     evict_weights->check_success(true);
+
+    delete_runtime(clockwork);
 }
 
 TEST_CASE("Evict without Weights Action", "[action] [evict_action]") {
@@ -188,6 +202,8 @@ TEST_CASE("Evict without Weights Action", "[action] [evict_action]") {
     evict_weights->submit();
     evict_weights->await();
     evict_weights->check_success(false, actionErrorModelWeightsNotPresent);
+
+    delete_runtime(clockwork);
 }
 
 TEST_CASE("Infer Action", "[action] [infer_action]") {
@@ -211,6 +227,8 @@ TEST_CASE("Infer Action", "[action] [infer_action]") {
     infer->submit();
     infer->await();
     infer->check_success(true);
+
+    delete_runtime(clockwork);
 }
 
 TEST_CASE("Infer Action Multiple", "[action] [infer_action]") {
@@ -241,6 +259,8 @@ TEST_CASE("Infer Action Multiple", "[action] [infer_action]") {
 
         delete infer;
     }
+
+    delete_runtime(clockwork);
 }
 
 TEST_CASE("Infer Action Multiple Concurrent", "[action] [infer_action]") {
@@ -280,6 +300,8 @@ TEST_CASE("Infer Action Multiple Concurrent", "[action] [infer_action]") {
 
         delete infer;
     }
+
+    delete_runtime(clockwork);
 }
 
 TEST_CASE("Infer after Evict Action", "[action] [evict_action]") {
@@ -325,4 +347,6 @@ TEST_CASE("Infer after Evict Action", "[action] [evict_action]") {
     infer2->check_success(false, actionErrorModelWeightsNotPresent);
 
     delete infer2;
+
+    delete_runtime(clockwork);
 }

@@ -38,6 +38,23 @@ public:
 
 	ModelStore() : in_use(ATOMIC_FLAG_INIT) {}
 
+	~ModelStore() {
+		while (in_use.test_and_set());
+
+		for (auto &p : models) {
+			RuntimeModel* rm = p.second;
+			if (rm != nullptr) {
+				// TODO: models are definitely not always on device or host
+				rm->model->uninstantiate_model_on_device();
+				rm->model->uninstantiate_model_on_host();
+				delete rm->model;
+				delete rm;
+			}
+		}
+
+		in_use.clear();
+	}
+
 	RuntimeModel* get(int model_id) {
 		while (in_use.test_and_set());
 
@@ -48,12 +65,36 @@ public:
 		return rm;
 	}
 
+	bool contains(int model_id) {
+		while (in_use.test_and_set());
+
+		RuntimeModel* rm = models[model_id];
+
+		in_use.clear();
+
+		return rm != nullptr;
+	}
+
 	void put(int model_id, RuntimeModel* model) {
 		while (in_use.test_and_set());
 
 		models[model_id] = model;
 
 		in_use.clear();
+	}
+
+	bool put_if_absent(int model_id, RuntimeModel* model) {
+		while (in_use.test_and_set());
+
+		bool did_put = false;
+		if (models[model_id] == nullptr) {
+			models[model_id] = model;
+			did_put = true;
+		}
+
+		in_use.clear();
+
+		return did_put;
 	}
 
 };
@@ -113,6 +154,30 @@ public:
 		has_error.store(true);
 		this->error(status_code, message);
 	}
+};
+
+/* For now, load, deserialize, and instantiate on host and device all in one.  TODO: split up. */
+class LoadModelFromDiskTask : public Task, public WithError {
+private:
+	int model_id;
+	std::string model_path;
+
+	MemoryManager* manager;
+	uint64_t earliest, latest;
+
+public:
+
+	LoadModelFromDiskTask(MemoryManager* manager, int model_id, std::string model_path, uint64_t earliest, uint64_t latest);
+	~LoadModelFromDiskTask();
+
+	// Task
+	uint64_t eligible();
+	void run(cudaStream_t stream);
+
+	// Callbacks
+	virtual void success(RuntimeModel* rm) = 0;
+	virtual void error(int status_code, std::string message) = 0;
+
 };
 
 class LoadWeightsTask : public Task, public CudaAsyncTask, public WithError {

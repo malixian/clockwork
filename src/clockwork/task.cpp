@@ -89,6 +89,67 @@ float CudaAsyncTask::async_duration() {
 }
 
 
+LoadModelFromDiskTask::LoadModelFromDiskTask(MemoryManager* manager, int model_id, std::string model_path, uint64_t earliest, uint64_t latest) :
+		manager(manager), model_id(model_id), model_path(model_path), earliest(earliest), latest(latest) {
+}
+
+LoadModelFromDiskTask::~LoadModelFromDiskTask() {}
+
+// Task
+uint64_t LoadModelFromDiskTask::eligible() {
+	return earliest;
+}
+
+void LoadModelFromDiskTask::run(cudaStream_t stream) {
+	uint64_t now = util::now(); // TODO: use chrono
+	if (now < earliest) {
+		set_error(actionErrorRuntimeError, "LoadModelFromDiskTask ran before it was eligible");
+		return;
+	}
+
+	if (now > latest) {
+		set_error(actionErrorCouldNotStartInTime, "LoadModelFromDiskTask could not start in time");
+		return;
+	}
+
+	if (manager->models->contains(model_id)) {
+		set_error(actionErrorInvalidModelID, "LoadModelFromDiskTask specified ID that already exists");
+		return;
+	}
+
+	// TODO: loadFromDisk will call cudaMallocHost; in future don't use this, and manage host memory manually
+	// TODO: for now just wrap dmlc error for failing to load model, since the existence of this task is a
+	//       giant hack anyway
+	model::Model* model;
+	try {
+		model = model::Model::loadFromDisk(
+			model_path + ".so",
+			model_path + ".clockwork",
+			model_path + ".clockwork_params"
+		);
+	} catch (dmlc::Error &error) {
+		set_error(actionErrorInvalidModelPath, error.what());
+		return;
+	}
+
+	model->instantiate_model_on_host();
+	model->instantiate_model_on_device();
+
+	RuntimeModel* rm = new RuntimeModel(model);
+
+	bool success = manager->models->put_if_absent(model_id, rm);
+
+	if (!success) {
+		delete model;
+		delete rm;
+		set_error(actionErrorInvalidModelID, "LoadModelFromDiskTask specified ID that already exists");
+		return;		
+	}
+
+	this->success(rm);
+}
+
+
 LoadWeightsTask::LoadWeightsTask(MemoryManager* manager, int model_id, uint64_t earliest, uint64_t latest) : 
 		manager(manager), model_id(model_id), earliest(earliest), latest(latest), 
 		rm(nullptr), new_weights(nullptr) {

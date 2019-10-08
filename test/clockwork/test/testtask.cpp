@@ -13,6 +13,31 @@
 using namespace clockwork;
 using namespace clockwork::model;
 
+class TestLoadModelFromDiskTask : public LoadModelFromDiskTask {
+public:
+    bool is_success = false;
+    bool is_error = false;
+    RuntimeModel* rm;
+    int status_code;
+    std::string error_message;
+
+    TestLoadModelFromDiskTask(MemoryManager* cache, int model_id, std::string model_path, uint64_t earliest, uint64_t latest) : 
+            LoadModelFromDiskTask(cache, model_id, model_path, earliest, latest) {
+    }
+
+    void success(RuntimeModel* rm) {
+        is_success = true;
+        this->rm = rm;
+    }
+
+    void error(int status_code, std::string message) {
+        is_error = true;
+        this->status_code = status_code;
+        this->error_message = message;
+    }
+
+};
+
 class TestLoadWeightsTask : public LoadWeightsTask {
 public:
     bool is_success = false;
@@ -166,6 +191,51 @@ MemoryManager* make_manager(PageCache* cache) {
     return manager;
 }
 
+TEST_CASE("Load Model From Disk", "[task] [loadmodel]") {
+    PageCache* pagecache = make_cache();
+    cudaStream_t stream = make_stream();
+    MemoryManager* cache = make_manager(pagecache);
+
+    int model_id = 0;
+    std::string model_path = clockwork::util::get_example_model();
+
+    TestLoadModelFromDiskTask* task = 
+        new TestLoadModelFromDiskTask(cache, model_id, model_path, util::now(), util::now()+1000000000);
+
+    task->run(stream);
+
+    INFO(task->status_code << ": " << task->error_message);
+    REQUIRE(!task->is_error);
+    REQUIRE(task->is_success);
+
+    delete task;
+    delete pagecache;
+    delete cache;
+}
+
+TEST_CASE("Load Non-Existent Model From Disk", "[task] [loadmodel]") {
+    PageCache* pagecache = make_cache();
+    cudaStream_t stream = make_stream();
+    MemoryManager* cache = make_manager(pagecache);
+
+    int model_id = 0;
+    std::string model_path = clockwork::util::get_example_model() + "bad";
+
+    TestLoadModelFromDiskTask* task = 
+        new TestLoadModelFromDiskTask(cache, model_id, model_path, util::now(), util::now()+1000000000);
+
+    task->run(stream);
+
+    INFO(task->status_code << ": " << task->error_message);
+    REQUIRE(task->is_error);
+    REQUIRE(!task->is_success);
+
+    delete task;
+    REQUIRE(cudaFree(pagecache->baseptr) == cudaSuccess);
+    delete pagecache;
+    delete cache;
+}
+
 TEST_CASE("Load Weights", "[task]") {
     Model* model = make_model();
     RuntimeModel* rm = new RuntimeModel(model);
@@ -190,6 +260,13 @@ TEST_CASE("Load Weights", "[task]") {
 
     REQUIRE(task->is_success);
     REQUIRE(!task->is_error);
+
+    delete task;
+    delete model;
+    delete rm;
+    REQUIRE(cudaFree(pagecache->baseptr) == cudaSuccess);
+    delete pagecache;
+    delete cache;
 }
 
 TEST_CASE("Load Weights Nonexistent Model", "[task]") {
@@ -208,6 +285,12 @@ TEST_CASE("Load Weights Nonexistent Model", "[task]") {
     REQUIRE(task->is_error);
     REQUIRE(!task->is_success);
     REQUIRE(task->status_code == actionErrorUnknownModel);
+
+    delete task;
+    delete model;
+    REQUIRE(cudaFree(pagecache->baseptr) == cudaSuccess);
+    delete pagecache;
+    delete cache;
 }
 
 TEST_CASE("Load Weights Earliest", "[task]") {
@@ -234,6 +317,7 @@ TEST_CASE("Load Weights Earliest", "[task]") {
     delete rm;
     delete model;
     REQUIRE(cudaFree(pagecache->baseptr) == cudaSuccess);
+    delete pagecache;
 }
 
 TEST_CASE("Load Weights Latest", "[task]") {
@@ -260,6 +344,7 @@ TEST_CASE("Load Weights Latest", "[task]") {
     delete rm;
     delete model;
     REQUIRE(cudaFree(pagecache->baseptr) == cudaSuccess);
+    delete pagecache;
 }
 
 TEST_CASE("Load Weights Insufficient Cache", "[task]") {
@@ -286,6 +371,7 @@ TEST_CASE("Load Weights Insufficient Cache", "[task]") {
     delete rm;
     delete model;
     REQUIRE(cudaFree(pagecache->baseptr) == cudaSuccess);
+    delete pagecache;
 }
 
 TEST_CASE("Load Weights Version Update", "[task]") {
@@ -320,6 +406,7 @@ TEST_CASE("Load Weights Version Update", "[task]") {
     delete rm;
     delete model;
     REQUIRE(cudaFree(pagecache->baseptr) == cudaSuccess);
+    delete pagecache;
 }
 
 TEST_CASE("Double Load Weights", "[task]") {
@@ -361,6 +448,7 @@ TEST_CASE("Double Load Weights", "[task]") {
     delete rm;
     delete model;
     REQUIRE(cudaFree(pagecache->baseptr) == cudaSuccess);
+    delete pagecache;
 }
 
 
@@ -396,6 +484,7 @@ TEST_CASE("Evict Weights", "[task]") {
     delete rm;
     delete model;
     REQUIRE(cudaFree(pagecache->baseptr) == cudaSuccess);
+    delete pagecache;
 }
 
 TEST_CASE("Evict Non-Existent Weights", "[task]") {
@@ -420,6 +509,7 @@ TEST_CASE("Evict Non-Existent Weights", "[task]") {
     delete rm;
     delete model;
     REQUIRE(cudaFree(pagecache->baseptr) == cudaSuccess);
+    delete pagecache;
 }
 
 TEST_CASE("Double Evict", "[task]") {
@@ -462,6 +552,7 @@ TEST_CASE("Double Evict", "[task]") {
     delete rm;
     delete model;
     REQUIRE(cudaFree(pagecache->baseptr) == cudaSuccess);
+    delete pagecache;
 }
 
 TEST_CASE("Evict Weights Nonexistent Model", "[task]") {
@@ -480,6 +571,12 @@ TEST_CASE("Evict Weights Nonexistent Model", "[task]") {
     REQUIRE(task->is_error);
     REQUIRE(!task->is_success);
     REQUIRE(task->status_code == actionErrorUnknownModel);
+
+    delete task;
+    delete model;
+    REQUIRE(cudaFree(pagecache->baseptr) == cudaSuccess);
+    delete pagecache;
+    delete cache;
 }
 
 
@@ -510,6 +607,7 @@ TEST_CASE("Copy Input", "[task]") {
     delete rm;
     delete model;
     REQUIRE(cudaFree(pagecache->baseptr) == cudaSuccess);
+    delete pagecache;
 }
 
 TEST_CASE("Copy Input Nonexistent Model", "[task]") {
@@ -530,6 +628,12 @@ TEST_CASE("Copy Input Nonexistent Model", "[task]") {
     REQUIRE(task->is_error);
     REQUIRE(!task->is_success);
     REQUIRE(task->status_code == actionErrorUnknownModel);
+
+    delete task;
+    delete model;
+    REQUIRE(cudaFree(pagecache->baseptr) == cudaSuccess);
+    delete pagecache;
+    delete cache;
 }
 
 
@@ -577,6 +681,7 @@ TEST_CASE("Input and Infer", "[task]") {
 
     free(input);
     delete copyinput;
+    delete infer;
     delete cache;
     delete rm;
     delete model;
@@ -611,10 +716,12 @@ TEST_CASE("Infer Without Weights", "[task]") {
 
     free(input);
     delete copyinput;
+    delete infer;
     delete cache;
     delete rm;
     delete model;
     REQUIRE(cudaFree(pagecache->baseptr) == cudaSuccess);
+    delete pagecache;
 }
 
 
@@ -623,12 +730,22 @@ TEST_CASE("Infer Without Weights", "[task]") {
 
 
 TEST_CASE("Input Infer and Output", "[task]") {
-    Model* model = make_model();
-    RuntimeModel* rm = new RuntimeModel(model);
     PageCache* pagecache = make_cache();
     cudaStream_t stream = make_stream();
     MemoryManager* cache = make_manager(pagecache);
-    cache->models->put(0, rm);
+
+    std::string model_path = clockwork::util::get_example_model();
+
+    TestLoadModelFromDiskTask* loadmodel = 
+        new TestLoadModelFromDiskTask(cache, 0, model_path, util::now(), util::now()+1000000000);
+
+    loadmodel->run(stream);
+    REQUIRE(loadmodel->is_success);
+    REQUIRE(!loadmodel->is_error);
+
+    RuntimeModel* rm = cache->models->get(0);
+    REQUIRE(rm != nullptr);
+    model::Model* model = rm->model;
 
     TestLoadWeightsTask* loadweights = new TestLoadWeightsTask(cache, 0, 0, util::now()+1000000000);
     loadweights->run(stream);
@@ -678,6 +795,7 @@ TEST_CASE("Input Infer and Output", "[task]") {
 
     free(input);
     free(output);
+    delete loadmodel;
     delete loadweights;
     delete copyinput;
     delete infer;
@@ -686,4 +804,5 @@ TEST_CASE("Input Infer and Output", "[task]") {
     delete rm;
     delete model;
     REQUIRE(cudaFree(pagecache->baseptr) == cudaSuccess);
+    delete pagecache;
 }

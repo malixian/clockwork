@@ -29,6 +29,9 @@ const int actionErrorWeightsChanged = 23; // Infer action failed because weights
 
 const int actionErrorInvalidInput = 30; // Invalid input to an inference action
 
+const int actionErrorInvalidModelID = 40; // Invalid ID specified for load model
+const int actionErrorInvalidModelPath = 41; // Invalid path specified for load model
+
 
 namespace clockwork {
 namespace workerapi {

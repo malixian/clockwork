@@ -35,9 +35,11 @@ void Executor::executorMain(int executorId) {
 		// TODO: shutdown queue or use try_dequeue
 		Task* next = queue.dequeue();
 
-		next->telemetry->dequeued = util::hrt();
-		next->run(stream);
-		next->telemetry->exec_complete = util::hrt();
+		if (next != nullptr) {
+			next->telemetry->dequeued = util::hrt();
+			next->run(stream);
+			next->telemetry->exec_complete = util::hrt();
+		}
 	}
 }
 

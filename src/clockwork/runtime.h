@@ -87,6 +87,33 @@ public:
 		checker = new AsyncTaskChecker();
 	}
 
+	~ClockworkRuntime() {
+		delete manager->models;
+		CUDA_CALL(cudaFree(manager->weights_cache->baseptr));
+		delete manager->weights_cache;
+		delete weights_executor;
+		delete inputs_executor;
+		delete gpu_executor;
+		delete outputs_executor;
+		delete checker;
+	}
+
+	void shutdown() {
+		weights_executor->shutdown();
+		inputs_executor->shutdown();
+		gpu_executor->shutdown();
+		outputs_executor->shutdown();
+		checker->shutdown();
+	}
+
+	void join() {
+		weights_executor->join();
+		inputs_executor->join();
+		gpu_executor->join();
+		outputs_executor->join();
+		checker->join();
+	}
+
 };
 
 
