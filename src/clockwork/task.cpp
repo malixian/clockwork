@@ -44,9 +44,9 @@ public:
 CudaEventPool event_pool;
 
 
-CopyOutputTask::CopyOutputTask(RuntimeModel* rm, PageCache* cache, uint64_t earliest, uint64_t latest, char* output, std::shared_ptr<Allocation> workspace) : 
+CopyOutputTask::CopyOutputTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, char* output, std::shared_ptr<Allocation> workspace) : 
 		Task(), AsyncTask(),
-		rm(rm), cache(cache), earliest(earliest), latest(latest), output(output), workspace(workspace) {
+		rm(rm), manager(manager), earliest(earliest), latest(latest), output(output), workspace(workspace) {
 	telemetry = new TaskTelemetry();
 	copy_output_begin = event_pool.get_or_create();
 	copy_output_end = event_pool.get_or_create();
@@ -65,16 +65,16 @@ uint64_t CopyOutputTask::eligible() {
 void CopyOutputTask::run(cudaStream_t stream) {
 	uint64_t now = util::now(); // TODO: use chrono
 	if (now < earliest) {
-		error(actionErrorRuntimeError, "CopyInputTask ran before it was eligible");
-		cache->unlock(workspace);
-		cache->free(workspace);
+		error(actionErrorRuntimeError, "CopyOutputTask ran before it was eligible");
+		manager->workspace_cache->unlock(workspace);
+		manager->workspace_cache->free(workspace);
 		return;
 	}
 
 	if (now > latest) {
-		error(actionErrorCouldNotStartInTime, "CopyInputTask could not start in time");
-		cache->unlock(workspace);
-		cache->free(workspace);
+		error(actionErrorCouldNotStartInTime, "CopyOutputTask could not start in time");
+		manager->workspace_cache->unlock(workspace);
+		manager->workspace_cache->free(workspace);
 		return;
 	}
 
@@ -100,16 +100,16 @@ void CopyOutputTask::process_completion() {
 	telemetry->async_complete = util::hrt();
 	CUDA_CALL(cudaEventElapsedTime(&telemetry->async_duration, copy_output_begin, copy_output_end));
 
-	cache->unlock(workspace);
-	cache->free(workspace);
+	manager->workspace_cache->unlock(workspace);
+	manager->workspace_cache->free(workspace);
 
 	this->success();
 }
 
 
-InferTask::InferTask(RuntimeModel* rm, PageCache* cache, uint64_t earliest, uint64_t latest, std::shared_ptr<Allocation> workspace) : 
+InferTask::InferTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, std::shared_ptr<Allocation> workspace) : 
 		Task(), AsyncTask(),
-		rm(rm), cache(cache), earliest(earliest), latest(latest), workspace(workspace),
+		rm(rm), manager(manager), earliest(earliest), latest(latest), workspace(workspace),
 		weights(nullptr) {
 	telemetry = new TaskTelemetry();
 	infer_begin = event_pool.get_or_create();
@@ -131,15 +131,15 @@ void InferTask::run(cudaStream_t stream) {
 	uint64_t now = util::now(); // TODO: use chrono
 	if (now < earliest) {
 		error(actionErrorRuntimeError, "InferTask ran before it was eligible");
-		cache->unlock(workspace);
-		cache->free(workspace);
+		manager->workspace_cache->unlock(workspace);
+		manager->workspace_cache->free(workspace);
 		return;
 	}
 
 	if (now > latest) {
 		error(actionErrorCouldNotStartInTime, "InferTask could not start in time");
-		cache->unlock(workspace);
-		cache->free(workspace);
+		manager->workspace_cache->unlock(workspace);
+		manager->workspace_cache->free(workspace);
 		return;
 	}
 
@@ -152,8 +152,8 @@ void InferTask::run(cudaStream_t stream) {
 
 	if (weights == nullptr || weights->evicted) {
 		error(actionErrorModelWeightsNotPresent, "InferTask failed due to missing model weights");
-		cache->unlock(workspace);
-		cache->free(workspace);
+		manager->workspace_cache->unlock(workspace);
+		manager->workspace_cache->free(workspace);
 		return;
 	}
 
@@ -187,19 +187,19 @@ void InferTask::process_completion() {
 
 	if (this->weights_version != current_weights_version || weights->evicted) {
 		error(actionErrorWeightsChanged, "InferTask failed due to weights version mismatch");
-		cache->unlock(workspace);
-		cache->free(workspace);
+		manager->workspace_cache->unlock(workspace);
+		manager->workspace_cache->free(workspace);
 		return;
 	}
 
-	this->success(workspace);
+	this->success();
 }
 
 
-CopyInputTask::CopyInputTask(RuntimeModel* rm, PageCache* cache, uint64_t earliest, uint64_t latest, char* input) : 
+CopyInputTask::CopyInputTask(MemoryManager* manager, int model_id, uint64_t earliest, uint64_t latest, char* input) : 
 		Task(), AsyncTask(),
-		rm(rm), cache(cache), earliest(earliest), latest(latest), input(input),
-		workspace(nullptr) {
+		manager(manager), model_id(model_id), earliest(earliest), latest(latest), input(input),
+		rm(nullptr), workspace(nullptr) {
 	telemetry = new TaskTelemetry();
 	copy_input_begin = event_pool.get_or_create();
 	copy_input_end = event_pool.get_or_create();
@@ -227,7 +227,14 @@ void CopyInputTask::run(cudaStream_t stream) {
 		return;
 	}
 
-	this->workspace = cache->alloc(rm->model->num_workspace_pages(cache->page_size), []{});
+	rm = manager->models->get(model_id);
+	if (rm == nullptr) {
+		error(actionErrorUnknownModel, "CopyInputTask could not find model with specified id");
+		return;
+	}
+
+	unsigned num_pages = rm->model->num_workspace_pages(manager->workspace_cache->page_size);
+	this->workspace = manager->workspace_cache->alloc(num_pages, []{});
 
 	if (this->workspace == nullptr) {
 		error(actionErrorRuntimeError, "CopyInputTask failed to allocate workspace pages from cache");
@@ -256,12 +263,12 @@ void CopyInputTask::process_completion() {
 	telemetry->async_complete = util::hrt();
 	CUDA_CALL(cudaEventElapsedTime(&telemetry->async_duration, copy_input_begin, copy_input_end));
 
-	this->success(workspace);
+	this->success(rm, workspace);
 }
 
 
-EvictWeightsTask::EvictWeightsTask(RuntimeModel* rm, PageCache* cache, uint64_t earliest, uint64_t latest): 
-		Task(), rm(rm), cache(cache), earliest(earliest), latest(latest) {
+EvictWeightsTask::EvictWeightsTask(MemoryManager* manager, int model_id, uint64_t earliest, uint64_t latest): 
+		Task(), manager(manager), model_id(model_id), earliest(earliest), latest(latest) {
 }
 
 uint64_t EvictWeightsTask::eligible() {
@@ -280,6 +287,12 @@ void EvictWeightsTask::run(cudaStream_t stream) {
 		return;
 	}
 
+	rm = manager->models->get(model_id);
+	if (rm == nullptr) {
+		error(actionErrorUnknownModel, "EvictWeightsTask could not find model with specified id");
+		return;
+	}
+
 	rm->lock();
 
 	rm->version++;
@@ -293,16 +306,17 @@ void EvictWeightsTask::run(cudaStream_t stream) {
 		return;
 	}
 
-	cache->unlock(previous_weights);
-	cache->free(previous_weights);
+	manager->weights_cache->unlock(previous_weights);
+	manager->weights_cache->free(previous_weights);
 
-	success();
+	success(rm);
 }
 
 
-LoadWeightsTask::LoadWeightsTask(RuntimeModel* rm, PageCache* cache, uint64_t earliest, uint64_t latest) : 
+LoadWeightsTask::LoadWeightsTask(MemoryManager* manager, int model_id, uint64_t earliest, uint64_t latest) : 
 		Task(), AsyncTask(),
-		rm(rm), cache(cache), earliest(earliest), latest(latest), new_weights(nullptr) {
+		manager(manager), model_id(model_id), earliest(earliest), latest(latest), 
+		rm(nullptr), new_weights(nullptr) {
 	telemetry = new TaskTelemetry();
 	load_weights_begin = event_pool.get_or_create();
 	load_weights_end = event_pool.get_or_create();
@@ -330,6 +344,12 @@ void LoadWeightsTask::run(cudaStream_t stream) {
 		return;
 	}
 
+	rm = manager->models->get(model_id);
+	if (rm == nullptr) {
+		error(actionErrorUnknownModel, "LoadWeightsTask could not find model with specified id");
+		return;
+	}
+
 	rm->lock();
 
 	this->new_version = ++rm->version;
@@ -339,11 +359,12 @@ void LoadWeightsTask::run(cudaStream_t stream) {
 	rm->unlock();
 
 	if (previous_weights != nullptr && !previous_weights->evicted) {
-		cache->unlock(previous_weights);
-		cache->free(previous_weights);
+		manager->weights_cache->unlock(previous_weights);
+		manager->weights_cache->free(previous_weights);
 	}
 
-	this->new_weights = cache->alloc(rm->model->num_weights_pages(cache->page_size), []{});
+	unsigned num_pages = rm->model->num_weights_pages(manager->weights_cache->page_size);
+	this->new_weights = manager->weights_cache->alloc(num_pages, []{});
 	if (this->new_weights == nullptr) {
 		error(actionErrorRuntimeError, "LoadWeightsTask failed to allocate pages from cache");
 		return;
@@ -385,7 +406,7 @@ void LoadWeightsTask::process_completion() {
 	rm->unlock();
 
 	if (version_unchanged) {
-		success();
+		success(rm);
 	} else {
 		error(actionErrorWeightsInUse, "Model weights were modified while being copied");
 		return;

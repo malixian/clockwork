@@ -10,22 +10,6 @@
 
 namespace clockwork {
 
-class Task {
-public:
-	TaskTelemetry* telemetry;
-
-	Task() : telemetry(new TaskTelemetry()) {}
-
-	virtual uint64_t eligible() = 0;
-	virtual void run(cudaStream_t stream) = 0;
-};
-
-class AsyncTask {
-public:
-	virtual bool is_complete() = 0;
-	virtual void process_completion() = 0;
-};
-
 
 class RuntimeModel {
 public:
@@ -42,11 +26,63 @@ public:
 
 };
 
+class ModelStore {
+private:
+	std::atomic_flag in_use;
+	std::unordered_map<int, RuntimeModel*> models;
+
+public:
+
+	ModelStore() : in_use(ATOMIC_FLAG_INIT) {}
+
+	RuntimeModel* get(int model_id) {
+		while (in_use.test_and_set());
+
+		RuntimeModel* rm = models[model_id];
+
+		in_use.clear();
+
+		return rm;
+	}
+
+	void put(int model_id, RuntimeModel* model) {
+		while (in_use.test_and_set());
+
+		models[model_id] = model;
+
+		in_use.clear();
+	}
+
+};
+
+class MemoryManager {
+public:
+	PageCache* weights_cache;
+	PageCache* workspace_cache;
+	ModelStore* models;
+};
+
+class Task {
+public:
+	TaskTelemetry* telemetry;
+
+	Task() : telemetry(new TaskTelemetry()) {}
+
+	virtual uint64_t eligible() = 0;
+	virtual void run(cudaStream_t stream) = 0;
+};
+
+class AsyncTask {
+public:
+	virtual bool is_complete() = 0;
+	virtual void process_completion() = 0;
+};
+
 class CopyOutputTask : public Task, public AsyncTask {
 private:
 	bool submitted;
 	RuntimeModel* rm;
-	PageCache* cache;
+	MemoryManager* manager;
 	uint64_t earliest, latest;
 	char* output;
 
@@ -55,7 +91,7 @@ private:
 	cudaEvent_t copy_output_begin, copy_output_end;
 
 public:
-	CopyOutputTask(RuntimeModel* rm, PageCache* cache, uint64_t earliest, uint64_t latest, char* output, std::shared_ptr<Allocation> workspace);
+	CopyOutputTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, char* output, std::shared_ptr<Allocation> workspace);
 	~CopyOutputTask();
 
 	// Task
@@ -75,7 +111,7 @@ class InferTask : public Task, public AsyncTask {
 private:
 	bool submitted;
 	RuntimeModel* rm;
-	PageCache* cache;
+	MemoryManager* manager;
 	uint64_t earliest, latest;
 	char* output;
 
@@ -87,7 +123,7 @@ private:
 
 public:
 
-	InferTask(RuntimeModel* rm, PageCache* cache, uint64_t earliest, uint64_t latest, std::shared_ptr<Allocation> workspace);
+	InferTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, std::shared_ptr<Allocation> workspace);
 	~InferTask();
 
 	// Task
@@ -100,14 +136,15 @@ public:
 
 	// Callbacks
 	virtual void error(int status_code, std::string message) = 0;
-	virtual void success(std::shared_ptr<Allocation> workspace) = 0;
+	virtual void success() = 0;
 };
 
 class CopyInputTask : public Task, public AsyncTask {
 private:
 	bool submitted;
+	int model_id;
 	RuntimeModel* rm;
-	PageCache* cache;
+	MemoryManager* manager;
 	uint64_t earliest, latest;
 	char* input;
 
@@ -117,7 +154,7 @@ private:
 
 public:
 
-	CopyInputTask(RuntimeModel* rm, PageCache* cache, uint64_t earliest, uint64_t latest, char* input);
+	CopyInputTask(MemoryManager* manager, int model_id, uint64_t earliest, uint64_t latest, char* input);
 	~CopyInputTask();
 
 	// Task
@@ -129,26 +166,27 @@ public:
 	void process_completion();
 
 	// Callbacks
-	virtual void success(std::shared_ptr<Allocation> workspace) = 0;
+	virtual void success(RuntimeModel* rm, std::shared_ptr<Allocation> workspace) = 0;
 	virtual void error(int status_code, std::string message) = 0;
 };
 
 class EvictWeightsTask : public Task {
 private:
+	int model_id;
 	RuntimeModel* rm;
-	PageCache* cache;
+	MemoryManager* manager;
 	uint64_t earliest, latest;
 
 public:
 
-	EvictWeightsTask(RuntimeModel* rm, PageCache* cache, uint64_t earliest, uint64_t latest);
+	EvictWeightsTask(MemoryManager* manager, int model_id, uint64_t earliest, uint64_t latest);
 
 	// Task
 	uint64_t eligible();
 	void run(cudaStream_t stream);
 
 	// Callbacks
-	virtual void success() = 0;
+	virtual void success(RuntimeModel* rm) = 0;
 	virtual void error(int status_code, std::string message) = 0;
 
 };
@@ -156,8 +194,9 @@ public:
 class LoadWeightsTask : public Task, public AsyncTask {
 private:
 	bool submitted;
+	int model_id;
 	RuntimeModel* rm;
-	PageCache* cache;
+	MemoryManager* manager;
 	uint64_t earliest, latest;
 
 	int new_version;
@@ -168,7 +207,7 @@ private:
 
 public:
 
-	LoadWeightsTask(RuntimeModel* rm, PageCache* cache, uint64_t earliest, uint64_t latest);
+	LoadWeightsTask(MemoryManager* manager, int model_id, uint64_t earliest, uint64_t latest);
 	~LoadWeightsTask();
 
 	// Task
@@ -180,7 +219,7 @@ public:
 	void process_completion();
 
 	// Callbacks
-	virtual void success() = 0;
+	virtual void success(RuntimeModel* rm) = 0;
 	virtual void error(int status_code, std::string message) = 0;
 
 };

@@ -4,7 +4,7 @@ project(clockwork)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -O2")
 set(THREADS_PREFER_PTHREAD_FLAG ON)
-# set(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_BUILD_TYPE Debug)
 
 find_package(Threads REQUIRED)
 find_package(Boost REQUIRED)
@@ -34,13 +34,13 @@ link_directories(
 )
 
 add_library(clockwork
-	src/clockwork/logging.cpp
 	src/clockwork/task.cpp
 	src/clockwork/modeldef.cpp
 	src/clockwork/runtime.cpp
 	src/clockwork/clockworkruntime.cpp
 	src/clockwork/cache.cpp
 	src/clockwork/util.cpp
+	src/clockwork/action.cpp
 #	src/clockwork/worker.cpp
 	src/clockwork/model/memfile.cpp
 	src/clockwork/model/model.cpp
@@ -154,6 +154,7 @@ add_executable (tests
 	test/tests.cpp
 	test/clockwork/test/util.cpp
 	test/clockwork/test/testtask.cpp
+	test/clockwork/test/testaction.cpp
 	test/clockwork/test/testcache.cpp
 	test/clockwork/test/testpriorityqueue.cpp
 	test/clockwork/test/testclient.cpp
