@@ -119,6 +119,33 @@ public:
 	virtual void error(int status_code, std::string message) = 0;
 };
 
+class EvictWeightsAction : public Action {
+private:
+
+	class EvictWeightsTaskImpl : public EvictWeightsTask {
+	public:
+		EvictWeightsAction* action;
+
+		EvictWeightsTaskImpl(EvictWeightsAction* action);
+
+		void run(cudaStream_t stream);
+		void success(RuntimeModel* rm);
+		void error(int status_code, std::string message);
+	};
+
+	ClockworkRuntime* runtime;
+	int model_id;
+	uint64_t earliest, latest;
+	EvictWeightsTaskImpl* task;
+
+public:
+	EvictWeightsAction(ClockworkRuntime* runtime, int model_id, uint64_t earliest, uint64_t latest);
+	~EvictWeightsAction();
+	void submit();
+	virtual void success() = 0;
+	virtual void error(int status_code, std::string message) = 0;
+};
+
 
 class InferAction : public Action {
 private:

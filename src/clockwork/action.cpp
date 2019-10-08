@@ -123,6 +123,42 @@ void LoadWeightsAction::submit() {
 };
 
 
+
+EvictWeightsAction::EvictWeightsTaskImpl::EvictWeightsTaskImpl(EvictWeightsAction* action) : EvictWeightsTask(
+		action->runtime->manager, 
+		action->model_id, 
+		action->earliest, 
+		action->latest), action(action) {
+}
+
+void EvictWeightsAction::EvictWeightsTaskImpl::run(cudaStream_t stream) {
+	EvictWeightsTask::run(stream);
+}
+
+void EvictWeightsAction::EvictWeightsTaskImpl::success(RuntimeModel* rm) {
+	action->success();
+}
+
+void EvictWeightsAction::EvictWeightsTaskImpl::error(int status_code, std::string message) {
+	action->error(status_code, message);
+}
+
+EvictWeightsAction::EvictWeightsAction(ClockworkRuntime* runtime, int model_id, uint64_t earliest, uint64_t latest) :
+	runtime(runtime), model_id(model_id), earliest(earliest), latest(latest), task(nullptr) {
+}
+
+EvictWeightsAction::~EvictWeightsAction() {
+	if (task != nullptr) delete task;
+}
+
+void EvictWeightsAction::submit() {
+	task = new EvictWeightsTaskImpl(this);
+	// Rather than have an entire new executor for this, just for now
+	// use the outputs executor because it's never even close to full utilization
+	runtime->outputs_executor->enqueue(task);
+};
+
+
 const uint64_t copy_input_lead_in = 1000000; // Copy inputs up to 1 ms before exec
 uint64_t InferAction::copy_input_earliest() {
 	return copy_input_lead_in > earliest ? 0 : earliest - copy_input_lead_in;

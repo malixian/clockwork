@@ -35,7 +35,7 @@ public:
         while ((!is_success) && (!is_error));
     }
 
-    void check_success(bool expect_success) {
+    void check_success(bool expect_success, int expected_status_code = 0) {
         if (expect_success) {
             INFO(status_code << ": " << error_message);
             REQUIRE(!is_error);
@@ -43,6 +43,8 @@ public:
         } else {
             REQUIRE(is_error);
             REQUIRE(!is_success);
+            INFO(status_code << ": " << error_message);
+            REQUIRE(status_code == expected_status_code);
         }
     }
 };
@@ -51,6 +53,21 @@ class TestLoadWeightsAction : public LoadWeightsAction, public TestAction {
 public:
     TestLoadWeightsAction(ClockworkRuntime* runtime, int model_id, uint64_t earliest, uint64_t latest) : 
         LoadWeightsAction(runtime, model_id, earliest, latest) {}
+
+    void success() {
+        setsuccess();
+    }
+
+    void error(int status_code, std::string message) {
+        seterror(status_code, message);
+    }
+
+};
+
+class TestEvictWeightsAction : public EvictWeightsAction, public TestAction {
+public:
+    TestEvictWeightsAction(ClockworkRuntime* runtime, int model_id, uint64_t earliest, uint64_t latest) : 
+        EvictWeightsAction(runtime, model_id, earliest, latest) {}
 
     void success() {
         setsuccess();
@@ -140,6 +157,39 @@ TEST_CASE("Load Weights Action Invalid Model", "[action]") {
     REQUIRE(action->status_code == actionErrorUnknownModel);
 }
 
+TEST_CASE("Load Evict Weights Action", "[action] [evict_action]") {
+    Model* model = make_model_for_action();
+    ClockworkRuntime* clockwork = make_runtime();
+    clockwork->manager->models->put(0, new RuntimeModel(model));
+
+    TestLoadWeightsAction* load_weights = 
+        new TestLoadWeightsAction(clockwork, 0, util::now(), util::now()+1000000000);
+
+    load_weights->submit();
+    load_weights->await();
+    load_weights->check_success(true);
+
+    TestEvictWeightsAction* evict_weights = 
+        new TestEvictWeightsAction(clockwork, 0, util::now(), util::now()+1000000000);
+
+    evict_weights->submit();
+    evict_weights->await();
+    evict_weights->check_success(true);
+}
+
+TEST_CASE("Evict without Weights Action", "[action] [evict_action]") {
+    Model* model = make_model_for_action();
+    ClockworkRuntime* clockwork = make_runtime();
+    clockwork->manager->models->put(0, new RuntimeModel(model));
+
+    TestEvictWeightsAction* evict_weights = 
+        new TestEvictWeightsAction(clockwork, 0, util::now(), util::now()+1000000000);
+
+    evict_weights->submit();
+    evict_weights->await();
+    evict_weights->check_success(false, actionErrorModelWeightsNotPresent);
+}
+
 TEST_CASE("Infer Action", "[action] [infer_action]") {
     Model* model = make_model_for_action();
     ClockworkRuntime* clockwork = make_runtime();
@@ -155,10 +205,85 @@ TEST_CASE("Infer Action", "[action] [infer_action]") {
     char* input = static_cast<char*>(malloc(model->input_size()));
     char* output = static_cast<char*>(malloc(model->output_size()));
 
-    TestInferAction* action = 
+    TestInferAction* infer = 
         new TestInferAction(clockwork, 0, util::now(), util::now()+1000000000, input, output);
 
-    action->submit();
-    action->await();
-    action->check_success(true);
+    infer->submit();
+    infer->await();
+    infer->check_success(true);
+}
+
+TEST_CASE("Infer Action Multiple", "[action] [infer_action]") {
+    Model* model = make_model_for_action();
+    ClockworkRuntime* clockwork = make_runtime();
+    clockwork->manager->models->put(0, new RuntimeModel(model));
+
+    TestLoadWeightsAction* load_weights = 
+        new TestLoadWeightsAction(clockwork, 0, util::now(), util::now()+1000000000);
+
+    load_weights->submit();
+    load_weights->await();
+    load_weights->check_success(true);
+
+    delete load_weights;
+
+    for (unsigned i = 0; i < 10; i++) {
+
+        char* input = static_cast<char*>(malloc(model->input_size()));
+        char* output = static_cast<char*>(malloc(model->output_size()));
+
+        TestInferAction* infer = 
+            new TestInferAction(clockwork, 0, util::now(), util::now()+1000000000, input, output);
+
+        infer->submit();
+        infer->await();
+        infer->check_success(true);
+
+        delete infer;
+    }
+}
+
+TEST_CASE("Infer after Evict Action", "[action] [evict_action]") {
+    Model* model = make_model_for_action();
+    ClockworkRuntime* clockwork = make_runtime();
+    clockwork->manager->models->put(0, new RuntimeModel(model));
+
+    TestLoadWeightsAction* load_weights = 
+        new TestLoadWeightsAction(clockwork, 0, util::now(), util::now()+1000000000);
+
+    load_weights->submit();
+    load_weights->await();
+    load_weights->check_success(true);
+
+    delete load_weights;
+
+    char* input = static_cast<char*>(malloc(model->input_size()));
+    char* output = static_cast<char*>(malloc(model->output_size()));
+
+    TestInferAction* infer = 
+        new TestInferAction(clockwork, 0, util::now(), util::now()+1000000000, input, output);
+
+    infer->submit();
+    infer->await();
+    infer->check_success(true);
+
+    delete infer;
+
+    TestEvictWeightsAction* evict_weights = 
+        new TestEvictWeightsAction(clockwork, 0, util::now(), util::now()+1000000000);
+
+    evict_weights->submit();
+    evict_weights->await();
+    evict_weights->check_success(true);
+
+    delete evict_weights;
+
+    TestInferAction* infer2 = 
+        new TestInferAction(clockwork, 0, util::now(), util::now()+1000000000, input, output);
+
+    infer2->submit();
+    infer2->await();
+    infer2->check_success(false, actionErrorModelWeightsNotPresent);
+
+    delete infer2;
 }
