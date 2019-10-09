@@ -38,12 +38,16 @@ public:
 
 	time_release_priority_queue() : alive(true) {}
 
-	void enqueue(T* element, uint64_t priority) {
+	bool enqueue(T* element, uint64_t priority) {
 		std::unique_lock<std::mutex> lock(mutex);
 
 		// TODO: will have to convert priority to a chrono::timepoint
-		queue.push(container{element, priority});
-		condition.notify_all();
+		if (alive) {
+			queue.push(container{element, priority});
+			condition.notify_all();
+		}
+
+		return alive;
 	}
 
 	bool try_dequeue(T* &element) {
@@ -85,6 +89,18 @@ public:
 		T* element = queue.top().element;
 		queue.pop();
 		return element;
+	}
+
+	std::vector<T*> drain() {
+		std::unique_lock<std::mutex> lock(mutex);
+
+		std::vector<T*> elements;
+		while (!queue.empty()) {
+			elements.push_back(queue.top().element);
+			queue.pop();
+		}
+
+		return elements;
 	}
 
 	void shutdown() {

@@ -1,5 +1,7 @@
 #include <catch2/catch.hpp>
 
+#include <unistd.h>
+#include <thread>
 #include <unordered_map>
 #include <algorithm>
 #include <cstdlib>
@@ -121,4 +123,143 @@ TEST_CASE("Priority Queue Eligible Time", "[queue]") {
         REQUIRE(e == elements[i]);
         REQUIRE(clockwork::util::now() >= priorities[i]);
     }
+}
+
+class ShutdownSignaller {
+public:
+    std::atomic_bool signalled_shutdown;
+    std::thread thread;
+    clockwork::time_release_priority_queue<int> &q;
+    ShutdownSignaller(clockwork::time_release_priority_queue<int> &q) : 
+            q(q), signalled_shutdown(false), thread(&ShutdownSignaller::run, this) {
+    }
+    void run() {
+        using namespace clockwork;
+        uint64_t start = util::now();
+        while (util::now() < start + 100000000UL) {
+            usleep(1000);
+        }
+        signalled_shutdown = true;
+        q.shutdown();
+    }
+};
+
+TEST_CASE("Priority Queue Blocking Dequeue", "[queue] [shutdown]") {
+    using namespace clockwork;
+
+    time_release_priority_queue<int> q;
+    ShutdownSignaller s(q);
+
+    int* e = q.dequeue();
+
+    INFO("Blocking dequeue returned before shutdown signaller completed");
+    REQUIRE(s.signalled_shutdown);
+
+    INFO("Blocking dequeue should have returned a nullptr");
+    REQUIRE(e == nullptr);
+
+    s.thread.join();
+}
+
+class Dequeuer {
+public:
+    std::thread thread;
+    clockwork::time_release_priority_queue<int> &q;
+    std::atomic_bool complete;
+    std::vector<int*> dequeued;
+    Dequeuer(clockwork::time_release_priority_queue<int> &q) : 
+            q(q), complete(false), thread(&Dequeuer::run, this) {
+    }
+    void run() {
+        using namespace clockwork;
+        uint64_t start = util::now();
+        while (true) {
+            int* element = q.dequeue();
+            if (element == nullptr) {
+                break;
+            } else {
+                dequeued.push_back(element);
+            }
+        }
+        complete = true;
+    }
+};
+
+TEST_CASE("Priority Queue Shutdown", "[queue] [shutdown]") {
+    using namespace clockwork;
+
+    time_release_priority_queue<int> q;
+
+    Dequeuer d(q);
+
+    std::vector<int*> elements;
+    for (unsigned i = 0; i < 10; i++) {
+        int* element = new int();
+        q.enqueue(element, i);
+        elements.push_back(element);
+    }
+
+    uint64_t now = util::now();
+    while (util::now() < now + 100000000) { // Wait 100ms
+        INFO("Dequeuer thread completed before it was signalled");
+        REQUIRE(!d.complete.load());
+        usleep(1000);
+    }
+
+    INFO("Dequeuer thread dequeued " << d.dequeued.size() << " elements");
+    REQUIRE(d.dequeued.size() == 10);
+
+    INFO("Dequeuer thread completed before it was signalled");
+    REQUIRE(!d.complete.load());
+
+    q.shutdown();
+
+    now = util::now();
+    while (util::now() < now + 1000000000) { // Max 1s
+        if (d.complete.load()) {
+            break;
+        }
+        usleep(1000);
+    }
+    INFO("Dequeuer thread never unblocked");
+    REQUIRE(d.complete.load());
+
+    d.thread.join();
+}
+
+TEST_CASE("Priority Queue Enqueue after Shutdown", "[queue] [shutdown]") {
+    using namespace clockwork;
+
+    time_release_priority_queue<int> q;
+
+    REQUIRE(q.enqueue(new int(), 0));
+
+    q.shutdown();
+
+    INFO("Should not be able to enqueue new elements after shutdown");
+    REQUIRE(!q.enqueue(new int(), 0));
+}
+
+TEST_CASE("Priority Queue Drain after Shutdown", "[queue] [shutdown]") {
+    using namespace clockwork;
+
+    time_release_priority_queue<int> q;
+
+    uint64_t now = util::now();
+
+    REQUIRE(q.enqueue(new int(), now + 1000000000UL));
+    REQUIRE(q.enqueue(new int(), now + 1000000000UL));
+    REQUIRE(q.enqueue(new int(), now + 1000000000UL));
+
+    q.shutdown();
+
+    int* dequeued = q.dequeue();
+    INFO("Shouldn't be able to dequeue after queue shutdown");
+    REQUIRE(dequeued == nullptr);
+
+
+    std::vector<int*> drained = q.drain();
+
+    INFO("Unable to drain pending elements from queue after shutdown");
+    REQUIRE(drained.size() == 3);
 }
