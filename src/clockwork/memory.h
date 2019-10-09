@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include "clockwork/cache.h"
 #include "clockwork/model/model.h"
+#include "tbb/concurrent_queue.h"
 
 namespace clockwork {
 
@@ -41,8 +42,27 @@ public:
 
 };
 
+// Simpler than a page cache for now since paging isn't really necessary for small inputs
+// Will allocate memory itself using cudaMallocHost
+class IOCache {
+private:
+	char* baseptr;
+	tbb::concurrent_queue<char*> ptrs;
+
+public:
+	const size_t page_size;
+
+	IOCache(size_t total_size, size_t page_size);
+	~IOCache();
+
+	bool take(char* &ptr);
+	void release(char* ptr);
+
+};
+
 class MemoryManager {
 public:
+	IOCache* io_cache;
 	PageCache* weights_cache;
 	PageCache* workspace_cache;
 	ModelStore* models;
@@ -58,6 +78,7 @@ public:
 	~CUDAPageCache();
 };
 
+IOCache* make_IO_cache();
 PageCache* make_GPU_cache(size_t cache_size, size_t page_size = 16777216);
 
 }
