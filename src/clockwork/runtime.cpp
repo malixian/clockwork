@@ -1,3 +1,4 @@
+#include "clockwork/api/worker_api.h"
 #include "clockwork/runtime.h"
 
 namespace clockwork {
@@ -9,12 +10,14 @@ Executor::Executor(TaskType type, int num_threads) : alive(true), type(type){
 }
 
 void Executor::enqueue(Task* task) {
-	queue.enqueue(task, task->eligible());
+	if (!queue.enqueue(task, task->eligible())) {
+		throw TaskError(actionErrorShuttingDown, "Cannot enqueue task to executor that is shutting down");
+	}
 }
 
 void Executor::shutdown() {
-	alive.store(false);
 	queue.shutdown();
+	alive.store(false);
 }
 
 void Executor::join() {
@@ -40,6 +43,11 @@ void Executor::executorMain(int executorId) {
 			next->run(stream);
 			next->telemetry->exec_complete = util::hrt();
 		}
+	}
+
+	std::vector<Task*> tasks = queue.drain();
+	for (Task* task : tasks) {
+		task->cancel();
 	}
 }
 

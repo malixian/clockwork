@@ -36,6 +36,7 @@ protected:
 
 		void run(cudaStream_t stream);
 		void success(RuntimeModel* rm);
+		void cancel();
 	};
 
 	ClockworkRuntime* runtime;
@@ -65,6 +66,7 @@ protected:
 		void run(cudaStream_t stream);
 		void process_completion();
 		void success(RuntimeModel* rm);
+		void cancel();
 	};
 
 	ClockworkRuntime* runtime;
@@ -93,6 +95,7 @@ private:
 
 		void run(cudaStream_t stream);
 		void success(RuntimeModel* rm);
+		void cancel();
 	};
 
 	ClockworkRuntime* runtime;
@@ -123,6 +126,7 @@ private:
 		void run(cudaStream_t stream);
 		void process_completion();
 		void success(RuntimeModel* rm, std::shared_ptr<Allocation> workspace);
+		void cancel();
 	};
 
 	class ExecTaskImpl : public ExecTask {
@@ -134,6 +138,7 @@ private:
 		void run(cudaStream_t stream);
 		void process_completion();
 		void success();
+		void cancel();
 	};
 
 	class CopyOutputTaskImpl : public CopyOutputTask {
@@ -145,6 +150,7 @@ private:
 		void run(cudaStream_t stream);
 		void process_completion();
 		void success(char* output);
+		void cancel();
 	};
 
 	ClockworkRuntime* runtime;

@@ -5,14 +5,25 @@ namespace clockwork {
 // TODO: actually instantiate the clockwork runtime properly and set the controller
 ClockworkWorker::ClockworkWorker() : runtime(new ClockworkRuntime()) {
 }
+
 ClockworkWorker::~ClockworkWorker() {
-    runtime->shutdown();
-    runtime->join();
     delete runtime;
+}
+
+void ClockworkWorker::shutdown(bool await_completion) {
+	runtime->shutdown(false);
+	if (await_completion) {
+		join();
+	}
+}
+
+void ClockworkWorker::join() {
+	runtime->join();
 }
 
 void ClockworkWorker::sendActions(std::vector<std::shared_ptr<workerapi::Action>> &actions) {
 	for (std::shared_ptr<workerapi::Action> action : actions) {
+		std::cout << "Received an action " << action->action_type << std::endl;
 		switch (action->action_type) {
 			case workerapi::loadModelFromDiskAction: loadModel(action); break;
 			case workerapi::loadWeightsAction: loadWeights(action); break;

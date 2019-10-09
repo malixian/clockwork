@@ -141,6 +141,25 @@ TEST_CASE("Load Model From Disk Action", "[action] [loadmodel_action]") {
     delete_runtime(clockwork);
 }
 
+TEST_CASE("Load Model From Disk Action Multiple", "[action] [loadmodel_action]") {
+    ClockworkRuntime* clockwork = make_runtime();
+
+    for (unsigned i = 0; i < 10; i++) {
+        auto action = load_model_from_disk_action();
+        action->model_id = i;
+
+        auto load_model = new TestLoadModelFromDiskAction(clockwork, action);
+
+        load_model->submit();
+        load_model->await();
+        load_model->check_success(true);
+
+        delete load_model;
+    }
+
+    delete_runtime(clockwork);
+}
+
 TEST_CASE("Load Weights Action", "[action] [loadweights_action]") {
     Model* model = make_model_for_action();
     ClockworkRuntime* clockwork = make_runtime();
@@ -355,4 +374,73 @@ TEST_CASE("Infer after Evict Action", "[action] [evict_action]") {
     delete infer2;
 
     delete_runtime(clockwork);
+}
+
+TEST_CASE("Actions E2E", "[action] [e2e]") {
+    ClockworkRuntime* clockwork = make_runtime();
+
+    auto load_model = new TestLoadModelFromDiskAction(clockwork, load_model_from_disk_action());
+
+    load_model->submit();
+    load_model->await();
+    load_model->check_success(true);
+
+    delete load_model;
+
+    auto load_weights = new TestLoadWeightsAction(clockwork, load_weights_action());
+
+    load_weights->submit();
+    load_weights->await();
+    load_weights->check_success(true);
+
+    delete load_weights;
+    
+    Model* model = clockwork->manager->models->get(0)->model;
+    auto infer = new TestInferAction(clockwork, infer_action(model));
+
+    infer->submit();
+    infer->await();
+    infer->check_success(true);
+
+    delete infer;
+
+    auto evict_weights = new TestEvictWeightsAction(clockwork, evict_weights_action());
+
+    evict_weights->submit();
+    evict_weights->await();
+    evict_weights->check_success(true);
+
+    delete evict_weights;
+
+    auto infer2 = new TestInferAction(clockwork, infer_action(model));
+
+    infer2->submit();
+    infer2->await();
+    infer2->check_success(false, actionErrorModelWeightsNotPresent);
+
+    delete infer2;
+
+    delete_runtime(clockwork);
+}
+
+TEST_CASE("Task Cancelled After Shutdown", "[action] [shutdown]") {
+    Model* model = make_model_for_action();
+    ClockworkRuntime* clockwork = make_runtime();
+    clockwork->manager->models->put(0, new RuntimeModel(model));
+
+    auto action = load_weights_action();
+    action->earliest = util::now() + 1000000000UL; // + 10seconds
+    action->latest = action->earliest;
+
+    auto load_weights = new TestLoadWeightsAction(clockwork, action);
+
+    load_weights->submit();
+
+    clockwork->shutdown(true);
+
+    load_weights->await();
+    load_weights->check_success(false, actionCancelled);
+
+    delete load_weights;
+    delete clockwork;
 }

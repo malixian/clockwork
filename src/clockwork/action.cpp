@@ -51,6 +51,11 @@ void LoadModelFromDiskAction::LoadModelFromDiskTaskImpl::success(RuntimeModel* r
 	load_model->success(result);
 }
 
+void LoadModelFromDiskAction::LoadModelFromDiskTaskImpl::cancel() {
+	TaskError error(actionCancelled, "Action cancelled");
+	load_model->handle_error(error);
+}
+
 LoadModelFromDiskAction::LoadModelFromDiskAction(ClockworkRuntime* runtime, std::shared_ptr<workerapi::LoadModelFromDisk> action) :
 	runtime(runtime), action(action), task(nullptr) {
 }
@@ -117,6 +122,11 @@ void LoadWeightsAction::LoadWeightsTaskImpl::success(RuntimeModel* rm) {
 	load_weights->success(result);
 }
 
+void LoadWeightsAction::LoadWeightsTaskImpl::cancel() {
+	TaskError error(actionCancelled, "Action cancelled");
+	load_weights->handle_error(error);
+}
+
 LoadWeightsAction::LoadWeightsAction(ClockworkRuntime* runtime, std::shared_ptr<workerapi::LoadWeights> action) :
 	runtime(runtime), action(action), task(nullptr) {
 }
@@ -173,6 +183,11 @@ void EvictWeightsAction::EvictWeightsTaskImpl::success(RuntimeModel* rm) {
 	extract_timing_sync(result.get(), telemetry);
 
 	evict_weights->success(result);
+}
+
+void EvictWeightsAction::EvictWeightsTaskImpl::cancel() {
+	TaskError error(actionCancelled, "Action cancelled");
+	evict_weights->handle_error(error);
 }
 
 EvictWeightsAction::EvictWeightsAction(ClockworkRuntime* runtime, std::shared_ptr<workerapi::EvictWeights> action) :
@@ -242,6 +257,11 @@ void InferAction::CopyInputTaskImpl::success(RuntimeModel* rm, std::shared_ptr<A
 	infer->runtime->gpu_executor->enqueue(infer->exec);
 }
 
+void InferAction::CopyInputTaskImpl::cancel() {
+	TaskError error(actionCancelled, "Action cancelled");
+	infer->handle_error(error);
+}
+
 InferAction::ExecTaskImpl::ExecTaskImpl(InferAction* infer) : ExecTask(
 		infer->rm,
 		infer->runtime->manager, 
@@ -272,6 +292,11 @@ void InferAction::ExecTaskImpl::success() {
 	infer->runtime->outputs_executor->enqueue(infer->copy_output);
 }
 
+void InferAction::ExecTaskImpl::cancel() {
+	TaskError error(actionCancelled, "Action cancelled");
+	infer->handle_error(error);
+}
+
 InferAction::CopyOutputTaskImpl::CopyOutputTaskImpl(InferAction* infer) : CopyOutputTask(
 		infer->rm,
 		infer->runtime->manager,
@@ -299,6 +324,11 @@ void InferAction::CopyOutputTaskImpl::process_completion() {
 
 void InferAction::CopyOutputTaskImpl::success(char* output) {
 	infer->handle_completion(output);
+}
+
+void InferAction::CopyOutputTaskImpl::cancel() {
+	TaskError error(actionCancelled, "Action cancelled");
+	infer->handle_error(error);
 }
 
 InferAction::InferAction(ClockworkRuntime* runtime, std::shared_ptr<workerapi::Infer> action) :

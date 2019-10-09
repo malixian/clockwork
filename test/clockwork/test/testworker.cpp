@@ -44,7 +44,7 @@ TEST_CASE("Test Worker E2E", "[worker]") {
     auto load_model = load_model_from_disk_action();
 
     auto load_weights = load_weights_action();
-    load_weights->earliest = load_model->earliest + 10000000;
+    load_weights->earliest = load_model->earliest + 300000000;
 
     auto infer = infer_action();
     infer->earliest = load_weights->earliest + 20000000;
@@ -55,5 +55,5 @@ TEST_CASE("Test Worker E2E", "[worker]") {
     std::vector<std::shared_ptr<workerapi::Action>> actions{load_model, load_weights, infer, evict_weights};
     worker->sendActions(actions);
 
-    usleep(100000);
+    usleep(1000000);
 }

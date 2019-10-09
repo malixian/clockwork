@@ -20,6 +20,9 @@ public:
 	ClockworkWorker();
 	~ClockworkWorker();
 
+	void shutdown(bool await_completion);
+	void join();
+
 	void sendActions(std::vector<std::shared_ptr<workerapi::Action>> &actions);
 
 private:

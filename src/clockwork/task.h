@@ -52,7 +52,8 @@ public:
 			}
 		}
 
-		in_use.clear();
+		// Let callers hang here to aid in use-after-free
+		// in_use.clear();
 	}
 
 	RuntimeModel* get(int model_id) {
@@ -114,6 +115,7 @@ public:
 
 	virtual uint64_t eligible() = 0;
 	virtual void run(cudaStream_t stream) = 0;
+	virtual void cancel() = 0;
 };
 
 class AsyncTask {
@@ -164,6 +166,7 @@ public:
 	// Task
 	uint64_t eligible();
 	void run(cudaStream_t stream);
+	virtual void cancel() = 0;
 
 	// Callbacks
 	virtual void success(RuntimeModel* rm) = 0;
@@ -188,6 +191,7 @@ public:
 	// Task
 	uint64_t eligible();
 	void run(cudaStream_t stream);
+	virtual void cancel() = 0;
 
 	// CudaAsyncTask
 	void process_completion();
@@ -211,6 +215,7 @@ public:
 	// Task
 	uint64_t eligible();
 	void run(cudaStream_t stream);
+	virtual void cancel() = 0;
 
 	// Callbacks
 	virtual void success(RuntimeModel* rm) = 0;
@@ -236,6 +241,7 @@ public:
 	// Task
 	uint64_t eligible();
 	void run(cudaStream_t stream);
+	virtual void cancel() = 0;
 
 	// CudaAsyncTask
 	void process_completion();
@@ -262,6 +268,7 @@ public:
 	// Task
 	uint64_t eligible();
 	void run(cudaStream_t stream);
+	virtual void cancel() = 0;
 
 	// CudaAsyncTask
 	void process_completion();
@@ -287,6 +294,7 @@ public:
 	// Task
 	uint64_t eligible();
 	void run(cudaStream_t stream);
+	virtual void cancel() = 0;
 
 	// CudaAsyncTask
 	void process_completion();

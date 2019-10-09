@@ -17,6 +17,7 @@ class TestLoadModelFromDiskTask : public LoadModelFromDiskTask {
 public:
     bool is_success = false;
     bool is_error = false;
+    bool is_cancelled = false;
     RuntimeModel* rm;
     int status_code;
     std::string error_message;
@@ -31,6 +32,10 @@ public:
         } catch (TaskError &error) {
             this->error(error.status_code, error.message);
         }
+    }
+
+    void cancel() {
+        is_cancelled = true;
     }
 
     void success(RuntimeModel* rm) {
@@ -50,6 +55,7 @@ class TestLoadWeightsTask : public LoadWeightsTask {
 public:
     bool is_success = false;
     bool is_error = false;
+    bool is_cancelled = false;
     RuntimeModel* rm;
     int status_code;
     std::string error_message;
@@ -62,6 +68,10 @@ public:
         } catch (TaskError &error) {
             this->error(error.status_code, error.message);
         }
+    }
+
+    void cancel() {
+        is_cancelled = true;
     }
 
     void process_completion() {
@@ -89,6 +99,7 @@ class TestEvictWeightsTask : public EvictWeightsTask {
 public:
     bool is_success = false;
     bool is_error = false;
+    bool is_cancelled = false;
     RuntimeModel* rm;
     int status_code;
     std::string error_message;
@@ -101,6 +112,10 @@ public:
         } catch (TaskError &error) {
             this->error(error.status_code, error.message);
         }
+    }
+
+    void cancel() {
+        is_cancelled = true;
     }
 
     void success(RuntimeModel* rm) {
@@ -121,6 +136,7 @@ class TestCopyInputTask : public CopyInputTask {
 public:
     bool is_success = false;
     bool is_error = false;
+    bool is_cancelled = false;
     int status_code;
     std::string error_message;
     RuntimeModel* rm;
@@ -134,6 +150,10 @@ public:
         } catch (TaskError &error) {
             this->error(error.status_code, error.message);
         }
+    }
+
+    void cancel() {
+        is_cancelled = true;
     }
 
     void process_completion() {
@@ -162,6 +182,7 @@ class TestInferTask : public ExecTask {
 public:
     bool is_success = false;
     bool is_error = false;
+    bool is_cancelled = false;
     int status_code;
     std::string error_message;
 
@@ -173,6 +194,10 @@ public:
         } catch (TaskError &error) {
             this->error(error.status_code, error.message);
         }
+    }
+
+    void cancel() {
+        is_cancelled = true;
     }
 
     void process_completion() {
@@ -199,6 +224,7 @@ class TestCopyOutputTask : public CopyOutputTask {
 public:
     bool is_success = false;
     bool is_error = false;
+    bool is_cancelled = false;
     int status_code;
     std::string error_message;
 
@@ -210,6 +236,10 @@ public:
         } catch (TaskError &error) {
             this->error(error.status_code, error.message);
         }
+    }
+
+    void cancel() {
+        is_cancelled = true;
     }
 
     void process_completion() {
