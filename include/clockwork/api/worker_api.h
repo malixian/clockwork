@@ -37,10 +37,10 @@ namespace clockwork {
 namespace workerapi {
 
 /* Action types */
-const int loadWeightsAction = 0;
-const int evictWeightsAction = 1;
+const int loadModelFromDiskAction = 0;
+const int loadWeightsAction = 1;
 const int inferAction = 2;
-const int loadModelFromDiskAction = 3;
+const int evictWeightsAction = 3;
 
 class Action {
 public:
