@@ -68,8 +68,9 @@ public:
 
 	AsyncTaskChecker* checker;
 
+	// TODO: currently we've hard-coded a whole bunch of defaults -- 8GB cache, 16MB pages
+
 	ClockworkRuntime() {
-		// TODO: factor this out; for now hard-coded 8GB cache w/ 16MB pages
 		int page_size = 16 * 1024 * 1024;
 		int cache_size = 50 * page_size;
 		void* baseptr;
@@ -101,26 +102,9 @@ public:
 		delete checker;
 	}
 
-	void shutdown(bool await_completion) {
-		load_model_executor->shutdown();
-		weights_executor->shutdown();
-		inputs_executor->shutdown();
-		gpu_executor->shutdown();
-		outputs_executor->shutdown();
-		checker->shutdown();
-		if (await_completion) {
-			join();
-		}
-	}
+	void shutdown(bool await_completion);
 
-	void join() {
-		load_model_executor->join();
-		weights_executor->join();
-		inputs_executor->join();
-		gpu_executor->join();
-		outputs_executor->join();
-		checker->join();
-	}
+	void join();
 
 };
 

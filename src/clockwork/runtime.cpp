@@ -65,7 +65,6 @@ void AsyncTaskChecker::enqueue(AsyncTask* task) {
 
 void AsyncTaskChecker::shutdown() {
 	alive.store(false);
-	// TODO: notify queue waiters
 }
 
 void AsyncTaskChecker::join() {
@@ -79,12 +78,8 @@ void AsyncTaskChecker::executorMain(int executorId) {
 	util::initializeCudaStream();
 
 	std::vector<AsyncTask*> pending_tasks;
-	while (alive.load()) {
-		AsyncTask* next;
-		while (queue.try_pop(next)) {
-			pending_tasks.push_back(next);
-		}
-
+	while (alive.load() || pending_tasks.size() > 0) {
+		// Check completed tasks
 		std::vector<AsyncTask*> still_pending;
 		for (AsyncTask* task : pending_tasks) {
 			if (task->is_complete()) {
@@ -94,7 +89,46 @@ void AsyncTaskChecker::executorMain(int executorId) {
 			}
 		}
 		pending_tasks = still_pending;
+
+		// Drain any newly queued tasks
+		AsyncTask* next;
+		while (queue.try_pop(next)) {
+			pending_tasks.push_back(next);
+		}
 	}
+}
+
+void ClockworkRuntime::shutdown(bool await_completion) {
+	/* 
+	Stop executors.  They'll finish current tasks, prevent enqueueing
+	new tasks, and cancel tasks that haven't been started yet
+	*/
+	load_model_executor->shutdown();
+	weights_executor->shutdown();
+	inputs_executor->shutdown();
+	gpu_executor->shutdown();
+	outputs_executor->shutdown();
+	if (await_completion) {
+		join();
+	}
+}
+
+void ClockworkRuntime::join() {
+	/*
+	Wait for executors to be finished
+	*/
+	load_model_executor->join();
+	weights_executor->join();
+	inputs_executor->join();
+	gpu_executor->join();
+	outputs_executor->join();
+
+	/*
+	Only now do we stop the checker.  Async tasks might still be
+	outstanding, and we still want to wait for them to complete
+	*/
+	checker->shutdown();
+	checker->join();
 }
 
 }
