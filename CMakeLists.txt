@@ -207,42 +207,42 @@ add_library(proto ${PROTO_HDRS} ${PROTO_SRCS})
 target_link_libraries(proto INTERFACE ${Protobuf_LIBRARIES})
 
 
-# add_executable (worker_net
-#         src/network/worker_net.cpp
-#         src/network/message_rx.cc
-#         src/network/message_tx.cc
-#         src/network/message_conn.cc
-#         )
+add_executable (worker_net
+        src/network/worker_net.cpp
+        src/network/message_rx.cc
+        src/network/message_tx.cc
+        src/network/message_conn.cc
+        )
 
-# target_link_libraries(
-#         worker_net
-#         clockwork
-#         Threads::Threads
-#         dl
-#         cuda
-#         cudart
-#         tvm_runtime
-#         proto
-#         ${Boost_SYSTEM_LIBRARY}
-# )
+target_link_libraries(
+        worker_net
+        clockwork
+        Threads::Threads
+        dl
+        cuda
+        cudart
+        tvm_runtime
+        proto
+        ${Boost_SYSTEM_LIBRARY}
+)
 
 
-# add_executable (client_net
-#         src/network/client_net.cpp
-#         src/network/message_rx.cc
-#         src/network/message_tx.cc
-#         src/network/message_conn.cc
-#         )
+add_executable (client_net
+        src/network/client_net.cpp
+        src/network/message_rx.cc
+        src/network/message_tx.cc
+        src/network/message_conn.cc
+        )
 
-# target_link_libraries(
-#         client_net
-#         clockwork
-#         Threads::Threads
-#         dl
-#         cuda
-#         cudart
-#         tvm_runtime
-#         proto
-#         ${Boost_SYSTEM_LIBRARY}
-# )
+target_link_libraries(
+        client_net
+        clockwork
+        Threads::Threads
+        dl
+        cuda
+        cudart
+        tvm_runtime
+        proto
+        ${Boost_SYSTEM_LIBRARY}
+)
 

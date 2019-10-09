@@ -60,6 +60,12 @@ public:
     send_request(*ireq);
   }
 
+  virtual void evict(clockwork::clientapi::EvictRequest &request,
+      std::function<void(clockwork::clientapi::EvictResponse&)> callback)
+  {
+    throw "todo";
+  }
+
   /** This is a 'backdoor' API function for ease of experimentation */
   virtual void loadRemoteModel(clockwork::clientapi::LoadModelFromRemoteDiskRequest &request,
       std::function<void(clockwork::clientapi::LoadModelFromRemoteDiskResponse&)> callback)

@@ -36,6 +36,11 @@ public:
     callback(ir);
   }
 
+  virtual void evict(EvictRequest &request, std::function<void(EvictResponse&)> callback)
+  {
+    std::cerr << "evict()" << std::endl;
+  }
+
   virtual void loadRemoteModel(LoadModelFromRemoteDiskRequest &request, std::function<void(LoadModelFromRemoteDiskResponse&)> callback)
   {
     std::cerr << "loadRemoteModel()" << std::endl;
