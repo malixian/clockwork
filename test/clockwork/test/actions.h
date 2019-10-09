@@ -5,6 +5,7 @@
 #include "clockwork/util.h"
 #include "clockwork/test/util.h"
 #include "clockwork/model/model.h"
+#include "clockwork/worker.h"
 #include <memory>
 
 using namespace clockwork::model;
@@ -20,6 +21,8 @@ std::shared_ptr<workerapi::EvictWeights> evict_weights_action();
 std::shared_ptr<workerapi::Infer> infer_action();
 
 std::shared_ptr<workerapi::Infer> infer_action(Model* model);
+
+std::shared_ptr<workerapi::Infer> infer_action2(ClockworkWorker* worker);
 
 }
 

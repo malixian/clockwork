@@ -53,6 +53,21 @@ std::shared_ptr<workerapi::Infer> infer_action() {
     return action;
 }
 
+std::shared_ptr<workerapi::Infer> infer_action2(ClockworkWorker* worker) {
+    auto action = std::make_shared<workerapi::Infer>();
+    action->id = id_seed++;
+    action->action_type = workerapi::inferAction;
+    action->earliest = util::now();
+    action->latest = util::now() + 1000000000;
+    action->expected_duration = 0;
+    action->model_id = 0;
+    action->gpu_id = 0;
+    action->batch_size = 1;
+    action->input_size = 602112; // Hard coded for the example model
+    worker->runtime->manager->io_cache->take(action->input);
+    return action;
+}
+
 std::shared_ptr<workerapi::Infer> infer_action(Model* model) {
     auto action = infer_action();
     action->input_size = model->input_size();
