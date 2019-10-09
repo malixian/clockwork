@@ -444,3 +444,42 @@ TEST_CASE("Task Cancelled After Shutdown", "[action] [shutdown]") {
     delete load_weights;
     delete clockwork;
 }
+
+class TestLoadModelFromDiskActionThatDeletesItself : public LoadModelFromDiskAction {
+public:
+    TestAction &action_status;
+
+    TestLoadModelFromDiskActionThatDeletesItself(
+            ClockworkRuntime* runtime, 
+            std::shared_ptr<workerapi::LoadModelFromDisk> action, 
+            TestAction &action_status) : 
+        LoadModelFromDiskAction(runtime, action), action_status(action_status) {}
+
+    void success(std::shared_ptr<workerapi::LoadModelFromDiskResult> result) {
+        action_status.setsuccess();
+        delete this;
+    }
+
+    void error(std::shared_ptr<workerapi::ErrorResult> result) {
+        action_status.seterror(result);
+        delete this;
+    }
+
+};
+
+TEST_CASE("Task Action That Deletes Itself in Callback", "[action] [shutdown]") {
+    ClockworkRuntime* clockwork = make_runtime();
+
+    TestAction action_status;
+
+    auto action = load_model_from_disk_action();
+    action->model_path = "";
+    auto load_model = new TestLoadModelFromDiskActionThatDeletesItself(
+            clockwork, action, action_status);
+
+    load_model->submit();
+    action_status.await();
+    action_status.check_success(false, actionErrorInvalidModelPath);
+
+    delete_runtime(clockwork);
+}

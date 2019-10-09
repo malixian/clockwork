@@ -198,7 +198,6 @@ void LoadWeightsTask::run(cudaStream_t stream) {
 }
 
 void LoadWeightsTask::process_completion() {
-	telemetry->async_complete = util::hrt();
 	telemetry->async_duration = this->async_duration();
 
 	bool version_unchanged = false;
@@ -303,7 +302,6 @@ void CopyInputTask::run(cudaStream_t stream) {
 }
 
 void CopyInputTask::process_completion() {
-	telemetry->async_complete = util::hrt();
 	telemetry->async_duration = this->async_duration();
 	this->success(rm, workspace);
 }
@@ -351,7 +349,6 @@ void ExecTask::run(cudaStream_t stream) {
 }
 
 void ExecTask::process_completion() {
-	telemetry->async_complete = util::hrt();
 	telemetry->async_duration = this->async_duration();
 
 	rm->lock();
@@ -400,7 +397,6 @@ void CopyOutputTask::run(cudaStream_t stream) {
 }
 
 void CopyOutputTask::process_completion() {
-	telemetry->async_complete = util::hrt();
 	telemetry->async_duration = this->async_duration();
 
 	this->success(output);

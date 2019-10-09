@@ -109,16 +109,16 @@ public:
 
 class Task {
 public:
-	TaskTelemetry* telemetry;
+	std::shared_ptr<TaskTelemetry> telemetry;
 
-	Task() : telemetry(new TaskTelemetry()) {}
+	Task() : telemetry(std::make_shared<TaskTelemetry>()) {}
 
 	virtual uint64_t eligible() = 0;
 	virtual void run(cudaStream_t stream) = 0;
 	virtual void cancel() = 0;
 };
 
-class AsyncTask {
+class AsyncTask : public Task {
 public:
 	virtual bool is_complete() = 0;
 	virtual void process_completion() = 0;
@@ -173,7 +173,7 @@ public:
 
 };
 
-class LoadWeightsTask : public Task, public CudaAsyncTask {
+class LoadWeightsTask : public CudaAsyncTask {
 private:
 	int model_id;
 	RuntimeModel* rm;
@@ -222,7 +222,7 @@ public:
 
 };
 
-class CopyInputTask : public Task, public CudaAsyncTask {
+class CopyInputTask : public CudaAsyncTask {
 private:
 	MemoryManager* manager;
 
@@ -250,7 +250,7 @@ public:
 	virtual void success(RuntimeModel* rm, std::shared_ptr<Allocation> workspace) = 0;
 };
 
-class ExecTask : public Task, public CudaAsyncTask {
+class ExecTask : public CudaAsyncTask {
 private:
 	RuntimeModel* rm;
 	MemoryManager* manager;
@@ -277,7 +277,7 @@ public:
 	virtual void success() = 0;
 };
 
-class CopyOutputTask : public Task, public CudaAsyncTask {
+class CopyOutputTask : public CudaAsyncTask {
 private:
 	RuntimeModel* rm;
 	MemoryManager* manager;

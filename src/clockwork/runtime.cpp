@@ -39,9 +39,10 @@ void Executor::executorMain(int executorId) {
 		Task* next = queue.dequeue();
 
 		if (next != nullptr) {
-			next->telemetry->dequeued = util::hrt();
+			auto telemetry = next->telemetry;
+			telemetry->dequeued = util::hrt();
 			next->run(stream);
-			next->telemetry->exec_complete = util::hrt();
+			telemetry->exec_complete = util::hrt();
 		}
 	}
 
@@ -83,7 +84,9 @@ void AsyncTaskChecker::executorMain(int executorId) {
 		std::vector<AsyncTask*> still_pending;
 		for (AsyncTask* task : pending_tasks) {
 			if (task->is_complete()) {
+				auto telemetry = task->telemetry;
 				task->process_completion();
+				telemetry->async_complete = util::hrt();
 			} else {
 				still_pending.push_back(task);
 			}

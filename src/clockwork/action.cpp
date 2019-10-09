@@ -3,13 +3,13 @@
 
 namespace clockwork {
 
-void extract_timing_sync(workerapi::Timing* timing, TaskTelemetry* telemetry) {
+void extract_timing_sync(workerapi::Timing* timing, std::shared_ptr<TaskTelemetry> &telemetry) {
 	timing->begin = util::nanos(telemetry->dequeued);
 	timing->end = util::nanos(telemetry->exec_complete);
 	timing->duration = timing->end - timing->begin;
 }
 
-void extract_timing_async(workerapi::Timing* timing, TaskTelemetry* telemetry) {
+void extract_timing_async(workerapi::Timing* timing, std::shared_ptr<TaskTelemetry> &telemetry) {
 	timing->begin = util::nanos(telemetry->dequeued);
 	timing->end = util::nanos(telemetry->async_complete);
 	timing->duration = (uint64_t) (telemetry->async_duration * 1000000.0);
