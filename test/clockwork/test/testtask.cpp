@@ -142,7 +142,7 @@ public:
     RuntimeModel* rm;
     std::shared_ptr<Allocation> workspace;
 
-    TestCopyInputTask(MemoryManager* cache, int model_id, uint64_t earliest, uint64_t latest, char* input) : CopyInputTask(cache, model_id, earliest, latest, input), workspace(nullptr) {}
+    TestCopyInputTask(MemoryManager* cache, int model_id, uint64_t earliest, uint64_t latest, size_t input_size, char* input) : CopyInputTask(cache, model_id, earliest, latest, input_size, input), workspace(nullptr) {}
 
     void run(cudaStream_t stream) {
         try {
@@ -703,13 +703,40 @@ TEST_CASE("Copy Input", "[task]") {
 
     char* input = static_cast<char*>(malloc(model->input_size()));
 
-    TestCopyInputTask* copyinput = new TestCopyInputTask(cache, 0, 0, util::now() + 1000000000, input);
+    TestCopyInputTask* copyinput = new TestCopyInputTask(cache, 0, 0, util::now() + 1000000000, model->input_size(), input);
     copyinput->run(stream);
     while (!copyinput->is_complete());
     copyinput->process_completion();
 
     REQUIRE(copyinput->is_success);
     REQUIRE(!copyinput->is_error);
+
+    free(input);
+    delete copyinput;
+    delete cache;
+    delete rm;
+    delete model;
+    REQUIRE(cudaFree(pagecache->baseptr) == cudaSuccess);
+    delete pagecache;
+}
+
+TEST_CASE("Copy Input Wrong Size", "[task] [wrongsize]") {
+    Model* model = make_model();
+    RuntimeModel* rm = new RuntimeModel(model);
+    PageCache* pagecache = make_cache();
+    cudaStream_t stream = make_stream();
+    MemoryManager* cache = make_manager(pagecache);
+    cache->models->put(0, rm);
+
+    char* input = static_cast<char*>(malloc(10));
+
+    TestCopyInputTask* copyinput = new TestCopyInputTask(cache, 0, 0, util::now() + 1000000000, 10, input);
+    copyinput->run(stream);
+    while (!copyinput->is_complete());
+
+    REQUIRE(!copyinput->is_success);
+    REQUIRE(copyinput->is_error);
+    REQUIRE(copyinput->status_code == actionErrorInvalidInput);
 
     free(input);
     delete copyinput;
@@ -729,7 +756,7 @@ TEST_CASE("Copy Input Nonexistent Model", "[task]") {
     char* input = static_cast<char*>(malloc(model->input_size()));
 
     uint64_t now = util::now();
-    TestCopyInputTask* task = new TestCopyInputTask(cache, 0, now, util::now() + 1000000000, input);
+    TestCopyInputTask* task = new TestCopyInputTask(cache, 0, now, util::now() + 1000000000, model->input_size(), input);
 
     REQUIRE(task->eligible() == now);
 
@@ -769,7 +796,7 @@ TEST_CASE("Input and Infer", "[task]") {
 
     char* input = static_cast<char*>(malloc(model->input_size()));
 
-    TestCopyInputTask* copyinput = new TestCopyInputTask(cache, 0, 0, util::now() + 1000000000, input);
+    TestCopyInputTask* copyinput = new TestCopyInputTask(cache, 0, 0, util::now() + 1000000000, model->input_size(), input);
     copyinput->run(stream);
     REQUIRE(!copyinput->is_error);
     
@@ -808,7 +835,7 @@ TEST_CASE("Infer Without Weights", "[task]") {
 
     char* input = static_cast<char*>(malloc(model->input_size()));
 
-    TestCopyInputTask* copyinput = new TestCopyInputTask(cache, 0, 0, util::now() + 1000000000, input);
+    TestCopyInputTask* copyinput = new TestCopyInputTask(cache, 0, 0, util::now() + 1000000000, model->input_size(), input);
     copyinput->run(stream);
     REQUIRE(!copyinput->is_error);
     
@@ -869,7 +896,7 @@ TEST_CASE("Input Infer and Output", "[task]") {
 
     char* input = static_cast<char*>(malloc(model->input_size()));
 
-    TestCopyInputTask* copyinput = new TestCopyInputTask(cache, 0, 0, util::now() + 1000000000, input);
+    TestCopyInputTask* copyinput = new TestCopyInputTask(cache, 0, 0, util::now() + 1000000000, model->input_size(), input);
     copyinput->run(stream);
     REQUIRE(!copyinput->is_error);
     

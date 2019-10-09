@@ -23,7 +23,6 @@ void ClockworkWorker::join() {
 
 void ClockworkWorker::sendActions(std::vector<std::shared_ptr<workerapi::Action>> &actions) {
 	for (std::shared_ptr<workerapi::Action> action : actions) {
-		std::cout << "Received an action " << action->action_type << std::endl;
 		switch (action->action_type) {
 			case workerapi::loadModelFromDiskAction: loadModel(action); break;
 			case workerapi::loadWeightsAction: loadWeights(action); break;

@@ -230,6 +230,7 @@ InferAction::CopyInputTaskImpl::CopyInputTaskImpl(InferAction* infer) : CopyInpu
 		infer->action->model_id,
 		infer->copy_input_earliest(),
 		infer->action->latest,
+		infer->action->input_size,
 		infer->action->input), infer(infer) {
 }
 

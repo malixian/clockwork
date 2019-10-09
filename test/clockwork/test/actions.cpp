@@ -48,8 +48,8 @@ std::shared_ptr<workerapi::Infer> infer_action() {
     action->model_id = 0;
     action->gpu_id = 0;
     action->batch_size = 1;
-    action->input_size = 4000;
-    action->input = static_cast<char*>(malloc(4000));
+    action->input_size = 602112; // Hard coded for the example model
+    action->input = static_cast<char*>(malloc(602112));
     return action;
 }
 

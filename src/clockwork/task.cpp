@@ -261,8 +261,8 @@ void EvictWeightsTask::run(cudaStream_t stream) {
 }
 
 
-CopyInputTask::CopyInputTask(MemoryManager* manager, int model_id, uint64_t earliest, uint64_t latest, char* input) : 
-		manager(manager), model_id(model_id), earliest(earliest), latest(latest), input(input),
+CopyInputTask::CopyInputTask(MemoryManager* manager, int model_id, uint64_t earliest, uint64_t latest, size_t input_size, char* input) : 
+		manager(manager), model_id(model_id), earliest(earliest), latest(latest), input_size(input_size), input(input),
 		rm(nullptr), workspace(nullptr) {
 }
 
@@ -287,6 +287,10 @@ void CopyInputTask::run(cudaStream_t stream) {
 	rm = manager->models->get(model_id);
 	if (rm == nullptr) {
 		throw TaskError(actionErrorUnknownModel, "CopyInputTask could not find model with specified id");
+	}
+
+	if (rm->model->input_size() != input_size) {
+		throw TaskError(actionErrorInvalidInput, "CopyInputTask received incorrectly sized input");		
 	}
 
 	unsigned num_pages = rm->model->num_workspace_pages(manager->workspace_cache->page_size);

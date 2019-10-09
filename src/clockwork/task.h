@@ -228,6 +228,7 @@ private:
 
 	int model_id;
 	uint64_t earliest, latest;
+	size_t input_size;
 	char* input;
 
 	RuntimeModel* rm;
@@ -235,7 +236,7 @@ private:
 
 public:
 
-	CopyInputTask(MemoryManager* manager, int model_id, uint64_t earliest, uint64_t latest, char* input);
+	CopyInputTask(MemoryManager* manager, int model_id, uint64_t earliest, uint64_t latest, size_t input_size, char* input);
 	~CopyInputTask();
 
 	// Task

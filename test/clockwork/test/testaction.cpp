@@ -266,6 +266,58 @@ TEST_CASE("Infer Action", "[action] [infer_action]") {
     delete_runtime(clockwork);
 }
 
+TEST_CASE("Infer Action Wrong Input Size", "[action] [nomodel]") {
+    Model* model = make_model_for_action();
+    ClockworkRuntime* clockwork = make_runtime();
+
+    auto action = infer_action();
+    action->input_size = 10;
+    auto infer = new TestInferAction(clockwork, action);
+
+    infer->submit();
+    infer->await();
+    infer->check_success(false, actionErrorUnknownModel);
+
+    delete infer;
+    delete_runtime(clockwork);
+}
+
+TEST_CASE("Infer Action Nonexistent Model", "[action] [nomodel]") {
+    Model* model = make_model_for_action();
+    ClockworkRuntime* clockwork = make_runtime();
+
+    auto infer = new TestInferAction(clockwork, infer_action());
+
+    infer->submit();
+    infer->await();
+    infer->check_success(false, actionErrorUnknownModel);
+
+    delete infer;
+    delete_runtime(clockwork);
+}
+
+TEST_CASE("Infer Action Nonexistent Weights", "[action] [noweights]") {
+    Model* model = make_model_for_action();
+    ClockworkRuntime* clockwork = make_runtime();
+
+    auto load_model = new TestLoadModelFromDiskAction(clockwork, load_model_from_disk_action());
+
+    load_model->submit();
+    load_model->await();
+    load_model->check_success(true);
+
+    delete load_model;
+
+    auto infer = new TestInferAction(clockwork, infer_action());
+
+    infer->submit();
+    infer->await();
+    infer->check_success(false, actionErrorModelWeightsNotPresent);
+
+    delete infer;
+    delete_runtime(clockwork);
+}
+
 // TEST_CASE("Infer Action Multiple", "[action] [infer_action_multiple]") {
 //     Model* model = make_model_for_action();
 //     ClockworkRuntime* clockwork = make_runtime();
