@@ -17,7 +17,8 @@ Model::Model(Memfile so_memfile, std::string &serialized_spec, int weights_size,
 }
 
 Model::~Model() {
-	// CUDA_CALL(cudaFreeHost(weights_pinned_host_memory));
+	if (hot_so != nullptr) uninstantiate_model_on_device();
+	if (warm_so != nullptr) uninstantiate_model_on_host();
 }
 
 void Model::instantiate_model_on_host() {
@@ -218,6 +219,16 @@ void Model::call_op_exec(OpExec &op, std::vector<char*> &pages) {
 	CHECK_EQ(ret, 0) << TVMGetLastError();
 }
 
+// TODO: should use managed memory for host-side weights rather than using cudaMallocHost
+
+DiskModel::DiskModel(Memfile so_memfile, std::string &serialized_spec, int weights_size, char* weights_pinned_host_memory) :
+		Model(so_memfile, serialized_spec, weights_size, weights_pinned_host_memory) {
+}
+
+DiskModel::~DiskModel() {
+	CUDA_CALL(cudaFreeHost(weights_pinned_host_memory));
+}
+
 Model* Model::loadFromDisk(
 		std::string so_filename, 
 		std::string clockwork_filename,
@@ -235,7 +246,7 @@ Model* Model::loadFromDisk(
 	CUDA_CALL(cudaMallocHost(&weights_pinned_host_memory, weights_size));
 	std::memcpy(weights_pinned_host_memory, weights.data(), weights_size);
 
-	return new Model(
+	return new DiskModel(
 		so_memfile, 
 		clockwork_serialized_spec, 
 		weights_size, 
