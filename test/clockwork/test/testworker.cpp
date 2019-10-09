@@ -26,7 +26,6 @@ public:
     std::shared_ptr<workerapi::Result> awaitResult() {
         std::shared_ptr<workerapi::Result> result;
         while (!results.try_pop(result));
-        std::cout << result->str() << std::endl;
         return result;
     }
 

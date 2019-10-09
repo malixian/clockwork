@@ -71,9 +71,11 @@ public:
 	// TODO: currently we've hard-coded a whole bunch of defaults -- 10GB cache, 16MB pages
 
 	ClockworkRuntime() {
-		size_t cache_size = 10L * 1024L * 1024L * 1024L; // 10 GB hard-coded for now
-		PageCache* cache = make_GPU_cache(cache_size);
-		manager = new MemoryManager(cache);
+		size_t weights_cache_size = 10L * 1024L * 1024L * 1024L; // 10 GB hard-coded weights cache for now
+		size_t workspace_cache_size = 512L * 1024L * 1024L; // Shouldn't need too much workspace cache
+		PageCache* weights_cache = make_GPU_cache(weights_cache_size);
+		PageCache* workspace_cache = make_GPU_cache(workspace_cache_size);
+		manager = new MemoryManager(weights_cache, workspace_cache);
 
 	    load_model_executor = new Executor(CPU);
 		weights_executor = new Executor(PCIe_H2D_Weights);

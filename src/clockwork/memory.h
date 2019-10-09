@@ -47,25 +47,9 @@ public:
 	PageCache* workspace_cache;
 	ModelStore* models;
 
-	MemoryManager(PageCache* cache) : 
-				weights_cache(cache), 
-				workspace_cache(cache), 
-				models(new ModelStore()) {
-	}
-
-	MemoryManager(PageCache* weights_cache, PageCache* workspace_cache) : 
-				weights_cache(weights_cache), 
-				workspace_cache(workspace_cache), 
-				models(new ModelStore()) {
-	}
-
-	~MemoryManager() {
-		delete models;
-		if (weights_cache != workspace_cache) {
-			delete weights_cache;
-		}
-		delete workspace_cache;
-	}
+	MemoryManager(PageCache* cache);
+	MemoryManager(PageCache* weights_cache, PageCache* workspace_cache);
+	~MemoryManager();
 };
 
 class CUDAPageCache : public PageCache {

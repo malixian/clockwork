@@ -79,6 +79,26 @@ bool ModelStore::put_if_absent(int model_id, RuntimeModel* model) {
 	return did_put;
 }
 
+MemoryManager::MemoryManager(PageCache* cache) : 
+			weights_cache(cache), 
+			workspace_cache(cache), 
+			models(new ModelStore()) {
+}
+
+MemoryManager::MemoryManager(PageCache* weights_cache, PageCache* workspace_cache) : 
+			weights_cache(weights_cache), 
+			workspace_cache(workspace_cache), 
+			models(new ModelStore()) {
+}
+
+MemoryManager::~MemoryManager() {
+	delete models;
+	if (weights_cache != workspace_cache) {
+		delete weights_cache;
+	}
+	delete workspace_cache;
+}
+
 CUDAPageCache::CUDAPageCache(char* baseptr, uint64_t total_size, uint64_t page_size, const bool allowEvictions) :
 		PageCache(baseptr, total_size, page_size, allowEvictions) {
 }
