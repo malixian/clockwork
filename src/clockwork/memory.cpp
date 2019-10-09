@@ -105,8 +105,7 @@ MemoryManager::~MemoryManager() {
 IOCache::IOCache(size_t total_size, size_t page_size) : page_size(page_size) {
 	total_size = page_size * (total_size / page_size);
 	CUDA_CALL(cudaMallocHost(&baseptr, total_size));
-	size_t offset = 0;
-	while (offset < total_size) {
+	for (size_t offset = 0; offset < total_size; offset += page_size) {
 		ptrs.push(baseptr + offset);
 	}
 }
