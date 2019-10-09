@@ -10,6 +10,7 @@
 #include "clockwork/task.h"
 #include "clockwork/action.h"
 #include <catch2/catch.hpp>
+#include "clockwork/test/actions.h"
 
 using namespace clockwork;
 using namespace clockwork::model;
@@ -126,55 +127,6 @@ Model* make_model_for_action() {
     model->instantiate_model_on_host();
     model->instantiate_model_on_device();
     return model;
-}
-
-std::shared_ptr<workerapi::LoadModelFromDisk> load_model_from_disk_action() {
-    auto action = std::make_shared<workerapi::LoadModelFromDisk>();
-    action->id = 0;
-    action->action_type = workerapi::loadModelFromDiskAction;
-    action->model_id = 0;
-    action->model_path = clockwork::util::get_example_model();
-    action->earliest = util::now();
-    action->latest = util::now() + 1000000000;
-    return action;
-}
-
-std::shared_ptr<workerapi::LoadWeights> load_weights_action() {
-    auto action = std::make_shared<workerapi::LoadWeights>();
-    action->id = 0;
-    action->action_type = workerapi::loadWeightsAction;
-    action->earliest = util::now();
-    action->latest = util::now() + 1000000000;
-    action->expected_duration = 0;
-    action->model_id = 0;
-    action->gpu_id = 0;
-    return action;
-}
-
-std::shared_ptr<workerapi::EvictWeights> evict_weights_action() {
-    auto action = std::make_shared<workerapi::EvictWeights>();
-    action->id = 0;
-    action->action_type = workerapi::evictWeightsAction;
-    action->earliest = util::now();
-    action->latest = util::now() + 1000000000;
-    action->model_id = 0;
-    action->gpu_id = 0;
-    return action;
-}
-
-std::shared_ptr<workerapi::Infer> infer_action(Model* model) {
-    auto action = std::make_shared<workerapi::Infer>();
-    action->id = 0;
-    action->action_type = workerapi::evictWeightsAction;
-    action->earliest = util::now();
-    action->latest = util::now() + 1000000000;
-    action->expected_duration = 0;
-    action->model_id = 0;
-    action->gpu_id = 0;
-    action->batch_size = 1;
-    action->input_size = model->input_size();
-    action->input = static_cast<char*>(malloc(model->input_size()));
-    return action;
 }
 
 TEST_CASE("Load Model From Disk Action", "[action] [loadmodel_action]") {

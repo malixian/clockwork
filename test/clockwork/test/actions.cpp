@@ -1,0 +1,63 @@
+#include "clockwork/test/actions.h"
+
+namespace clockwork {
+
+std::atomic_int id_seed = 0;
+
+std::shared_ptr<workerapi::LoadModelFromDisk> load_model_from_disk_action() {
+    auto action = std::make_shared<workerapi::LoadModelFromDisk>();
+    action->id = id_seed++;
+    action->action_type = workerapi::loadModelFromDiskAction;
+    action->model_id = 0;
+    action->model_path = clockwork::util::get_example_model();
+    action->earliest = util::now();
+    action->latest = util::now() + 1000000000;
+    return action;
+}
+
+std::shared_ptr<workerapi::LoadWeights> load_weights_action() {
+    auto action = std::make_shared<workerapi::LoadWeights>();
+    action->id = id_seed++;
+    action->action_type = workerapi::loadWeightsAction;
+    action->earliest = util::now();
+    action->latest = util::now() + 1000000000;
+    action->expected_duration = 0;
+    action->model_id = 0;
+    action->gpu_id = 0;
+    return action;
+}
+
+std::shared_ptr<workerapi::EvictWeights> evict_weights_action() {
+    auto action = std::make_shared<workerapi::EvictWeights>();
+    action->id = id_seed++;
+    action->action_type = workerapi::evictWeightsAction;
+    action->earliest = util::now();
+    action->latest = util::now() + 1000000000;
+    action->model_id = 0;
+    action->gpu_id = 0;
+    return action;
+}
+
+std::shared_ptr<workerapi::Infer> infer_action() {
+    auto action = std::make_shared<workerapi::Infer>();
+    action->id = id_seed++;
+    action->action_type = workerapi::inferAction;
+    action->earliest = util::now();
+    action->latest = util::now() + 1000000000;
+    action->expected_duration = 0;
+    action->model_id = 0;
+    action->gpu_id = 0;
+    action->batch_size = 1;
+    action->input_size = 4000;
+    action->input = static_cast<char*>(malloc(4000));
+    return action;
+}
+
+std::shared_ptr<workerapi::Infer> infer_action(Model* model) {
+    auto action = infer_action();
+    action->input_size = model->input_size();
+    action->input = static_cast<char*>(malloc(model->input_size()));
+    return action;
+}
+
+}

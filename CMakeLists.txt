@@ -153,8 +153,10 @@ include_directories(test)
 add_executable (tests
 	test/tests.cpp
 	test/clockwork/test/util.cpp
+	test/clockwork/test/actions.cpp
 	test/clockwork/test/testtask.cpp
 	test/clockwork/test/testaction.cpp
+	test/clockwork/test/testworker.cpp
 	test/clockwork/test/testcache.cpp
 	test/clockwork/test/testpriorityqueue.cpp
 	test/clockwork/test/testclient.cpp

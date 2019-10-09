@@ -402,7 +402,7 @@ void CopyOutputTask::run(cudaStream_t stream) {
 void CopyOutputTask::process_completion() {
 	telemetry->async_complete = util::hrt();
 	telemetry->async_duration = this->async_duration();
-	
+
 	this->success(output);
 }
 
