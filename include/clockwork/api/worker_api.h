@@ -16,6 +16,7 @@ execute at specific times.
 const int actionSuccess = 0; // Action completed successfully
 const int actionCancelled = 1; // Action cancelled for some other reason
 const int actionErrorRuntimeError = 2; // Action cancelled due to runtime error
+const int actionErrorShuttingDown = 3; // Action cancelled due to clockwork shutting down
 
 const int actionErrorUnknownModel = 10; // Action requested an unknown model
 const int actionErrorCouldNotStartInTime = 11; // Action dropped because it could not be executed in time
