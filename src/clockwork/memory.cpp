@@ -1,4 +1,5 @@
 #include "clockwork/memory.h"
+#include "tvm/runtime/cuda_common.h"
 
 namespace clockwork {
 
@@ -76,6 +77,21 @@ bool ModelStore::put_if_absent(int model_id, RuntimeModel* model) {
 	in_use.clear();
 
 	return did_put;
+}
+
+CUDAPageCache::CUDAPageCache(char* baseptr, uint64_t total_size, uint64_t page_size, const bool allowEvictions) :
+		PageCache(baseptr, total_size, page_size, allowEvictions) {
+}
+
+CUDAPageCache::~CUDAPageCache() {
+	CUDA_CALL(cudaFree(this->baseptr));
+}
+
+PageCache* make_GPU_cache(size_t cache_size, size_t page_size) {
+	cache_size = page_size * (cache_size / page_size);
+	void* baseptr;
+	CUDA_CALL(cudaMalloc(&baseptr, cache_size));
+	return new CUDAPageCache(static_cast<char*>(baseptr), cache_size, page_size, false);
 }
 
 }

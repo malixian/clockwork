@@ -25,6 +25,10 @@ public:
 	LinkedListElement<T>* head = nullptr;
 	LinkedListElement<T>* tail = nullptr;
 
+	~LinkedList() {
+		while (popHead() != nullptr);
+	}
+
 	bool isEmpty() {
 		return head==nullptr;
 	}
@@ -127,6 +131,7 @@ public:
 	LinkedList<std::shared_ptr<Allocation>> lockedAllocations, unlockedAllocations;
 
 	PageCache(char* baseptr, uint64_t total_size, uint64_t page_size, const bool allowEvictions = true);
+	virtual ~PageCache() {}
 
 	/* 
 	Locks the allocation if it hasn't been evicted

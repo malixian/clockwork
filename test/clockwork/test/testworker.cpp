@@ -55,6 +55,7 @@ TEST_CASE("Test Worker", "[worker]") {
     controller->expect(actionSuccess);
 
     worker->shutdown(true);
+    delete worker;
 }
 
 TEST_CASE("Test Infer No Weights", "[worker] [noweights]") {
@@ -73,6 +74,7 @@ TEST_CASE("Test Infer No Weights", "[worker] [noweights]") {
     controller->expect(actionErrorModelWeightsNotPresent);
 
     worker->shutdown(true);
+    delete worker;
 }
 
 TEST_CASE("Test Infer Weights Not There Yet", "[worker] [noweights]") {
@@ -93,6 +95,7 @@ TEST_CASE("Test Infer Weights Not There Yet", "[worker] [noweights]") {
     controller->expect(actionSuccess);
 
     worker->shutdown(true);
+    delete worker;
 }
 
 TEST_CASE("Test Infer Invalid Input", "[worker] [invalid]") {
@@ -113,6 +116,7 @@ TEST_CASE("Test Infer Invalid Input", "[worker] [invalid]") {
     controller->expect(actionErrorInvalidInput);
 
     worker->shutdown(true);
+    delete worker;
 }
 
 TEST_CASE("Test Infer Invalid Input Size", "[worker] [invalid]") {
@@ -133,6 +137,7 @@ TEST_CASE("Test Infer Invalid Input Size", "[worker] [invalid]") {
     controller->expect(actionErrorInvalidInput);
 
     worker->shutdown(true);
+    delete worker;
 }
 
 TEST_CASE("Test Worker E2E Simple", "[worker] [e2esimple]") {
@@ -163,6 +168,7 @@ TEST_CASE("Test Worker E2E Simple", "[worker] [e2esimple]") {
     controller->expect(actionSuccess);
 
     worker->shutdown(true);
+    delete worker;
 }
 
 TEST_CASE("Test Worker E2E Timed Success", "[worker]") {
@@ -192,4 +198,5 @@ TEST_CASE("Test Worker E2E Timed Success", "[worker]") {
     }
 
     worker->shutdown(true);
+    delete worker;
 }

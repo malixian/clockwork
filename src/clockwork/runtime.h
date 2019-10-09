@@ -68,19 +68,12 @@ public:
 
 	AsyncTaskChecker* checker;
 
-	// TODO: currently we've hard-coded a whole bunch of defaults -- 8GB cache, 16MB pages
+	// TODO: currently we've hard-coded a whole bunch of defaults -- 10GB cache, 16MB pages
 
 	ClockworkRuntime() {
-		int page_size = 16 * 1024 * 1024;
-		int cache_size = 50 * page_size;
-		void* baseptr;
-    	CUDA_CALL(cudaMalloc(&baseptr, cache_size));
-    	PageCache* cache = new PageCache(static_cast<char*>(baseptr), cache_size, page_size, false);
-
-		manager = new MemoryManager();
-	    manager->weights_cache = cache;
-	    manager->workspace_cache = cache;
-	    manager->models = new ModelStore();
+		size_t cache_size = 10L * 1024L * 1024L * 1024L; // 10 GB hard-coded for now
+		PageCache* cache = make_GPU_cache(cache_size);
+		manager = new MemoryManager(cache);
 
 	    load_model_executor = new Executor(CPU);
 		weights_executor = new Executor(PCIe_H2D_Weights);
@@ -91,9 +84,7 @@ public:
 	}
 
 	~ClockworkRuntime() {
-		delete manager->models;
-		CUDA_CALL(cudaFree(manager->weights_cache->baseptr));
-		delete manager->weights_cache;
+		delete manager;
 		delete load_model_executor;
 		delete weights_executor;
 		delete inputs_executor;

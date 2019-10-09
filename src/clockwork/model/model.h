@@ -67,7 +67,7 @@ private:
 	so::TVMHotSharedObject* hot_so = nullptr;
 
 public:
-	~Model();
+	virtual ~Model();
 
 	/* Preconditions: none */
 	void instantiate_model_on_host();
