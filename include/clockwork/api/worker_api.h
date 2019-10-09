@@ -47,6 +47,8 @@ class Action {
 public:
 	int id;
 	int action_type;
+
+	virtual std::string str() = 0;
 };
 
 class LoadModelFromDisk : public Action {
@@ -55,6 +57,8 @@ public:
 	std::string model_path;
 	uint64_t earliest;
 	uint64_t latest;
+
+	virtual std::string str();
 };
 
 class LoadWeights : public Action {
@@ -65,6 +69,8 @@ public:
 
 	int model_id;
 	int gpu_id;
+	
+	virtual std::string str();
 };
 
 class EvictWeights : public Action {
@@ -74,6 +80,8 @@ public:
 
 	int model_id;
 	int gpu_id;
+	
+	virtual std::string str();
 };
 
 class Infer : public Action {
@@ -87,6 +95,8 @@ public:
 	int batch_size;
 	int input_size;
 	char* input;
+	
+	virtual std::string str();
 };
 
 class Result {
@@ -94,11 +104,15 @@ public:
 	int id;
 	int action_type;
 	int status;
+	
+	virtual std::string str() = 0;
 };
 
 class ErrorResult : public Result {
 public:
 	std::string message;
+	
+	virtual std::string str();
 };
 
 class Timing {
@@ -106,6 +120,8 @@ public:
 	uint64_t begin;
 	uint64_t end;
 	uint64_t duration; // For async tasks this is NOT end-begin
+	
+	virtual std::string str();
 };
 
 class LoadModelFromDiskResult : public Result, public Timing {
@@ -117,14 +133,20 @@ public:
 	size_t weights_size_in_cache;
 
 	// TODO: put some measurements like weight load time and exec time here
+	
+	virtual std::string str();
 };
 
 class LoadWeightsResult : public Result, public Timing {
 public:
+	
+	virtual std::string str();
 };
 
 class EvictWeightsResult : public Result, public Timing {
 public:
+	
+	virtual std::string str();
 };
 
 class InferResult : public Result {
@@ -134,6 +156,8 @@ public:
 	Timing copy_output;
 	int output_size;
 	char* output;
+	
+	virtual std::string str();
 };
 
 // TODO: upload model action or RPC possibly

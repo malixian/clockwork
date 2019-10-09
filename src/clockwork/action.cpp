@@ -5,7 +5,7 @@ namespace clockwork {
 
 void extract_timing_sync(workerapi::Timing* timing, std::shared_ptr<TaskTelemetry> &telemetry) {
 	timing->begin = util::nanos(telemetry->dequeued);
-	timing->end = util::nanos(telemetry->exec_complete);
+	timing->end = util::now();
 	timing->duration = timing->end - timing->begin;
 }
 
