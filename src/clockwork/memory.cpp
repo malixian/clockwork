@@ -83,20 +83,12 @@ MemoryManager::MemoryManager(PageCache* cache) :
 			weights_cache(cache), 
 			workspace_cache(cache), 
 			models(new ModelStore()) {
-	// More hardcoding.  io_cache is used for model inputs and outputs only.
-	size_t io_cache_size = 512L * 1024L * 1024L; // 512MB staging area
-	size_t io_page_size = 16L * 1024L * 1024L; // 16MB pages
-	this->io_cache = make_IO_cache(io_cache_size, io_page_size);
 }
 
 MemoryManager::MemoryManager(PageCache* weights_cache, PageCache* workspace_cache) : 
 			weights_cache(weights_cache), 
 			workspace_cache(workspace_cache), 
 			models(new ModelStore()) {
-	// More hardcoding.  io_cache is used for model inputs and outputs only.
-	size_t io_cache_size = 512L * 1024L * 1024L; // 512MB staging area
-	size_t io_page_size = 16L * 1024L * 1024L; // 16MB pages
-	this->io_cache = make_IO_cache(io_cache_size, io_page_size);
 }
 
 MemoryManager::~MemoryManager() {
@@ -105,8 +97,6 @@ MemoryManager::~MemoryManager() {
 		delete weights_cache;
 	}
 	delete workspace_cache;
-	CUDA_CALL(cudaFreeHost(io_cache->baseptr));
-	delete io_cache;
 }
 
 CUDAPageCache::CUDAPageCache(char* baseptr, uint64_t total_size, uint64_t page_size, const bool allowEvictions) :
@@ -115,12 +105,6 @@ CUDAPageCache::CUDAPageCache(char* baseptr, uint64_t total_size, uint64_t page_s
 
 CUDAPageCache::~CUDAPageCache() {
 	CUDA_CALL(cudaFree(this->baseptr));
-}
-
-PageCache* make_IO_cache(size_t cache_size, size_t page_size) {
-	void* baseptr;
-	CUDA_CALL(cudaMallocHost(&baseptr, cache_size));
-	return new PageCache(static_cast<char*>(baseptr), cache_size, page_size, false);	
 }
 
 PageCache* make_GPU_cache(size_t cache_size, size_t page_size) {

@@ -45,7 +45,6 @@ class MemoryManager {
 public:
 	PageCache* weights_cache;
 	PageCache* workspace_cache;
-	PageCache* io_cache;
 	ModelStore* models;
 
 	MemoryManager(PageCache* cache);
@@ -59,7 +58,6 @@ public:
 	~CUDAPageCache();
 };
 
-PageCache* make_IO_cache(size_t cache_size, size_t page_size);
 PageCache* make_GPU_cache(size_t cache_size, size_t page_size = 16777216);
 
 }
