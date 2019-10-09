@@ -115,8 +115,7 @@ ClockworkRuntime* make_runtime() {
 }
 
 void delete_runtime(ClockworkRuntime* runtime) {
-    runtime->shutdown();
-    runtime->join();
+    runtime->shutdown(true);
     delete runtime;
 }
 

@@ -101,13 +101,16 @@ public:
 		delete checker;
 	}
 
-	void shutdown() {
+	void shutdown(bool await_completion) {
 		load_model_executor->shutdown();
 		weights_executor->shutdown();
 		inputs_executor->shutdown();
 		gpu_executor->shutdown();
 		outputs_executor->shutdown();
 		checker->shutdown();
+		if (await_completion) {
+			join();
+		}
 	}
 
 	void join() {
