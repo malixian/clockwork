@@ -6,23 +6,6 @@
 
 namespace clockwork {
 
-
-RuntimeModel::RuntimeModel(model::Model* model) : model(model), in_use(ATOMIC_FLAG_INIT), weights(nullptr), version(0) {
-}
-
-bool RuntimeModel::try_lock() {
-	return !in_use.test_and_set();
-}
-
-void RuntimeModel::lock() {
-	while (!try_lock());
-}
-
-void RuntimeModel::unlock() {
-	in_use.clear();
-}
-
-
 class CudaEventPool {
 public:
 	tbb::concurrent_queue<cudaEvent_t> events;

@@ -7,105 +7,13 @@
 #include "clockwork/telemetry.h"
 #include "clockwork/cache.h"
 #include "clockwork/model/model.h"
+#include "clockwork/memory.h"
 
 /*
 This file contains logic for executing models directly
 */
 
 namespace clockwork {
-
-class RuntimeModel {
-public:
-	model::Model* model;
-	std::atomic_flag in_use;
-	int version;
-	std::shared_ptr<Allocation> weights;
-
-	RuntimeModel(model::Model* model);
-
-	bool try_lock();
-	void lock();
-	void unlock();
-
-};
-
-class ModelStore {
-private:
-	std::atomic_flag in_use;
-	std::unordered_map<int, RuntimeModel*> models;
-
-public:
-
-	ModelStore() : in_use(ATOMIC_FLAG_INIT) {}
-
-	~ModelStore() {
-		while (in_use.test_and_set());
-
-		for (auto &p : models) {
-			RuntimeModel* rm = p.second;
-			if (rm != nullptr) {
-				// TODO: models are definitely not always on device or host
-				rm->model->uninstantiate_model_on_device();
-				rm->model->uninstantiate_model_on_host();
-				delete rm->model;
-				delete rm;
-			}
-		}
-
-		// Let callers hang here to aid in use-after-free
-		// in_use.clear();
-	}
-
-	RuntimeModel* get(int model_id) {
-		while (in_use.test_and_set());
-
-		RuntimeModel* rm = models[model_id];
-
-		in_use.clear();
-
-		return rm;
-	}
-
-	bool contains(int model_id) {
-		while (in_use.test_and_set());
-
-		RuntimeModel* rm = models[model_id];
-
-		in_use.clear();
-
-		return rm != nullptr;
-	}
-
-	void put(int model_id, RuntimeModel* model) {
-		while (in_use.test_and_set());
-
-		models[model_id] = model;
-
-		in_use.clear();
-	}
-
-	bool put_if_absent(int model_id, RuntimeModel* model) {
-		while (in_use.test_and_set());
-
-		bool did_put = false;
-		if (models[model_id] == nullptr) {
-			models[model_id] = model;
-			did_put = true;
-		}
-
-		in_use.clear();
-
-		return did_put;
-	}
-
-};
-
-class MemoryManager {
-public:
-	PageCache* weights_cache;
-	PageCache* workspace_cache;
-	ModelStore* models;
-};
 
 class Task {
 public:
