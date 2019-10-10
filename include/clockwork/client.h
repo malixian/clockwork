@@ -1,6 +1,7 @@
 #ifndef _CLOCKWORK_CLIENT_H_
 #define _CLOCKWORK_CLIENT_H_
 
+#include <future>
 #include <functional>
 #include <string>
 
@@ -10,48 +11,68 @@ This is the user-facing Clockwork Client
 
 namespace clockwork {
 
-/** A super simple representation of a model -- blobs of data */
+/* Represents a model that can be inferred */
 class ClockworkModel {
 public:
-	std::string so, params, clockwork;
+	int model_id;
+	int input_size;
 
-	static ClockworkModel* LoadFromLocalDisk(std::string &so_filename, std::string &params_filename, std::string &clockwork_filename);
+	/* 
+	Perform an inference with the provided input and return the output.
+	Blocks until the inference has completed.
+	Can throw exceptions.
+	*/
+	virtual std::vector<uint8_t> infer(std::vector<uint8_t> &input) = 0;
+
+	/*
+	Asynchronous version of infer.
+	Performans an inference on the provided input.
+	Returns a future that will receive the result of the inference (the output size and the output)
+	If an exception occurs, it will be thrown by calls to future.get().
+	*/
+	virtual std::future<std::vector<uint8_t>> infer_async(std::vector<uint8_t> &input) = 0;
+
+	/*
+	This is a backdoor API call that's useful for testing.
+	Instructs the server to evict the weights of this model from the GPU.
+	Will throw an exception is the weights aren't loaded.
+	*/
+	virtual void evict() = 0;
+	virtual std::future<void> evict_async() = 0;
+
 };
 
-class Client;
-class LocalClient;
-class RemoteClient;
-
-class Client {
+/* 
+Represents a client to Clockwork 
+Clockwork can be either local or remote,
+and Clockwork can have multiple clients
+*/
+class ClockworkClient {
 public:
 
-	/** The proper way of uploading a model will be to send it an ONNX file,
-	where it will be compiled remotely.  For now we'll pre-compile clockwork
-	models.  This is the synchronous version.  On error, will throw an exception. */
-	void uploadModel(ClockworkModel* model, int &model_id);
+	/*
+	Gets an existing ClockworkModel from Clockwork that can then be inferenced.
+	Can throw exceptions including if the model doesn't exist.
+	*/
+	virtual ClockworkModel* get_model(int model_id) = 0;
+	virtual std::future<ClockworkModel*> get_model_async(int model_id) = 0;
 
-	/** Asynchronous version of uploadModel.
-	On success, callback will be called with the model id.
-	On error, errback will be called with the status code and the error message */
-	void uploadModelAsync(ClockworkModel* model, std::function<void(int)> callback, std::function<void(int, std::string)> errback);
+	/*
+	Uploads a model to Clockwork.  Returns a ClockworkModel for the model
+	Can throw exceptions including if the model is invalid
+	*/
+	virtual ClockworkModel* upload_model(std::vector<uint8_t> &serialized_model) = 0;
+	virtual std::future<ClockworkModel*> upload_model_async(std::vector<uint8_t> &serialized_model) = 0;
 
-	/** From the client's perspective this is the only API call for inference */
-	void infer(int model_id, size_t inputSize, void* input, size_t* outputSize, void** output);
-
-	/** Asynchronous version of infer.
-	On success, callback will be called with the output.
-	On error, errback will be called with the status code and the error message */
-	void inferAsync(int model_id, size_t inputSize, void* input, std::function<void(size_t, void*)> callback, std::function<void(int, std::string)> errback);
-
-	/** Connect to a clockwork instance over the network */
-	static RemoteClient* ConnectTo(std::string hostname, int port);
-
-	/** Connect to a clockwork instance running on the local machine */
-	static LocalClient* Local(); // TODO TODO this
 };
 
-class LocalClient : public Client{};
-class RemoteClient : public Client{};
+class Clockwork {
+public:
+
+	/* Connect to a Clockwork instance */
+	static ClockworkClient* Connect(std::string &hostname, int port);
+
+};
 
 }
 
