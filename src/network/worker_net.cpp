@@ -95,7 +95,7 @@ protected:
             delete api_req;
 
             msg_inference_res_tx *ir_tx = new msg_inference_res_tx(msg_id);
-            ir_tx->msg.set_status(res.header.status);
+            ir_tx->msg.mutable_header()->set_status(res.header.status);
             ir_tx->msg.set_model_id(res.model_id);
             ir_tx->msg.set_batch_size(res.batch_size);
             ir_tx->set_outputs(res.output, res.output_size);

@@ -4,6 +4,7 @@
 #include <iostream>
 #include <string>
 
+#include "clockwork/network/client_api.h"
 #include <clockwork/network.h>
 #include <clockwork.pb.h>
 
@@ -106,7 +107,7 @@ protected:
 class msg_load_model_req_tx :
   public msg_protobuf_tx<
     clockwork::ModelLoadRequest,
-    clockwork::REQ_MODEL_LOAD>
+    clockwork::REQ_UPLOAD_MODEL>
 {
 public:
   msg_load_model_req_tx(uint64_t req_id)
@@ -162,7 +163,7 @@ private:
 class msg_load_model_req_rx :
   public msg_protobuf_rx<
     clockwork::ModelLoadRequest,
-    clockwork::REQ_MODEL_LOAD>
+    clockwork::REQ_UPLOAD_MODEL>
 {
 public:
   msg_load_model_req_rx(uint64_t req_id, size_t body_len)
@@ -246,7 +247,7 @@ private:
 class msg_load_model_res_tx :
   public msg_protobuf_tx<
     clockwork::ModelLoadResponse,
-    clockwork::RES_MODEL_LOAD>
+    clockwork::RSP_UPLOAD_MODEL>
 {
 public:
   msg_load_model_res_tx(uint64_t req_id) :
@@ -256,7 +257,7 @@ public:
 class msg_load_model_res_rx :
   public msg_protobuf_rx<
     clockwork::ModelLoadResponse,
-    clockwork::RES_MODEL_LOAD>
+    clockwork::RSP_UPLOAD_MODEL>
 {
 public:
   msg_load_model_res_rx(uint64_t req_id, size_t body_len)
@@ -268,7 +269,7 @@ public:
 class msg_inference_req_tx :
   public msg_protobuf_tx<
     clockwork::ModelInferenceRequest,
-    clockwork::REQ_MODEL_INFERENCE>
+    clockwork::REQ_INFERENCE>
 {
 public:
   msg_inference_req_tx(uint64_t req_id)
@@ -298,7 +299,7 @@ private:
 class msg_inference_req_rx :
   public msg_protobuf_rx<
     clockwork::ModelInferenceRequest,
-    clockwork::REQ_MODEL_INFERENCE>
+    clockwork::REQ_INFERENCE>
 {
 public:
   msg_inference_req_rx(uint64_t req_id, size_t body_len)
@@ -331,7 +332,7 @@ private:
 class msg_inference_res_tx :
   public msg_protobuf_tx<
     clockwork::ModelInferenceResponse,
-    clockwork::RES_MODEL_INFERENCE>
+    clockwork::RSP_INFERENCE>
 {
 public:
   msg_inference_res_tx(uint64_t req_id)
@@ -361,7 +362,7 @@ private:
 class msg_inference_res_rx :
   public msg_protobuf_rx<
     clockwork::ModelInferenceResponse,
-    clockwork::RES_MODEL_INFERENCE>
+    clockwork::RSP_INFERENCE>
 {
 public:
   msg_inference_res_rx(uint64_t req_id, size_t body_len)

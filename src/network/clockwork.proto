@@ -3,33 +3,83 @@ syntax = "proto2";
 package clockwork;
 
 enum RequestType {
-  REQ_MODEL_LOAD = 1;
-  REQ_MODEL_INFERENCE = 2;
+  REQ_UPLOAD_MODEL = 1;
+  REQ_INFERENCE = 2;
+  REQ_LOAD_REMOTE_MODEL = 3;
+  REQ_EVICT = 4;
 
-  RES_MODEL_LOAD = 101;
-  RES_MODEL_INFERENCE = 102;
+  RSP_UPLOAD_MODEL = 101;
+  RSP_INFERENCE = 102;
+  RSP_LOAD_REMOTE_MODEL = 103;
+  RSP_EVICT = 104;
+}
+
+message RequestHeaderProto {
+  optional int32 user_id = 1;
+  optional int32 user_request_id = 2;
+}
+
+message ResponseHeaderProto {
+  optional int32 user_request_id = 1;
+  optional int32 status = 2;
+  optional string message = 3;
 }
 
 message ModelLoadRequest {
-  required uint32 model_id = 1;
-  required uint32 batchsize = 2;
-  required uint64 so_len = 3;
-  required uint64 clockwork_len = 4;
-  required uint64 params_len = 5;
+  required RequestHeaderProto header = 1;
+  required uint32 model_id = 2;
+  required uint32 batchsize = 3;
+  required uint64 so_len = 4;
+  required uint64 clockwork_len = 5;
+  required uint64 params_len = 6;
 }
 
 message ModelLoadResponse {
-  required int32 status = 1;
+  required ResponseHeaderProto header = 1;
 }
 
 
 message ModelInferenceRequest {
-  required uint32 model_id = 1;
-  required uint32 batch_size = 2;
+  required RequestHeaderProto header = 1;
+  required uint32 model_id = 2;
+  required uint32 batch_size = 3;
 }
 
 message ModelInferenceResponse {
-  required int32 status = 1;
+  required ResponseHeaderProto header = 1;
   required uint32 model_id = 2;
   required uint32 batch_size = 3;
+}
+
+message EvictRequest {
+  required RequestHeaderProto header = 1;
+  required uint32 model_id = 2;
+}
+
+message EvictResponse {
+  required ResponseHeaderProto header = 1;
+}
+
+message LoadModelFromDiskRequest {
+  required RequestHeaderProto header = 1;
+  required string remote_path = 2;
+}
+
+message LoadModelFromDiskResponse {
+  required ResponseHeaderProto header = 1;
+  required uint32 model_id = 2;
+  required uint64 input_size = 3;
+  required uint64 output_size = 4;
+}
+
+enum ActionType {
+  ACTION_LOAD_MODEL_FROM_DISK = 1;
+  ACTION_LOAD_WEIGHTS = 2;
+  ACTION_INFER = 3;
+  ACTION_EVICT_WEIGHTS = 4;
+
+  RESULT_LOAD_MODEL_FROM_DISK = 101;
+  RESULT_LOAD_WEIGHTS = 102;
+  RESULT_INFER = 103;
+  RESULT_EVICT_WEIGHTS = 104;
 }
