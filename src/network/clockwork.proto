@@ -25,17 +25,19 @@ message ResponseHeaderProto {
   optional string message = 3;
 }
 
-message ModelLoadRequest {
+message ModelUploadRequest {
   required RequestHeaderProto header = 1;
-  required uint32 model_id = 2;
   required uint32 batchsize = 3;
   required uint64 so_len = 4;
   required uint64 clockwork_len = 5;
   required uint64 params_len = 6;
 }
 
-message ModelLoadResponse {
+message ModelUploadResponse {
   required ResponseHeaderProto header = 1;
+  required uint32 model_id = 2;
+  required uint64 input_size = 3;
+  required uint64 output_size = 4;
 }
 
 

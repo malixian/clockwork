@@ -32,9 +32,9 @@ struct UploadModelRequest {
 		/* Each batch size has different code and spec */
 		int batch_size;
 		size_t so_size;
-		char* so;
+		void* so;
 		size_t spec_size;
-		char* spec;
+		void* spec;
 	};
 	
 	/* Code and params for different batch sizes */

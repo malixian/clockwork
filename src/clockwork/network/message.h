@@ -115,7 +115,7 @@ protected:
   void* body_ = nullptr;
 
 public:
-  
+
   void set_body_len(size_t body_len) {
     body_len_ = body_len;
     body_ = new uint8_t[body_len];

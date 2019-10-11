@@ -106,7 +106,7 @@ protected:
 
 class msg_load_model_req_tx :
   public msg_protobuf_tx<
-    clockwork::ModelLoadRequest,
+    clockwork::ModelUploadRequest,
     clockwork::REQ_UPLOAD_MODEL>
 {
 public:
@@ -162,7 +162,7 @@ private:
 
 class msg_load_model_req_rx :
   public msg_protobuf_rx<
-    clockwork::ModelLoadRequest,
+    clockwork::ModelUploadRequest,
     clockwork::REQ_UPLOAD_MODEL>
 {
 public:
@@ -246,7 +246,7 @@ private:
 
 class msg_load_model_res_tx :
   public msg_protobuf_tx<
-    clockwork::ModelLoadResponse,
+    clockwork::ModelUploadResponse,
     clockwork::RSP_UPLOAD_MODEL>
 {
 public:
@@ -256,7 +256,7 @@ public:
 
 class msg_load_model_res_rx :
   public msg_protobuf_rx<
-    clockwork::ModelLoadResponse,
+    clockwork::ModelUploadResponse,
     clockwork::RSP_UPLOAD_MODEL>
 {
 public:
