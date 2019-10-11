@@ -5,6 +5,7 @@
 #include <string>
 
 #include "clockwork/network/client_api.h"
+#include "clockwork/network/worker_api.h"
 #include <clockwork/network.h>
 #include <clockwork.pb.h>
 

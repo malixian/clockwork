@@ -68,7 +68,7 @@ public:
 	uint64_t expected_duration;
 
 	int model_id;
-	int gpu_id;
+	unsigned gpu_id;
 	
 	virtual std::string str();
 };
@@ -79,7 +79,7 @@ public:
 	uint64_t latest;
 
 	int model_id;
-	int gpu_id;
+	unsigned gpu_id;
 	
 	virtual std::string str();
 };
@@ -91,7 +91,7 @@ public:
 	uint64_t expected_duration;
 
 	int model_id;
-	int gpu_id;
+	unsigned gpu_id;
 	int batch_size;
 	int input_size;
 	char* input;

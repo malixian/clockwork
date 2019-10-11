@@ -80,8 +80,84 @@ enum ActionType {
   ACT_INFER = 3;
   ACT_EVICT_WEIGHTS = 4;
 
+  RES_ERROR = 100;
   RES_LOAD_MODEL_FROM_DISK = 101;
   RES_LOAD_WEIGHTS = 102;
   RES_INFER = 103;
   RES_EVICT_WEIGHTS = 104;
+}
+
+message ErrorResultProto {
+  required int32 action_id = 1;
+  required int32 action_type = 2;
+  required int32 status = 3;
+  required string message = 4;
+}
+
+message TimingProto {
+  required int32 begin = 1;
+  required uint64 end = 2;
+  required uint64 duration = 3;
+}
+
+message LoadModelFromDiskActionProto {
+  required int32 action_id = 1;
+  required int32 model_id = 2;
+  required string model_path = 3;
+  required uint64 earliest = 4;
+  required uint64 latest = 5;
+}
+
+message LoadModelFromDiskResultProto {
+  required int32 action_id = 1;
+  required TimingProto timing = 2;
+  required uint64 input_size = 3;
+  required uint64 output_size = 4;
+  repeated uint32 supported_batch_sizes = 5;
+  required uint64 weights_size_in_cache = 6;
+}
+
+message LoadWeightsActionProto {
+  required int32 action_id = 1;
+  required int32 model_id = 2;
+  required uint32 gpu_id = 3;
+  required uint64 earliest = 4;
+  required uint64 latest = 5;
+  required uint64 expected_duration = 6;
+}
+
+message LoadWeightsResultProto {
+  required int32 action_id = 1;
+  required TimingProto timing = 2;
+}
+
+message EvictWeightsActionProto {
+  required int32 action_id = 1;
+  required int32 model_id = 2;
+  required uint32 gpu_id = 3;
+  required uint64 earliest = 4;
+  required uint64 latest = 5;
+}
+
+message EvictWeightsResultProto {
+  required int32 action_id = 1;
+  required TimingProto timing = 2;
+}
+
+message InferActionProto {
+  required int32 action_id = 1;
+  required int32 model_id = 2;
+  required uint32 gpu_id = 3;
+  required uint64 earliest = 4;
+  required uint64 latest = 5;
+  required uint64 expected_duration = 6;
+  required uint32 batch_size = 7;
+  required uint64 input_size = 8;
+}
+
+message InferResultProto {
+  required int32 action_id = 1;
+  required TimingProto copy_input_timing = 2;
+  required TimingProto exec_timing = 3;
+  required TimingProto copy_output_timing = 4;
 }
