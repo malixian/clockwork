@@ -106,7 +106,7 @@ protected:
 
 class msg_load_model_req_tx :
   public msg_protobuf_tx<
-    clockwork::ModelUploadRequest,
+    clockwork::ModelUploadReqProto,
     clockwork::REQ_UPLOAD_MODEL>
 {
 public:
@@ -162,7 +162,7 @@ private:
 
 class msg_load_model_req_rx :
   public msg_protobuf_rx<
-    clockwork::ModelUploadRequest,
+    clockwork::ModelUploadReqProto,
     clockwork::REQ_UPLOAD_MODEL>
 {
 public:
@@ -246,7 +246,7 @@ private:
 
 class msg_load_model_res_tx :
   public msg_protobuf_tx<
-    clockwork::ModelUploadResponse,
+    clockwork::ModelUploadRspProto,
     clockwork::RSP_UPLOAD_MODEL>
 {
 public:
@@ -256,7 +256,7 @@ public:
 
 class msg_load_model_res_rx :
   public msg_protobuf_rx<
-    clockwork::ModelUploadResponse,
+    clockwork::ModelUploadRspProto,
     clockwork::RSP_UPLOAD_MODEL>
 {
 public:
@@ -268,7 +268,7 @@ public:
 
 class msg_inference_req_tx :
   public msg_protobuf_tx<
-    clockwork::ModelInferenceRequest,
+    clockwork::ModelInferenceReqProto,
     clockwork::REQ_INFERENCE>
 {
 public:
@@ -298,7 +298,7 @@ private:
 
 class msg_inference_req_rx :
   public msg_protobuf_rx<
-    clockwork::ModelInferenceRequest,
+    clockwork::ModelInferenceReqProto,
     clockwork::REQ_INFERENCE>
 {
 public:
@@ -331,7 +331,7 @@ private:
 
 class msg_inference_res_tx :
   public msg_protobuf_tx<
-    clockwork::ModelInferenceResponse,
+    clockwork::ModelInferenceRspProto,
     clockwork::RSP_INFERENCE>
 {
 public:
@@ -361,7 +361,7 @@ private:
 
 class msg_inference_res_rx :
   public msg_protobuf_rx<
-    clockwork::ModelInferenceResponse,
+    clockwork::ModelInferenceRspProto,
     clockwork::RSP_INFERENCE>
 {
 public:

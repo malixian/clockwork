@@ -29,7 +29,7 @@ void get_header(ResponseHeader &response_header, const ResponseHeaderProto &prot
 	response_header.message = proto.message();
 }
 
-class msg_inference_req_tx : public msg_protobuf_tx_with_body<REQ_INFERENCE, ModelInferenceRequest, clientapi::InferenceRequest> {
+class msg_inference_req_tx : public msg_protobuf_tx_with_body<REQ_INFERENCE, ModelInferenceReqProto, clientapi::InferenceRequest> {
 public:
   virtual void set(clientapi::InferenceRequest &request) {
   	set_header(request.header, msg.mutable_header());
@@ -40,7 +40,7 @@ public:
   }
 };
 
-class msg_inference_req_rx : public msg_protobuf_rx_with_body<REQ_INFERENCE, ModelInferenceRequest, clientapi::InferenceRequest> {
+class msg_inference_req_rx : public msg_protobuf_rx_with_body<REQ_INFERENCE, ModelInferenceReqProto, clientapi::InferenceRequest> {
 public:
   virtual void get(clientapi::InferenceRequest &request) {
   	get_header(request.header, msg.header());
@@ -51,7 +51,7 @@ public:
   }
 };
 
-class msg_inference_rsp_tx : public msg_protobuf_tx_with_body<RSP_INFERENCE, ModelInferenceResponse, clientapi::InferenceResponse> {
+class msg_inference_rsp_tx : public msg_protobuf_tx_with_body<RSP_INFERENCE, ModelInferenceRspProto, clientapi::InferenceResponse> {
 public:
   void set(clientapi::InferenceResponse &response) {
   	set_header(response.header, msg.mutable_header());
@@ -62,7 +62,7 @@ public:
   }
 };
 
-class msg_inference_rsp_rx : public msg_protobuf_rx_with_body<RSP_INFERENCE, ModelInferenceResponse, clientapi::InferenceResponse> {
+class msg_inference_rsp_rx : public msg_protobuf_rx_with_body<RSP_INFERENCE, ModelInferenceRspProto, clientapi::InferenceResponse> {
 public:
   void get(clientapi::InferenceResponse &response) {
     get_header(response.header, msg.header());
@@ -73,7 +73,7 @@ public:
   }
 };
 
-class msg_evict_req_tx : public msg_protobuf_tx<REQ_EVICT, EvictRequest, clientapi::EvictRequest> {
+class msg_evict_req_tx : public msg_protobuf_tx<REQ_EVICT, EvictReqProto, clientapi::EvictRequest> {
 public:
   void set(clientapi::EvictRequest &request) {
     set_header(request.header, msg.mutable_header());
@@ -81,7 +81,7 @@ public:
   }
 };
 
-class msg_evict_req_rx : public msg_protobuf_rx<REQ_EVICT, EvictRequest, clientapi::EvictRequest> {
+class msg_evict_req_rx : public msg_protobuf_rx<REQ_EVICT, EvictReqProto, clientapi::EvictRequest> {
 public:
   void get(clientapi::EvictRequest &request) {
     get_header(request.header, msg.header());
@@ -89,23 +89,21 @@ public:
   }
 };
 
-class msg_evict_rsp_tx : public msg_protobuf_tx<RSP_EVICT, EvictRequest, clientapi::EvictRequest> {
+class msg_evict_rsp_tx : public msg_protobuf_tx<RSP_EVICT, EvictRspProto, clientapi::EvictResponse> {
 public:
-  void set(clientapi::EvictRequest &request) {
+  void set(clientapi::EvictResponse &request) {
     set_header(request.header, msg.mutable_header());
-    msg.set_model_id(request.model_id);
   }
 };
 
-class msg_evict_rsp_rx : public msg_protobuf_rx<RSP_EVICT, EvictRequest, clientapi::EvictRequest> {
+class msg_evict_rsp_rx : public msg_protobuf_rx<RSP_EVICT, EvictRspProto, clientapi::EvictResponse> {
 public:
-  void get(clientapi::EvictRequest &request) {
+  void get(clientapi::EvictResponse &request) {
     get_header(request.header, msg.header());
-    request.model_id = msg.model_id();
   }
 };
 
-class msg_load_remote_model_req_tx : public msg_protobuf_tx<REQ_LOAD_REMOTE_MODEL, LoadModelFromDiskRequest, clientapi::LoadModelFromRemoteDiskRequest> {
+class msg_load_remote_model_req_tx : public msg_protobuf_tx<REQ_LOAD_REMOTE_MODEL, LoadModelFromDiskReqProto, clientapi::LoadModelFromRemoteDiskRequest> {
 public:  
   void set(clientapi::LoadModelFromRemoteDiskRequest &request) {
     set_header(request.header, msg.mutable_header());
@@ -113,7 +111,7 @@ public:
   }
 };
 
-class msg_load_remote_model_req_rx : public msg_protobuf_rx<REQ_LOAD_REMOTE_MODEL, LoadModelFromDiskRequest, clientapi::LoadModelFromRemoteDiskRequest> {
+class msg_load_remote_model_req_rx : public msg_protobuf_rx<REQ_LOAD_REMOTE_MODEL, LoadModelFromDiskReqProto, clientapi::LoadModelFromRemoteDiskRequest> {
 public:
   void get(clientapi::LoadModelFromRemoteDiskRequest &request) {
     get_header(request.header, msg.header());
@@ -121,7 +119,7 @@ public:
   }
 };
 
-class msg_load_remote_model_rsp_tx : public msg_protobuf_tx<RSP_LOAD_REMOTE_MODEL, LoadModelFromDiskResponse, clientapi::LoadModelFromRemoteDiskResponse> {
+class msg_load_remote_model_rsp_tx : public msg_protobuf_tx<RSP_LOAD_REMOTE_MODEL, LoadModelFromDiskRspProto, clientapi::LoadModelFromRemoteDiskResponse> {
 public:
   void set(clientapi::LoadModelFromRemoteDiskResponse &response) {
     set_header(response.header, msg.mutable_header());
@@ -131,7 +129,7 @@ public:
   }
 };
 
-class msg_load_remote_model_rsp_rx : public msg_protobuf_rx<RSP_LOAD_REMOTE_MODEL, LoadModelFromDiskResponse, clientapi::LoadModelFromRemoteDiskResponse> {
+class msg_load_remote_model_rsp_rx : public msg_protobuf_rx<RSP_LOAD_REMOTE_MODEL, LoadModelFromDiskRspProto, clientapi::LoadModelFromRemoteDiskResponse> {
 public:
   void get(clientapi::LoadModelFromRemoteDiskResponse &response) {
     get_header(response.header, msg.header());
@@ -142,7 +140,7 @@ public:
 };
 
 
-class msg_upload_model_req_tx : public msg_protobuf_tx<REQ_UPLOAD_MODEL, ModelUploadRequest, clientapi::UploadModelRequest> {
+class msg_upload_model_req_tx : public msg_protobuf_tx<REQ_UPLOAD_MODEL, ModelUploadReqProto, clientapi::UploadModelRequest> {
 private:
   enum body_tx_state {
     BODY_SEND_SO,
@@ -187,7 +185,7 @@ public:
   }
 };
 
-class msg_upload_model_req_rx : public msg_protobuf_rx<REQ_UPLOAD_MODEL, ModelUploadRequest, clientapi::UploadModelRequest> {
+class msg_upload_model_req_rx : public msg_protobuf_rx<REQ_UPLOAD_MODEL, ModelUploadReqProto, clientapi::UploadModelRequest> {
 private:
   enum body_rx_state {
     BODY_RX_SO,
@@ -265,7 +263,7 @@ public:
   }
 };
 
-class msg_upload_model_rsp_tx : public msg_protobuf_tx<RSP_UPLOAD_MODEL, ModelUploadResponse, clientapi::UploadModelResponse> {
+class msg_upload_model_rsp_tx : public msg_protobuf_tx<RSP_UPLOAD_MODEL, ModelUploadRspProto, clientapi::UploadModelResponse> {
 public:
   void set(clientapi::UploadModelResponse &response) {
     set_header(response.header, msg.mutable_header());
@@ -275,7 +273,7 @@ public:
   }
 };
 
-class msg_upload_model_rsp_rx : public msg_protobuf_rx<RSP_UPLOAD_MODEL, ModelUploadResponse, clientapi::UploadModelResponse> {
+class msg_upload_model_rsp_rx : public msg_protobuf_rx<RSP_UPLOAD_MODEL, ModelUploadRspProto, clientapi::UploadModelResponse> {
 public:
   void get(clientapi::UploadModelResponse &response) {
     get_header(response.header, msg.header());

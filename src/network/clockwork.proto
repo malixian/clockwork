@@ -25,7 +25,7 @@ message ResponseHeaderProto {
   optional string message = 3;
 }
 
-message ModelUploadRequest {
+message ModelUploadReqProto {
   required RequestHeaderProto header = 1;
   required uint32 batchsize = 3;
   required uint64 so_len = 4;
@@ -33,7 +33,7 @@ message ModelUploadRequest {
   required uint64 params_len = 6;
 }
 
-message ModelUploadResponse {
+message ModelUploadRspProto {
   required ResponseHeaderProto header = 1;
   required uint32 model_id = 2;
   required uint64 input_size = 3;
@@ -41,33 +41,33 @@ message ModelUploadResponse {
 }
 
 
-message ModelInferenceRequest {
+message ModelInferenceReqProto {
   required RequestHeaderProto header = 1;
   required uint32 model_id = 2;
   required uint32 batch_size = 3;
 }
 
-message ModelInferenceResponse {
+message ModelInferenceRspProto {
   required ResponseHeaderProto header = 1;
   required uint32 model_id = 2;
   required uint32 batch_size = 3;
 }
 
-message EvictRequest {
+message EvictReqProto {
   required RequestHeaderProto header = 1;
   required uint32 model_id = 2;
 }
 
-message EvictResponse {
+message EvictRspProto {
   required ResponseHeaderProto header = 1;
 }
 
-message LoadModelFromDiskRequest {
+message LoadModelFromDiskReqProto {
   required RequestHeaderProto header = 1;
   required string remote_path = 2;
 }
 
-message LoadModelFromDiskResponse {
+message LoadModelFromDiskRspProto {
   required ResponseHeaderProto header = 1;
   required uint32 model_id = 2;
   required uint64 input_size = 3;
@@ -75,13 +75,13 @@ message LoadModelFromDiskResponse {
 }
 
 enum ActionType {
-  ACTION_LOAD_MODEL_FROM_DISK = 1;
-  ACTION_LOAD_WEIGHTS = 2;
-  ACTION_INFER = 3;
-  ACTION_EVICT_WEIGHTS = 4;
+  ACT_LOAD_MODEL_FROM_DISK = 1;
+  ACT_LOAD_WEIGHTS = 2;
+  ACT_INFER = 3;
+  ACT_EVICT_WEIGHTS = 4;
 
-  RESULT_LOAD_MODEL_FROM_DISK = 101;
-  RESULT_LOAD_WEIGHTS = 102;
-  RESULT_INFER = 103;
-  RESULT_EVICT_WEIGHTS = 104;
+  RES_LOAD_MODEL_FROM_DISK = 101;
+  RES_LOAD_WEIGHTS = 102;
+  RES_INFER = 103;
+  RES_EVICT_WEIGHTS = 104;
 }
