@@ -122,11 +122,11 @@ public:
   }
 
   virtual std::pair<void *,size_t> next_body_rx_buf() {
-    return std::make_pair(body_, msg_protobuf_rx<TMsgType, TMsg, TRsp>::body_len_);
+    return std::make_pair(body_, body_len_);
   }
 
   virtual void body_buf_received(size_t len) {
-    CHECK(len == (msg_protobuf_rx<TMsgType, TMsg, TRsp>::body_len_)) << "Message length did not match expected payload size";
+    CHECK(len == body_len_) << "Message length did not match expected payload size";
   }
 
 };
