@@ -274,22 +274,20 @@ void WorkerServer::sendResult(std::shared_ptr<workerapi::Result> result) {
 }	
 
 void WorkerServer::start_accept(tcp::acceptor* acceptor) {
-	current_connection = new WorkerConnection(acceptor->get_io_service(), worker);
+	auto connection = new WorkerConnection(acceptor->get_io_service(), worker);
 
-	acceptor->async_accept(current_connection->get_socket(),
-		boost::bind(&WorkerServer::handle_accept, this, current_connection, acceptor,
+	acceptor->async_accept(connection->get_socket(),
+		boost::bind(&WorkerServer::handle_accept, this, connection, acceptor,
 			asio::placeholders::error));
 }
 
-void WorkerServer::handle_accept(message_connection* nc, tcp::acceptor* acceptor, const asio::error_code& error) {
-	if (!error) {
-		std::cout << "Accepted a connection" << std::endl;
-		nc->established();
-	} else {
-		std::cout << error.message() << std::endl;
+void WorkerServer::handle_accept(WorkerConnection* connection, tcp::acceptor* acceptor, const asio::error_code& error) {
+	if (error) {
+		throw std::runtime_error(error.message());
 	}
 
-
+	connection->established();
+	this->current_connection = connection;
 	start_accept(acceptor);
 }
 

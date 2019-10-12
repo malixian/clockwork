@@ -100,7 +100,7 @@ public:
 private:
 	void start_accept(tcp::acceptor* acceptor);
 
-	void handle_accept(message_connection* nc, tcp::acceptor* acceptor, const asio::error_code& error);
+	void handle_accept(WorkerConnection* connection, tcp::acceptor* acceptor, const asio::error_code& error);
 
 };
 
