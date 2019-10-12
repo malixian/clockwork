@@ -1,6 +1,7 @@
 #ifndef _CLOCKWORK_NETWORK_NETWORK_H_
 #define _CLOCKWORK_NETWORK_NETWORK_H_
 
+#include <mutex>
 #include <utility>
 #include <queue>
 #include <boost/bind.hpp>
@@ -48,6 +49,9 @@ private:
       size_t bytes_transferred);
   void next_body_seg();
   void abort_connection(const char *msg);
+  void abort_connection(std::string msg) {
+    abort_connection(msg.c_str());
+  }
 
 
   asio::ip::tcp::socket &socket_;
@@ -62,6 +66,8 @@ private:
   message_handler &handler_;
   size_t body_left;
   size_t body_seg_sent_;
+
+  std::mutex queue_mutex;
   std::deque<message_tx*> tx_queue_;
 };
 
@@ -73,6 +79,9 @@ public:
 
 private:
   void abort_connection(const char *msg);
+  void abort_connection(std::string msg) {
+    abort_connection(msg.c_str());
+  }
   /* begin reading a new message */
   void read_new_message();
   /* common pre header received */
@@ -119,6 +128,9 @@ private:
       asio::ip::tcp::resolver::iterator endpoint_iterator);
   void handle_established(const asio::error_code& err);
   void abort_connection(const char *msg);
+  void abort_connection(std::string msg) {
+    abort_connection(msg.c_str());
+  }
 
   message_receiver msg_rx_;
   asio::ip::tcp::resolver resolver_;

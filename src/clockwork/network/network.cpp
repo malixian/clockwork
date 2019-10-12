@@ -1,3 +1,4 @@
+#include <stdexcept>
 #include "clockwork/network/network.h"
 #include <iostream>
 #include <boost/bind.hpp>
@@ -14,6 +15,8 @@ message_sender::message_sender(message_connection *conn, message_handler &handle
 
 void message_sender::send_message(message_tx &req)
 {
+  std::lock_guard<std::mutex> lock(queue_mutex);
+
   if (!req_) {
     start_send(req);
   } else {
@@ -23,8 +26,7 @@ void message_sender::send_message(message_tx &req)
 
 void message_sender::send_next_message()
 {
-  if (tx_queue_.empty())
-    return;
+  if (tx_queue_.empty()) return;
   message_tx *req = tx_queue_.front();
   tx_queue_.pop_front();
   start_send(*req);
@@ -47,9 +49,11 @@ void message_sender::start_send(message_tx &req)
         asio::placeholders::bytes_transferred));
 }
 
-void message_sender::handle_prehdr_sent(const asio::error_code& error,
-    size_t bytes_transferred)
-{
+void message_sender::handle_prehdr_sent(const asio::error_code& error, size_t bytes_transferred) {
+  if (error) {
+    abort_connection(error.message());
+    return;
+  }
   if (bytes_transferred != 32) {
     abort_connection("Invalid number of bytes sent for header lengths");
     return;
@@ -62,9 +66,11 @@ void message_sender::handle_prehdr_sent(const asio::error_code& error,
         asio::placeholders::bytes_transferred));
 }
 
-void message_sender::handle_hdr_sent(const asio::error_code& error,
-    size_t bytes_transferred)
-{
+void message_sender::handle_hdr_sent(const asio::error_code& error, size_t bytes_transferred) {
+  if (error) {
+    abort_connection(error.message());
+    return;
+  }
   if (bytes_transferred != req_->get_tx_header_len()) {
     abort_connection("Invalid number of bytes sent for header");
     return;
@@ -74,9 +80,11 @@ void message_sender::handle_hdr_sent(const asio::error_code& error,
   next_body_seg();
 }
 
-void message_sender::handle_body_seg_sent(const asio::error_code& error,
-    size_t bytes_transferred)
-{
+void message_sender::handle_body_seg_sent(const asio::error_code& error, size_t bytes_transferred) {
+  if (error) {
+    abort_connection(error.message());
+    return;
+  }
   if (bytes_transferred != body_seg_sent_) {
     abort_connection("Invalid number of bytes sent for body segment");
     return;
@@ -87,8 +95,7 @@ void message_sender::handle_body_seg_sent(const asio::error_code& error,
 }
 
 /* initiate rx for next body segment or finish request */
-void message_sender::next_body_seg()
-{
+void message_sender::next_body_seg() {
   /* if we have a body... */
   if (body_left > 0) {
     std::pair<const void *,size_t> body_buf = req_->next_tx_body_buf();
@@ -102,17 +109,15 @@ void message_sender::next_body_seg()
   } else {
     req_->tx_complete();
     handler_.completed_transmit(conn_, req_);
-    req_ = 0;
 
+    std::lock_guard<std::mutex> lock(queue_mutex);
+    req_ = 0;
     send_next_message();
   }
 }
 
-void message_sender::abort_connection(const char *msg)
-{
-  /* todo */
-  std::cerr << msg << std::endl;
-  throw "todo";
+void message_sender::abort_connection(const char *msg) {
+  throw std::runtime_error(msg);  
 }
 
 
@@ -128,8 +133,7 @@ void message_receiver::start()
 
 void message_receiver::abort_connection(const char *msg)
 {
-  std::cerr << "aborting connection: " << msg << std::endl;
-  // TODO
+  throw std::runtime_error(msg);
 }
 
 /* begin reading a new message */
@@ -147,8 +151,7 @@ void message_receiver::handle_pre_read(const asio::error_code& error,
     size_t bytes_transferred)
 {
   if (error) {
-    std::cerr << error << std::endl;
-    abort_connection("Error on pre header read");
+    abort_connection(error.message());
     return;
   }
 
@@ -173,7 +176,7 @@ void message_receiver::handle_header_read(const asio::error_code& error,
     size_t bytes_transferred)
 {
   if (error) {
-    abort_connection("Error on pre header read");
+    abort_connection(error.message());
     return;
   }
 
@@ -195,7 +198,7 @@ void message_receiver::handle_body_seg_read(const asio::error_code& error,
     size_t bytes_transferred)
 {
   if (error) {
-    abort_connection("Error on pre header read");
+    abort_connection(error.message());
     return;
   }
 
@@ -264,11 +267,11 @@ asio::ip::tcp::socket &message_connection::get_socket()
   return socket_;
 }
 
-void message_connection::handle_resolved(const asio::error_code& err,
+void message_connection::handle_resolved(const asio::error_code& error,
     asio::ip::tcp::resolver::iterator endpoint_iterator)
 {
-  if (err) {
-    abort_connection("Resolve failed");
+  if (error) {
+    abort_connection(error.message());
     return;
   }
 
@@ -278,21 +281,18 @@ void message_connection::handle_resolved(const asio::error_code& err,
         asio::placeholders::error));
 }
 
-void message_connection::handle_established(const asio::error_code& err)
+void message_connection::handle_established(const asio::error_code& error)
 {
-  if (err) {
-    abort_connection("connect failed");
+  if (error) {
+    abort_connection(error.message());
     return;
   }
 
   established();
 }
 
-void message_connection::abort_connection(const char *msg)
-{
-  /* todo */
-  std::cerr << msg << std::endl;
-  throw "todo";
+void message_connection::abort_connection(const char *msg) {
+  throw std::runtime_error(msg);  
 }
 
 
