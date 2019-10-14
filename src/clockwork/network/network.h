@@ -119,9 +119,11 @@ public:
   /* connection on socket established externally (e.g. through acceptor) */
   void established();
   asio::ip::tcp::socket &get_socket();
+  void close(const char* reason = nullptr);
 
 protected:
   virtual void ready();
+  virtual void closed();
 
 private:
   void handle_resolved(const asio::error_code& err,
@@ -132,6 +134,7 @@ private:
     abort_connection(msg.c_str());
   }
 
+  std::atomic_flag is_closed;
   message_receiver msg_rx_;
   asio::ip::tcp::resolver resolver_;
   asio::ip::tcp::socket socket_;

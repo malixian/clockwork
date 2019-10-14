@@ -5,10 +5,11 @@ namespace network {
 
 using asio::ip::tcp;
 
-WorkerConnection::WorkerConnection(asio::io_service &io_service, ClockworkWorker* worker) :
+WorkerConnection::WorkerConnection(asio::io_service &io_service, ClockworkWorker* worker, std::function<void(void)> on_close) :
 		message_connection(io_service, *this),
 		msg_tx_(this, *this),
-		worker(worker) {
+		worker(worker),
+		on_close(on_close) {
 
 }
 
@@ -70,7 +71,6 @@ void WorkerConnection::completed_receive(message_connection *tcp_conn, message_r
 
 	delete req;
 	worker->sendActions(actions);
-
 }
 
 void WorkerConnection::completed_transmit(message_connection *tcp_conn, message_tx *req) {
@@ -110,6 +110,9 @@ void WorkerConnection::sendResult(std::shared_ptr<workerapi::Result> result) {
 	}
 }
 
+void WorkerConnection::closed() {
+	this->on_close();
+}
 
 ControllerConnection::ControllerConnection(asio::io_service &io_service, workerapi::Controller* controller) :
 		message_connection(io_service, *this),
@@ -156,6 +159,9 @@ message_rx* ControllerConnection::new_rx_message(message_connection *tcp_conn, u
 
 void ControllerConnection::ready() {
 	connected.store(true);
+}
+
+void ControllerConnection::closed() {
 }
 
 void ControllerConnection::aborted_receive(message_connection *tcp_conn, message_rx *req) {
@@ -265,16 +271,24 @@ void WorkerServer::run(int port) {
 	} catch (const char* m) {
 		CHECK(false) << "Exception in network thread: " << m;
 	}
+	std::cout << "WorkerServer exiting" << std::endl;
 	alive.store(false);
 }
 
 // workerapi::Controller::sendResult
 void WorkerServer::sendResult(std::shared_ptr<workerapi::Result> result) {
-	current_connection->sendResult(result);
+	if (current_connection == nullptr) {
+		std::cout << "Dropping result " << result->str() << std::endl;
+	} else {
+		current_connection->sendResult(result);
+	}
 }	
 
 void WorkerServer::start_accept(tcp::acceptor* acceptor) {
-	auto connection = new WorkerConnection(acceptor->get_io_service(), worker);
+	auto connection = new WorkerConnection(acceptor->get_io_service(), worker, [this]{
+		this->current_connection = nullptr;
+		delete this->current_connection;
+	});
 
 	acceptor->async_accept(connection->get_socket(),
 		boost::bind(&WorkerServer::handle_accept, this, connection, acceptor,
@@ -320,7 +334,7 @@ void WorkerClient::join() {
 	network_thread.join();
 }
 
-workerapi::Worker* WorkerClient::connect(std::string host, std::string port, workerapi::Controller* controller) {
+ControllerConnection* WorkerClient::connect(std::string host, std::string port, workerapi::Controller* controller) {
 	try {
 		ControllerConnection* c = new ControllerConnection(io_service, controller);
 		c->connect(host, port);

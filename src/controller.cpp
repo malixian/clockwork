@@ -24,10 +24,12 @@ std::string get_example_model(std::string name = "resnet18_tesla-m40_batchsize1"
 
 class Printer : public workerapi::Controller {
 public:
+	std::atomic_int results_count = 0;
 
 	// workerapi::Controller::sendResult
 	virtual void sendResult(std::shared_ptr<workerapi::Result> result) {
 		std::cout << "Received result " << result->str() << std::endl;
+		results_count++;
 	}
 
 };
@@ -56,10 +58,10 @@ int main(int argc, char *argv[]) {
 
 	worker->sendActions(actions);
 
+	while (controller->results_count.load() == 0);
 
-
-	//client->shutdown(false);
-	client->join();
+	worker->close();
+	client->shutdown(true);
 
 	std::cout << "Clockwork Worker Exiting" << std::endl;
 }

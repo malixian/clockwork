@@ -21,9 +21,10 @@ class WorkerConnection : public message_connection, public message_handler, publ
 private:
 	ClockworkWorker* worker;
 	message_sender msg_tx_;
+	std::function<void(void)> on_close;
 
 public:
-	WorkerConnection(asio::io_service &io_service, ClockworkWorker* worker);
+	WorkerConnection(asio::io_service &io_service, ClockworkWorker* worker, std::function<void(void)> on_close);
 
 protected:
 	virtual message_rx *new_rx_message(message_connection *tcp_conn, uint64_t header_len,
@@ -36,6 +37,8 @@ protected:
 	virtual void completed_transmit(message_connection *tcp_conn, message_tx *req);
 
 	virtual void aborted_transmit(message_connection *tcp_conn, message_tx *req);
+
+	virtual void closed();
 
 public:
 	
@@ -61,6 +64,7 @@ protected:
 			uint64_t body_len, uint64_t msg_type, uint64_t msg_id);
 
 	virtual void ready();
+	virtual void closed();
 
 	virtual void aborted_receive(message_connection *tcp_conn, message_rx *req);
 
@@ -118,7 +122,7 @@ public:
 	void shutdown(bool awaitCompletion = false);
 
 	void join();
-	workerapi::Worker* connect(std::string host, std::string port, workerapi::Controller* controller);
+	ControllerConnection* connect(std::string host, std::string port, workerapi::Controller* controller);
 
 };
 

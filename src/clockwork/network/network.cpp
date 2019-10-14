@@ -116,8 +116,9 @@ void message_sender::next_body_seg() {
   }
 }
 
-void message_sender::abort_connection(const char *msg) {
-  throw std::runtime_error(msg);  
+void message_sender::abort_connection(const char *msg)
+{
+  conn_->close(msg);
 }
 
 
@@ -133,7 +134,7 @@ void message_receiver::start()
 
 void message_receiver::abort_connection(const char *msg)
 {
-  throw std::runtime_error(msg);
+  conn_->close(msg);
 }
 
 /* begin reading a new message */
@@ -232,7 +233,8 @@ void message_receiver::next_body_seg()
 message_connection::message_connection(asio::io_service& io_service,
     message_handler &handler)
   : socket_(io_service), resolver_(io_service),
-    msg_rx_(message_receiver(this, handler))
+    msg_rx_(message_receiver(this, handler)),
+    is_closed(ATOMIC_FLAG_INIT)
 {
 }
 
@@ -261,6 +263,11 @@ void message_connection::established()
 void message_connection::ready()
 {
 }
+
+void message_connection::closed()
+{
+}
+
 
 asio::ip::tcp::socket &message_connection::get_socket()
 {
@@ -291,8 +298,22 @@ void message_connection::handle_established(const asio::error_code& error)
   established();
 }
 
+void message_connection::close(const char* reason) {
+  if (!is_closed.test_and_set()) {
+    std::cout << "Closing connection " << this;
+    if (reason) {
+      std::cout << ", reason: " << reason;
+    }
+    std::cout << std::endl;
+    socket_.cancel();
+    socket_.shutdown(asio::ip::tcp::socket::shutdown_both);
+    socket_.close();
+    this->closed();
+  }
+}
+
 void message_connection::abort_connection(const char *msg) {
-  throw std::runtime_error(msg);  
+  close(msg);
 }
 
 
