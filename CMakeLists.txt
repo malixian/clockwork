@@ -50,6 +50,7 @@ add_library(clockwork
 	src/clockwork/api/worker_api.cpp
 	src/clockwork/network/network.cpp
 	src/clockwork/network/worker_net.cpp
+	src/clockwork/network/client_net.cpp
 	src/clockwork/alternatives/runtime_model.cpp
 	src/clockwork/alternatives/model_manager.cpp
 	src/clockwork/alternatives/threadpoolruntime.cpp
