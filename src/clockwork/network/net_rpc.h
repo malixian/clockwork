@@ -1,6 +1,8 @@
 #ifndef CLOCKWORK_NETWORK_NET_RPC_H_
 #define CLOCKWORK_NETWORK_NET_RPC_H_
 
+#include <mutex>
+#include <atomic>
 #include <clockwork/network/message.h>
 
 namespace clockwork {
@@ -8,10 +10,15 @@ namespace network {
 
 class net_rpc_base
 {
+private:
+  uint64_t id;
 public:
-  uint64_t id()
-  {
-    return request().get_tx_req_id();
+  virtual uint64_t get_id() {
+    return id;
+  }
+
+  virtual void set_id(uint64_t id) {
+    this->id = id;
   }
 
   virtual message_tx &request() = 0;
@@ -23,9 +30,11 @@ template<class TReq, class TRes>
 class net_rpc : public net_rpc_base
 {
 public:
-  net_rpc(uint64_t id, std::function<void(TRes&)> c)
-    : req(id), comp(c)
-  {
+  net_rpc(std::function<void(TRes&)> c) : req(), comp(c) {}
+
+  virtual void set_id(uint64_t id) {
+    net_rpc_base::set_id(id);
+    req.set_msg_id(id);
   }
 
   virtual message_tx &request()
@@ -35,11 +44,7 @@ public:
 
   virtual message_rx &make_response(uint64_t msg_type, uint64_t body_len)
   {
-    if (msg_type != TRes::MsgType)
-      throw "unexpected message type in response";
-
-    res = new TRes(id(), body_len);
-    return *res;
+    return do_make_response(msg_type, body_len);
   }
 
   virtual void done()
@@ -47,35 +52,68 @@ public:
     comp(*res);
   }
 
+protected:
+
+  virtual TRes &do_make_response(uint64_t msg_type, uint64_t body_len)
+  {
+    if (msg_type != TRes::MsgType)
+      throw "unexpected message type in response";
+
+    auto rsp = new TRes();
+    rsp->set_msg_id(get_id());
+    return *rsp;
+  }
+
+public:
   TReq req;
   TRes *res;
   std::function<void(TRes&)> comp;
+};
+
+template<class TReq, class TRes>
+class net_rpc_receive_payload : public net_rpc<TReq, TRes>
+{
+public:
+  net_rpc_receive_payload(std::function<void(TRes&)> c)
+    : net_rpc<TReq, TRes>(c) {}
+
+  virtual TRes &do_make_response(uint64_t msg_type, uint64_t body_len)
+  {
+    TRes& rsp = net_rpc<TReq, TRes>::do_make_response(msg_type, body_len);
+    rsp.set_body_len(body_len);
+    return rsp;
+  }
 };
 
 
 class net_rpc_conn :
   public message_connection, public message_handler
 {
+
 public:
   net_rpc_conn(asio::io_service& io_service)
-    : message_connection(io_service, *this), msg_tx_(this, *this)
+    : message_connection(io_service, *this), msg_tx_(this, *this), request_id_seed(0)
   {
   }
 
 protected:
-  virtual void request_done(net_rpc_base &req)
-  {
-  }
+  virtual void request_done(net_rpc_base &req) {}
 
   void send_request(net_rpc_base &rb)
   {
-    requests[rb.id()] = &rb;
+    std::lock_guard<std::mutex> lock(requests_mutex);
+
+    uint64_t request_id = request_id_seed++;
+    rb.set_id(request_id);
+    requests[request_id] = &rb;
     msg_tx_.send_message(rb.request());
   }
 
   virtual message_rx *new_rx_message(message_connection *tcp_conn, uint64_t header_len,
       uint64_t body_len, uint64_t msg_type, uint64_t msg_id)
   {
+    std::lock_guard<std::mutex> lock(requests_mutex);
+
     net_rpc_base *rb = requests[msg_id];
     message_rx &mrx = rb->make_response(msg_type, body_len);
 
@@ -88,12 +126,20 @@ protected:
 
   virtual void completed_receive(message_connection *tcp_conn, message_rx *req)
   {
-    uint64_t id = req->get_msg_id();
-    std::map<uint64_t, net_rpc_base *>::iterator it = requests.find(id);
-    net_rpc_base *rb = it->second;
-    requests.erase(it);
-    rb->done();
+    net_rpc_base* rb = nullptr;
+    {
+      std::lock_guard<std::mutex> lock(requests_mutex);
 
+      uint64_t msg_id = req->get_msg_id();
+      std::map<uint64_t, net_rpc_base *>::iterator it = requests.find(msg_id);
+      if (it != requests.end()) {
+        rb = it->second;
+        requests.erase(it);
+      }
+    }
+    CHECK(rb != nullptr) << "Received response to non-existent request";
+    
+    rb->done();
     request_done(*rb);
   }
 
@@ -106,7 +152,10 @@ protected:
   }
 
   message_sender msg_tx_;
+  std::mutex requests_mutex;
   std::map<uint64_t, net_rpc_base *> requests;
+  std::atomic_int request_id_seed;
+
 };
 
 }
