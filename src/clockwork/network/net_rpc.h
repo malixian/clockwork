@@ -44,29 +44,29 @@ public:
 
   virtual message_rx &make_response(uint64_t msg_type, uint64_t body_len)
   {
-    return do_make_response(msg_type, body_len);
+    do_make_response(msg_type, body_len);
+    return *rsp;
   }
 
   virtual void done()
   {
-    comp(*res);
+    comp(*rsp);
   }
 
 protected:
 
-  virtual TRes &do_make_response(uint64_t msg_type, uint64_t body_len)
+  virtual void do_make_response(uint64_t msg_type, uint64_t body_len)
   {
     if (msg_type != TRes::MsgType)
       throw "unexpected message type in response";
 
-    auto rsp = new TRes();
+    rsp = new TRes();
     rsp->set_msg_id(get_id());
-    return *rsp;
   }
 
 public:
   TReq req;
-  TRes *res;
+  TRes *rsp;
   std::function<void(TRes&)> comp;
 };
 
@@ -77,11 +77,10 @@ public:
   net_rpc_receive_payload(std::function<void(TRes&)> c)
     : net_rpc<TReq, TRes>(c) {}
 
-  virtual TRes &do_make_response(uint64_t msg_type, uint64_t body_len)
+  virtual void do_make_response(uint64_t msg_type, uint64_t body_len)
   {
-    TRes& rsp = net_rpc<TReq, TRes>::do_make_response(msg_type, body_len);
-    rsp.set_body_len(body_len);
-    return rsp;
+    net_rpc<TReq, TRes>::do_make_response(msg_type, body_len);
+    net_rpc<TReq, TRes>::rsp->set_body_len(body_len);
   }
 };
 

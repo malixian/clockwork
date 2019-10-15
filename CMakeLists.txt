@@ -49,6 +49,7 @@ add_library(clockwork
 	src/clockwork/model/so.cpp
 	src/clockwork/api/worker_api.cpp
 	src/clockwork/network/network.cpp
+	src/clockwork/network/client_api.cpp
 	src/clockwork/network/worker_net.cpp
 	src/clockwork/network/client_net.cpp
 	src/clockwork/alternatives/runtime_model.cpp
@@ -233,6 +234,23 @@ add_executable (controller
 
 target_link_libraries(
     controller
+    clockwork
+    Threads::Threads
+    dl
+    cuda
+    cudart
+    tvm_runtime
+    proto
+    ${Boost_SYSTEM_LIBRARY}
+)
+
+
+add_executable (client
+	src/client.cpp
+)
+
+target_link_libraries(
+    client
     clockwork
     Threads::Threads
     dl
