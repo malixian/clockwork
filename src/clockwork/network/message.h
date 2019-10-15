@@ -9,6 +9,7 @@ namespace network {
 
 class message_tx {
 public:
+  virtual ~message_tx() {}
   virtual uint64_t get_tx_msg_type() const = 0;
   virtual uint64_t get_tx_req_id() const = 0;
   virtual uint64_t get_tx_header_len() const = 0;
@@ -21,6 +22,7 @@ public:
 
 class message_rx {
 public:
+  virtual ~message_rx() {}
   virtual uint64_t get_msg_id() const = 0;
   virtual void header_received(const void *hdr, size_t hdr_len) = 0;
   virtual std::pair<void *,size_t> next_body_rx_buf() = 0;
@@ -98,7 +100,7 @@ protected:
 
 public:
 
-  void set_body_len(size_t body_len) { body_len_ = body_len; }
+  virtual void set_body_len(size_t body_len) { body_len_ = body_len; }
 
   virtual uint64_t get_tx_body_len() const { return body_len_; }
 
@@ -116,7 +118,7 @@ protected:
 
 public:
 
-  void set_body_len(size_t body_len) {
+  virtual void set_body_len(size_t body_len) {
     body_len_ = body_len;
     body_ = new uint8_t[body_len];
   }

@@ -376,7 +376,6 @@ void CopyOutputTask::run(cudaStream_t stream) {
 	}
 
 	// TODO: use cudaHostMalloc managed host memory w/ paging
-	char* output;
 	if (!manager->io_cache->take(output)) {
 		throw TaskError(actionErrorRuntimeError, "CopyOutputTask failed to allocate host pages for output");
 	}

@@ -140,7 +140,7 @@ public:
 			save_callback(load_weights->id, load_weights_complete);
 			actions.push_back(load_weights);
 
-			next_action_start_time += 7000000000UL; // if we have to load weights, for now just assume they take 7ms, so delay the inference by 7ms.
+			next_action_start_time += 7000000UL; // if we have to load weights, for now just assume they take 7ms, so delay the inference by 7ms.
 		}
 		
 		// Translate clientapi request into a workerapi action
@@ -154,7 +154,7 @@ public:
 		infer->latest = next_action_start_time + 10000000000L;
 
 		// When the infer result is received, call this callback
-		auto infer_complete = [this, callback, user_request_id] (std::shared_ptr<workerapi::Result> result) {
+		auto infer_complete = [this, callback, user_request_id, model_id] (std::shared_ptr<workerapi::Result> result) {
 			std::cout << "Worker  -> " << result->str() << std::endl;
 
 			// Translate workerapi result into a clientapi response
@@ -168,6 +168,8 @@ public:
 			} else if (auto infer_result = std::dynamic_pointer_cast<workerapi::InferResult>(result)) {
 				response.header.status = clockworkSuccess;
 				response.header.message = "";
+				response.model_id = model_id;
+				response.batch_size = 1;
 				response.output_size = infer_result->output_size;
 				response.output = infer_result->output;
 			} else {
