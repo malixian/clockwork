@@ -206,7 +206,7 @@ target_link_libraries(
 find_package(Protobuf REQUIRED)
 include_directories(${Protobuf_INCLUDE_DIR})
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
-protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS src/network/clockwork.proto)
+protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS proto/clockwork.proto)
 add_library(proto ${PROTO_HDRS} ${PROTO_SRCS})
 target_link_libraries(proto INTERFACE ${Protobuf_LIBRARIES})
 

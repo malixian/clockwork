@@ -2,7 +2,6 @@
 #include "clockwork/network/network.h"
 #include <iostream>
 #include <boost/bind.hpp>
-#include <clockwork/network.h>
 
 namespace clockwork {
 namespace network {
