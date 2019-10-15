@@ -1,6 +1,5 @@
 #include <atomic>
-#include "clockwork/network/worker_net.h"
-#include "clockwork/network/client_net.h"
+#include "clockwork/network/controller.h"
 #include "clockwork/api/client_api.h"
 #include "clockwork/api/worker_api.h"
 #include <cstdlib>
@@ -29,17 +28,17 @@ class Controller : public workerapi::Controller, public clientapi::ClientAPI {
 public:
 	std::atomic_int model_id_seed;
 
-	network::ControllerServer* client_facing_server;
-	network::WorkerManager* worker_manager;
-	std::vector<network::ControllerConnection*> workers;
+	network::controller::Server* client_facing_server;
+	network::controller::WorkerManager* worker_manager;
+	std::vector<network::controller::WorkerConnection*> workers;
 
 	Controller(int client_port, std::vector<std::pair<std::string, std::string>> worker_host_port_pairs) : 
 			model_id_seed(0) {
-		client_facing_server = new network::ControllerServer(this, client_port);
-		worker_manager = new network::WorkerManager();
+		client_facing_server = new network::controller::Server(this, client_port);
+		worker_manager = new network::controller::WorkerManager();
 
 		for (auto host_port_pair : worker_host_port_pairs) {
-			network::ControllerConnection* connection = worker_manager->connect(host_port_pair.first, host_port_pair.second, this);
+			network::controller::WorkerConnection* connection = worker_manager->connect(host_port_pair.first, host_port_pair.second, this);
 			workers.push_back(connection);
 		}
 	}

@@ -1,5 +1,5 @@
-#ifndef CLOCKWORK_NETWORK_NET_RPC_H_
-#define CLOCKWORK_NETWORK_NET_RPC_H_
+#ifndef _CLOCKWORK_NETWORK_RPC_H_
+#define _CLOCKWORK_NETWORK_RPC_H_
 
 #include <mutex>
 #include <atomic>

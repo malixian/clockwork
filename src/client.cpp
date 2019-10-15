@@ -1,4 +1,4 @@
-#include "clockwork/network/client_net.h"
+#include "clockwork/network/client.h"
 #include "clockwork/api/client_api.h"
 #include <cstdlib>
 #include <unistd.h>
@@ -24,9 +24,9 @@ std::string get_example_model(std::string name = "resnet18_tesla-m40_batchsize1"
 
 class ClosedLoopClient {
 public:
-	network::ControllerClient* client;
+	network::client::Connection* client;
 
-	ClosedLoopClient(network::ControllerClient* client) : client(client) {
+	ClosedLoopClient(network::client::Connection* client) : client(client) {
 		loadModel();
 	}
 
@@ -59,7 +59,7 @@ int main(int argc, char *argv[]) {
 
 	asio::io_service io_service;
 
-	network::ControllerClient* network_client = new network::ControllerClient(io_service);
+	network::client::Connection* network_client = new network::client::Connection(io_service);
 
 	ClosedLoopClient* closed_loop = nullptr;
     network_client->set_ready_cb([network_client, &closed_loop](){ 
