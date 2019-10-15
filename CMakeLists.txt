@@ -47,6 +47,7 @@ add_library(clockwork
 	src/clockwork/model/model.cpp
 	src/clockwork/model/cuda.cpp
 	src/clockwork/model/so.cpp
+	src/clockwork/api/client_api.cpp
 	src/clockwork/api/worker_api.cpp
 	src/clockwork/network/network.cpp
 	src/clockwork/network/client_api.cpp

@@ -16,6 +16,7 @@ this API, rather than the API defined in worker_api.h.
 */
 
 namespace clockwork {
+
 namespace clientapi {
 
 /* This is only currently used during setup/tear down phase of Clockwork.  Currently this
@@ -39,6 +40,8 @@ struct UploadModelRequest {
 	
 	/* Code and params for different batch sizes */
 	std::vector<ModelInstance> instances;
+
+	std::string str();
 };
 
 /* This is only currently used during setup/tear down phase of Clockwork */
@@ -47,6 +50,8 @@ struct UploadModelResponse {
 	int model_id;
 	size_t input_size;
 	size_t output_size;
+
+	std::string str();
 };
 
 /* Make an inference request for a model.  Clients can sent in arbitrary
@@ -59,6 +64,8 @@ struct InferenceRequest {
 	int batch_size;
 	size_t input_size;
 	void* input;
+
+	std::string str();
 };
 
 /* The response to a specific inference request. */
@@ -68,23 +75,31 @@ struct InferenceResponse {
 	int batch_size;
 	size_t output_size;
 	void* output;
+
+	std::string str();
 };
 
 /** This is a 'backdoor' API function for ease of experimentation */
 struct EvictRequest {
 	RequestHeader header;
 	int model_id;
+
+	std::string str();
 };
 
 /** This is a 'backdoor' API function for ease of experimentation */
 struct EvictResponse {
 	ResponseHeader header;
+
+	std::string str();
 };
 
 /** This is a 'backdoor' API function for ease of experimentation */
 struct LoadModelFromRemoteDiskRequest {
 	RequestHeader header;
 	std::string remote_path;
+
+	std::string str();
 };
 
 /** This is a 'backdoor' API function for ease of experimentation */
@@ -93,6 +108,8 @@ struct LoadModelFromRemoteDiskResponse {
 	int model_id;
 	size_t input_size;
 	size_t output_size;
+
+	std::string str();
 };
 
 class ClientAPI {
