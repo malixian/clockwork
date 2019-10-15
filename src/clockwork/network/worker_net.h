@@ -108,14 +108,15 @@ private:
 
 };
 
-class WorkerClient {
+/* WorkerManager is used to connect to multiple workers.  One IO thread will service all worker network calls */
+class WorkerManager {
 private:
 	std::atomic_bool alive;
 	asio::io_service io_service;
 	std::thread network_thread;
 
 public:
-	WorkerClient();
+	WorkerManager();
 
 	void run();
 

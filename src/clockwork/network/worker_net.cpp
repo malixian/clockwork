@@ -305,9 +305,9 @@ void WorkerServer::handle_accept(WorkerConnection* connection, tcp::acceptor* ac
 	start_accept(acceptor);
 }
 
-WorkerClient::WorkerClient() : alive(true), network_thread(&WorkerClient::run, this) {}
+WorkerManager::WorkerManager() : alive(true), network_thread(&WorkerManager::run, this) {}
 
-void WorkerClient::run() {
+void WorkerManager::run() {
 	while (alive) {
 		try {
 			asio::io_service::work work(io_service);
@@ -322,7 +322,7 @@ void WorkerClient::run() {
 	}
 }
 
-void WorkerClient::shutdown(bool awaitCompletion) {
+void WorkerManager::shutdown(bool awaitCompletion) {
 	alive.store(false);
 	io_service.stop();
 	if (awaitCompletion) {
@@ -330,11 +330,11 @@ void WorkerClient::shutdown(bool awaitCompletion) {
 	}
 }
 
-void WorkerClient::join() {
+void WorkerManager::join() {
 	network_thread.join();
 }
 
-ControllerConnection* WorkerClient::connect(std::string host, std::string port, workerapi::Controller* controller) {
+ControllerConnection* WorkerManager::connect(std::string host, std::string port, workerapi::Controller* controller) {
 	try {
 		ControllerConnection* c = new ControllerConnection(io_service, controller);
 		c->connect(host, port);
