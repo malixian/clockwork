@@ -152,7 +152,6 @@ message InferActionProto {
   required uint64 latest = 5;
   required uint64 expected_duration = 6;
   required uint32 batch_size = 7;
-  required uint64 input_size = 8;
 }
 
 message InferResultProto {

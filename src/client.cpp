@@ -24,28 +24,46 @@ std::string get_example_model(std::string name = "resnet18_tesla-m40_batchsize1"
 
 class ClosedLoopClient {
 public:
+	std::atomic_int request_id_seed;
 	network::client::Connection* client;
 
-	ClosedLoopClient(network::client::Connection* client) : client(client) {
+	ClosedLoopClient(network::client::Connection* client) : client(client), request_id_seed(0) {
 		loadModel();
 	}
 
 	void loadModel() {
 		clientapi::LoadModelFromRemoteDiskRequest request;
 		request.header.user_id = 0;
-		request.header.user_request_id = 0;
+		request.header.user_request_id = request_id_seed++;
 		request.remote_path = get_example_model();
 
+		std::cout << "<--  " << request.str() << std::endl;
+
 		client->loadRemoteModel(request, [this] (clientapi::LoadModelFromRemoteDiskResponse &response) {
-			std::cout << "Model loaded" << std::endl;
-			std::cout << response.header.status << ": " << response.header.message << std::endl;
-			std::cout << response.model_id << " input=" << response.input_size << " output=" << response.output_size << std::endl;
-			this->infer();
+			std::cout << " --> " << response.str() << std::endl;
+			if (response.header.status == clockworkSuccess) {
+				this->infer(response.model_id, response.input_size);
+			}
 		});
 	}
 
-	void infer() {
-		std::cout << "inferring" << std::endl;
+	void infer(int model_id, int input_size) {
+		clientapi::InferenceRequest request;
+		request.header.user_id = 0;
+		request.header.user_request_id = request_id_seed++;
+		request.model_id = model_id;
+		request.batch_size = 1;
+		request.input_size = input_size;
+		request.input = malloc(input_size);
+
+		std::cout << "<--  " << request.str() << std::endl;
+
+		client->infer(request, [this, model_id, input_size] (clientapi::InferenceResponse &response) {
+			std::cout << " --> " << response.str() << std::endl;
+			if (response.header.status == clockworkSuccess) {
+				this->infer(model_id, input_size);
+			}
+		});		
 	}
 
 };
@@ -57,23 +75,16 @@ int main(int argc, char *argv[]) {
 	}
 	std::cout << "Starting Clockwork Client" << std::endl;
 
-	asio::io_service io_service;
+	// Manages client-side connections to clockwork, has internal network IO thread
+	network::client::ConnectionManager* manager = new network::client::ConnectionManager();
 
-	network::client::Connection* network_client = new network::client::Connection(io_service);
+	// Connect to clockwork
+	network::client::Connection* clockwork_connection = manager->connect(argv[1], argv[2]);    
 
-	ClosedLoopClient* closed_loop = nullptr;
-    network_client->set_ready_cb([network_client, &closed_loop](){ 
-    	closed_loop = new ClosedLoopClient(network_client);
-    });
-    network_client->connect(argv[1], argv[2]);
+	// Simple closed-loop client
+	ClosedLoopClient* closed_loop = new ClosedLoopClient(clockwork_connection);
 
-	try {
-	    io_service.run();
-	} catch (std::exception& e) {
-	    std::cerr << e.what() << std::endl;
-	} catch (const char * m) {
-	    std::cerr << m << std::endl;
-	}
+	manager->join();
 
 	std::cout << "Clockwork Client Exiting" << std::endl;
 }

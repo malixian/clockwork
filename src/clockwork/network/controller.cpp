@@ -106,8 +106,6 @@ void WorkerConnection::sendActions(std::vector<std::shared_ptr<workerapi::Action
 }
 
 void WorkerConnection::sendAction(std::shared_ptr<workerapi::Action> &action) {
-	std::cout << "Sending " << action->str() << std::endl;
-
 	if (auto load_model = std::dynamic_pointer_cast<workerapi::LoadModelFromDisk>(action)) {
 		auto tx = new load_model_from_disk_action_tx();
 		tx->set(*load_model);
@@ -232,44 +230,49 @@ void ClientConnection::aborted_receive(message_connection *tcp_conn, message_rx 
 }
 
 void ClientConnection::completed_receive(message_connection *tcp_conn, message_rx *req) {
+	int request_id = req->get_msg_id();
 
 	if (auto infer = dynamic_cast<msg_inference_req_rx*>(req)) {
 		auto request = new clientapi::InferenceRequest();
 		infer->get(*request);
-		api->infer(*request, [this, request] (clientapi::InferenceResponse &response) {
+		api->infer(*request, [this, request, request_id] (clientapi::InferenceResponse &response) {
 			delete request;
 			auto rsp = new msg_inference_rsp_tx();
 			rsp->set(response);
+			rsp->set_msg_id(request_id);
 			msg_tx_.send_message(*rsp);
 		});
 
 	} else if (auto evict = dynamic_cast<msg_evict_req_rx*>(req)) {
 		auto request = new clientapi::EvictRequest();
 		evict->get(*request);
-		api->evict(*request, [this, request] (clientapi::EvictResponse &response) {
+		api->evict(*request, [this, request, request_id] (clientapi::EvictResponse &response) {
 			delete request;
 			auto rsp = new msg_evict_rsp_tx();
 			rsp->set(response);
+			rsp->set_msg_id(request_id);
 			msg_tx_.send_message(*rsp);
 		});
 
 	} else if (auto load_model = dynamic_cast<msg_load_remote_model_req_rx*>(req)) {
 		auto request = new clientapi::LoadModelFromRemoteDiskRequest();
 		load_model->get(*request);
-		api->loadRemoteModel(*request, [this, request] (clientapi::LoadModelFromRemoteDiskResponse &response) {
+		api->loadRemoteModel(*request, [this, request, request_id] (clientapi::LoadModelFromRemoteDiskResponse &response) {
 			delete request;
 			auto rsp = new msg_load_remote_model_rsp_tx();
 			rsp->set(response);
+			rsp->set_msg_id(request_id);
 			msg_tx_.send_message(*rsp);
 		});
 		
 	} else if (auto upload_model = dynamic_cast<msg_upload_model_req_rx*>(req)) {
 		auto request = new clientapi::UploadModelRequest();
 		upload_model->get(*request);
-		api->uploadModel(*request, [this, request] (clientapi::UploadModelResponse &response) {
+		api->uploadModel(*request, [this, request, request_id] (clientapi::UploadModelResponse &response) {
 			delete request;
 			auto rsp = new msg_upload_model_rsp_tx();
 			rsp->set(response);
+			rsp->set_msg_id(request_id);
 			msg_tx_.send_message(*rsp);
 		});
 		

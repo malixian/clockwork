@@ -7,15 +7,11 @@ namespace client {
 using asio::ip::tcp;
 using namespace clockwork::clientapi;
 
-Connection::Connection(asio::io_service& io_service): net_rpc_conn(io_service), ready_cb(nop_cb) {
-}
-
-void Connection::set_ready_cb(std::function<void()> cb) {
-	ready_cb = cb;
+Connection::Connection(asio::io_service& io_service): net_rpc_conn(io_service), connected(false) {
 }
 
 void Connection::ready() {
-	ready_cb();
+	connected.store(true);
 }
 
 void Connection::request_done(net_rpc_base &req) {
@@ -72,7 +68,53 @@ void Connection::loadRemoteModel(LoadModelFromRemoteDiskRequest &request, std::f
 	send_request(*rpc);
 }
 
-void Connection::nop_cb() {}
+ConnectionManager::ConnectionManager() : alive(true), network_thread(&ConnectionManager::run, this) {}
+
+void ConnectionManager::run() {
+	while (alive) {
+		try {
+			asio::io_service::work work(io_service);
+			io_service.run();
+		} catch (std::exception& e) {
+			alive.store(false);
+			CHECK(false) << "Exception in network thread: " << e.what();
+		} catch (const char* m) {
+			alive.store(false);
+			CHECK(false) << "Exception in network thread: " << m;
+		}
+	}
+}
+
+void ConnectionManager::shutdown(bool awaitCompletion) {
+	alive.store(false);
+	io_service.stop();
+	if (awaitCompletion) {
+		join();
+	}
+}
+
+void ConnectionManager::join() {
+	network_thread.join();
+}
+
+Connection* ConnectionManager::connect(std::string host, std::string port) {
+	try {
+		Connection* c = new Connection(io_service);
+		c->connect(host, port);
+		std::cout << "Connecting to clockwork @ " << host << ":" << port << std::endl;
+		while (alive.load() && !c->connected.load()); // If connection fails, alive sets to false
+		std::cout << "Connection established" << std::endl;
+		return c;
+	} catch (std::exception& e) {
+		alive.store(false);
+		io_service.stop();
+		CHECK(false) << "Exception in network thread: " << e.what();
+	} catch (const char* m) {
+		alive.store(false);
+		io_service.stop();
+		CHECK(false) << "Exception in network thread: " << m;
+	}
+}
 
 }
 }

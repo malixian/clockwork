@@ -20,9 +20,9 @@ using namespace clockwork::clientapi;
 Represents a connection of a client to the Clockwork controller */
 class Connection: public net_rpc_conn, public ClientAPI {
 public:
-  Connection(asio::io_service& io_service);
+  std::atomic_bool connected;
 
-  void set_ready_cb(std::function<void()> cb);
+  Connection(asio::io_service& io_service);
 
   // net_rpc_conn methods
   virtual void ready();
@@ -34,10 +34,27 @@ public:
   virtual void evict(EvictRequest &request, std::function<void(EvictResponse&)> callback);
   virtual void loadRemoteModel(LoadModelFromRemoteDiskRequest &request, std::function<void(LoadModelFromRemoteDiskResponse&)> callback);
 
-private:
-  std::function<void()> ready_cb;
+};
 
-  static void nop_cb();
+/* ConnectionManager is used to connect multiple times to the clockwork controller
+Connect can be called multiple times to represent multiple clients
+The ConnectionManager internally has just one IO thread to handle IO for all connections */
+class ConnectionManager {
+private:
+  std::atomic_bool alive;
+  asio::io_service io_service;
+  std::thread network_thread;
+
+  void run();
+
+public:
+  ConnectionManager();
+
+  void shutdown(bool awaitCompletion = false);
+  void join();
+
+  Connection* connect(std::string host, std::string port);
+
 };
 
 }

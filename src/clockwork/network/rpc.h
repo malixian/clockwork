@@ -77,6 +77,8 @@ public:
   net_rpc_receive_payload(std::function<void(TRes&)> c)
     : net_rpc<TReq, TRes>(c) {}
 
+protected:
+
   virtual void do_make_response(uint64_t msg_type, uint64_t body_len)
   {
     net_rpc<TReq, TRes>::do_make_response(msg_type, body_len);
@@ -113,7 +115,10 @@ protected:
   {
     std::lock_guard<std::mutex> lock(requests_mutex);
 
-    net_rpc_base *rb = requests[msg_id];
+    auto it = requests.find(msg_id);
+    CHECK(it != requests.end()) << "No RPC request with ID " << msg_id;
+
+    auto rb = it->second;
     message_rx &mrx = rb->make_response(msg_type, body_len);
 
     return &mrx;
@@ -130,7 +135,7 @@ protected:
       std::lock_guard<std::mutex> lock(requests_mutex);
 
       uint64_t msg_id = req->get_msg_id();
-      std::map<uint64_t, net_rpc_base *>::iterator it = requests.find(msg_id);
+      auto it = requests.find(msg_id);
       if (it != requests.end()) {
         rb = it->second;
         requests.erase(it);

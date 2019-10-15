@@ -146,7 +146,7 @@ class evict_weights_action_rx : public msg_protobuf_rx<ACT_EVICT_WEIGHTS, EvictW
 public:
   virtual void get(workerapi::EvictWeights &action) {
   	action.id = msg.action_id();
-  	action.action_type = workerapi::loadWeightsAction;
+  	action.action_type = workerapi::evictWeightsAction;
   	action.model_id = msg.model_id();
   	action.gpu_id = msg.gpu_id();
   	action.earliest = msg.earliest();
@@ -168,7 +168,7 @@ class evict_weights_result_rx : public msg_protobuf_rx<RES_EVICT_WEIGHTS, EvictW
 public:
   virtual void get(workerapi::EvictWeightsResult &result) {
   	result.id = msg.action_id();
-  	result.action_type = workerapi::loadWeightsAction;
+  	result.action_type = workerapi::evictWeightsAction;
   	result.status = actionSuccess;
   	result.begin = msg.timing().begin();
   	result.end = msg.timing().end();
@@ -195,7 +195,7 @@ class infer_action_rx : public msg_protobuf_rx_with_body<ACT_INFER, InferActionP
 public:
   virtual void get(workerapi::Infer &action) {
   	action.id = msg.action_id();
-  	action.action_type = workerapi::loadWeightsAction;
+  	action.action_type = workerapi::inferAction;
   	action.model_id = msg.model_id();
   	action.gpu_id = msg.gpu_id();
   	action.earliest = msg.earliest();
@@ -229,7 +229,7 @@ class infer_result_rx : public msg_protobuf_rx_with_body<RES_INFER, InferResultP
 public:
   virtual void get(workerapi::InferResult &result) {
   	result.id = msg.action_id();
-  	result.action_type = workerapi::loadWeightsAction;
+  	result.action_type = workerapi::inferAction;
   	result.status = actionSuccess;
   	result.copy_input.begin = msg.copy_input_timing().begin();
   	result.copy_input.end = msg.copy_input_timing().end();

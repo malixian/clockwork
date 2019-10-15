@@ -93,7 +93,6 @@ void msg_load_remote_model_rsp_tx::set(clientapi::LoadModelFromRemoteDiskRespons
 }
 
 void msg_load_remote_model_rsp_rx::get(clientapi::LoadModelFromRemoteDiskResponse &response) {
-	std::cout << "Getting" << std::endl;
 	get_header(response.header, msg.header());
 	response.model_id = msg.model_id();
 	response.input_size = msg.input_size();
