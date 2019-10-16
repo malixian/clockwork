@@ -12,10 +12,11 @@ This is the user-facing Clockwork Client
 namespace clockwork {
 
 /* Represents a model that can be inferred */
-class ClockworkModel {
+class Model {
 public:
-	int model_id;
-	int input_size;
+	virtual int id() = 0;
+
+	virtual int input_size() = 0;
 
 	/* 
 	Perform an inference with the provided input and return the output.
@@ -47,32 +48,38 @@ Represents a client to Clockwork
 Clockwork can be either local or remote,
 and Clockwork can have multiple clients
 */
-class ClockworkClient {
+class Client {
 public:
 
+	virtual ~Client(){}
+
 	/*
-	Gets an existing ClockworkModel from Clockwork that can then be inferenced.
+	Gets an existing Model from Clockwork that can then be inferenced.
 	Can throw exceptions including if the model doesn't exist.
 	*/
-	virtual ClockworkModel* get_model(int model_id) = 0;
-	virtual std::future<ClockworkModel*> get_model_async(int model_id) = 0;
+	virtual Model* get_model(int model_id) = 0;
+	virtual std::future<Model*> get_model_async(int model_id) = 0;
 
 	/*
-	Uploads a model to Clockwork.  Returns a ClockworkModel for the model
+	Uploads a model to Clockwork.  Returns a Model for the model
 	Can throw exceptions including if the model is invalid
 	*/
-	virtual ClockworkModel* upload_model(std::vector<uint8_t> &serialized_model) = 0;
-	virtual std::future<ClockworkModel*> upload_model_async(std::vector<uint8_t> &serialized_model) = 0;
+	virtual Model* upload_model(std::vector<uint8_t> &serialized_model) = 0;
+	virtual std::future<Model*> upload_model_async(std::vector<uint8_t> &serialized_model) = 0;
+
+
+	/*
+	Backdoor client function to load a model that resides on the remote machine.
+	Not part of the proper API but useful for experimentation
+	*/
+	virtual Model* load_remote_model(std::string model_path) = 0;
+	virtual std::future<Model*> load_remote_model_async(std::string model_path) = 0;
 
 };
 
-class Clockwork {
-public:
 
-	/* Connect to a Clockwork instance */
-	static ClockworkClient* Connect(std::string &hostname, int port);
-
-};
+/* Connect to a Clockwork instance */
+extern "C" Client* Connect(const std::string &hostname, const std::string &port);
 
 }
 

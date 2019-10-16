@@ -34,6 +34,7 @@ link_directories(
 )
 
 add_library(clockwork
+	src/clockwork/client.cpp
 	src/clockwork/task.cpp
 	src/clockwork/modeldef.cpp
 	src/clockwork/common.cpp
