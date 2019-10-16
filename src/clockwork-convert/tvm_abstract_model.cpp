@@ -181,19 +181,82 @@ std::vector<Page*> pack(std::vector<StorageLocation*> locations, size_t page_siz
 	return pages;
 }
 
-PageMappedStorage PageMappedStorage::calculate(Model model, size_t page_size) {
+void make_weights_lookup_table(Model &model, PageMappedStorage* mapped) {
+	unsigned page_number = 0;
+	for (Page* page : mapped->weights) {
+		unsigned index_in_page = 0;
+
+		for (StorageLocation* location : page->used_by) {
+
+			// Find the LayerWeights that this storage location corresponds to
+			LayerWeights* weights = nullptr;
+			for (auto &p : model.weights) {
+				if (p.second->tensor->storage == location) {
+					weights = p.second;
+				}
+			}
+
+			if (weights == nullptr) {
+				throw "Error: page does not correspond to any LayerWeights";
+			}
+
+			// Store the actual weights data in the storage lookup table.
+			auto data = std::string(static_cast<char*>(weights->data), weights->size);
+			mapped->weights_lookup[data] = std::make_pair(page_number, index_in_page);
+
+			index_in_page++;
+		}
+
+		page_number++;
+	}
+}
+
+std::vector<Page*> replicate_weights_mapping(Model &model, PageMappedStorage* existing_weights_mapping) {
+	std::vector<Page*> pages;
+	for (unsigned i = 0; i < existing_weights_mapping->weights.size(); i++) {
+		Page* page = new Page();
+		for (unsigned j = 0; j < existing_weights_mapping->weights[i]->used_by.size(); j++) {
+			page->used_by.push_back(nullptr);
+		}
+		pages.push_back(page);
+	}
+
+	for (auto &p : model.weights) {
+		LayerWeights* weights = p.second;
+		auto data = std::string(static_cast<char*>(weights->data), weights->size);
+		if (existing_weights_mapping->weights_lookup.find(data) == existing_weights_mapping->weights_lookup.end()) {
+			throw "Error: " + weights->name + " not found in existing weights mapping";
+		}
+		auto assignment = existing_weights_mapping->weights_lookup[data];
+		pages[assignment.first]->used_by[assignment.second] = weights->tensor->storage;
+	}
+
+	for (unsigned i = 0; i < pages.size(); i++) {
+		for (unsigned j = 0; j < pages[i]->used_by.size(); j++) {
+			if (pages[i]->used_by[j] == nullptr) {
+				std::stringstream err;
+				err << "Error: page " << i << "," << j << " is nullptr";
+				throw err.str();
+			}
+		}
+	}
+
+	return pages;
+}
+
+PageMappedStorage* PageMappedStorage::calculate(Model &model, size_t page_size, PageMappedStorage* existing_weights_mapping) {
 	std::vector<StorageLocation*> weights_storage;
 	std::vector<StorageLocation*> workspace_storage;
 
 	for (auto &p : model.weights) {
 		if (p.second == nullptr) {
-			std::cout << "p.second is nullptr" << std::endl;
+			throw "p.second is nullptr";
 		}
 		if (p.second->tensor == nullptr) {
-			std::cout << " tensor is nullptr" << std::endl;
+			throw "tensor is nullptr";
 		}
 		if (p.second->tensor->storage == nullptr) {
-			std::cout << "storage is nullptr" << std::endl;
+			throw "storage is nullptr";
 		}
 		weights_storage.push_back(p.second->tensor->storage);
 	}
@@ -204,9 +267,19 @@ PageMappedStorage PageMappedStorage::calculate(Model model, size_t page_size) {
 		}
 	}
 
-	PageMappedStorage mapped;
-	mapped.weights = pack(weights_storage, page_size);
-	mapped.workspace = pack(workspace_storage, page_size);
+	auto mapped = new PageMappedStorage();
+
+	if (existing_weights_mapping == nullptr) {
+		mapped->weights = pack(weights_storage, page_size);
+		make_weights_lookup_table(model, mapped);
+	} else {
+		mapped->weights = replicate_weights_mapping(model, existing_weights_mapping);
+	}
+
+	mapped->weights = pack(weights_storage, page_size);
+
+
+	mapped->workspace = pack(workspace_storage, page_size);
 
 	int maxWorkspacePages = 0;
 	for (Operation* &op : model.operations) {
@@ -227,7 +300,7 @@ PageMappedStorage PageMappedStorage::calculate(Model model, size_t page_size) {
 		}
 	}
 
-	mapped.allocs = maxWorkspacePages;
+	mapped->allocs = maxWorkspacePages;
 
 	return mapped;
 }
@@ -290,8 +363,8 @@ void printNewModel(clockwork::model::PageMappedModelDef model) {
 
 }
 
-void makeModelDef(Model &model, int page_size, clockwork::model::PageMappedModelDef &output, char* &weights, int &weightsSize) {
-	PageMappedStorage mapped = PageMappedStorage::calculate(model, page_size);
+void makeModelDef(Model &model, int page_size, clockwork::model::PageMappedModelDef &output, char* &weights, int &weightsSize, PageMappedStorage* &mapped, PageMappedStorage* existing_weights_mapping) {
+	mapped = PageMappedStorage::calculate(model, page_size, existing_weights_mapping);
 
 	output.minimum_required_memory = 0;
 	for (StorageLocation* &location : model.storage_locations) {
@@ -303,13 +376,13 @@ void makeModelDef(Model &model, int page_size, clockwork::model::PageMappedModel
 		output.weights_memory += p.second->tensor->Size();
 	}
 
-	output.total_pages = mapped.weights.size() + mapped.workspace.size() + mapped.allocs;
+	output.total_pages = mapped->weights.size() + mapped->workspace.size() + mapped->allocs;
 	output.configured_page_size = page_size;
 	output.paged_required_memory = output.total_pages * output.configured_page_size;
 
 
 	uint64_t current_offset = 0;
-	for (Page* &page : mapped.weights) {
+	for (Page* &page : mapped->weights) {
 		clockwork::model::PageDef pagedef{current_offset, page->Size()};
 		output.weights_pages.push_back(pagedef);
 		current_offset += pagedef.size;
@@ -332,9 +405,9 @@ void makeModelDef(Model &model, int page_size, clockwork::model::PageMappedModel
 	std::unordered_map<int, PagePointer> storage_location_pointers;
 
 	current_offset = 0;
-	for (unsigned i = 0; i < mapped.weights.size() + mapped.workspace.size(); i++) {
+	for (unsigned i = 0; i < mapped->weights.size() + mapped->workspace.size(); i++) {
 		// Construct mapping for storage locations
-		Page* page = i < mapped.weights.size() ? mapped.weights[i] : mapped.workspace[i-mapped.weights.size()];
+		Page* page = i < mapped->weights.size() ? mapped->weights[i] : mapped->workspace[i-mapped->weights.size()];
 		uint64_t current_page_offset = 0;
 		for (StorageLocation* &location : page->used_by) {
 			CHECK(storage_location_pointers.find(location->id) == storage_location_pointers.end())
@@ -364,7 +437,7 @@ void makeModelDef(Model &model, int page_size, clockwork::model::PageMappedModel
 			opdef.inputs.push_back(tensordef);
 		}
 
-		int current_workspace_page = mapped.weights.size() + mapped.workspace.size();
+		int current_workspace_page = mapped->weights.size() + mapped->workspace.size();
 		int current_workspace_offset = 0;
 		for (size_t alloc : operation->allocs) {
 			if (current_workspace_offset + alloc > page_size) {

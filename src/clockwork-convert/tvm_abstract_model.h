@@ -96,10 +96,12 @@ public:
 	std::vector<Page*> workspace;
 	int allocs;
 
-	static PageMappedStorage calculate(Model model, size_t page_size);
+	std::unordered_map<std::string, std::pair<unsigned, unsigned>> weights_lookup;
+
+	static PageMappedStorage* calculate(Model &model, size_t page_size, PageMappedStorage* existing_weights_mapping = nullptr);
 };
 
-extern void makeModelDef(Model &model, int page_size, clockwork::model::PageMappedModelDef &output, char* &weights, int &weightsSize);
+extern void makeModelDef(Model &model, int page_size, clockwork::model::PageMappedModelDef &output, char* &weights, int &weightsSize, PageMappedStorage* &mapped, PageMappedStorage* existing_weights_mapping = nullptr);
 
 
 /* Invariants to check:

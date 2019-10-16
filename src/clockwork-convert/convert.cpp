@@ -20,6 +20,20 @@
 
 using namespace clockwork;
 
+struct TVM_Input {
+	int batchsize;
+	std::string model_json_filename;
+	std::string model_so_filename;
+	std::string model_params_filename;
+};
+
+struct ConvertConfig {
+	int pagesize;
+	std::vector<TVM_Input> inputs;
+	std::string output_dir;
+	std::string output_filename_prefix;
+};
+
 /** Converts a TVM model into a lighterweight Clockwork model 
 
 Clockwork models use the original .so object for the TVM model,
@@ -27,38 +41,72 @@ but a different params file, and a more efficient alternative to the json.
 
 */
 
-void convert(int pagesize, std::string model_so, std::string model_json, std::string model_params, std::string clockwork_meta_out, std::string clockwork_params_out) {
+void convert(ConvertConfig config) {
+	clockwork_model::PageMappedStorage* weights_mapping = nullptr;
 
-	tvm_model::Model model = tvm_model::Model::LoadFromFile(model_json);
-	tvm_model::Params params = tvm_model::Params::LoadFromFile(model_params);
-	tvm_model::Allocs allocs = tvm_model::Allocs::ProfileModel(model_so, model_json, model_params);
+	// The base output filename
+	std::string outfile_base = config.output_dir + "/" + config.output_filename_prefix;
 
-
-	clockwork_model::Model model2 = clockwork_model::Model::fromTVM(model, params, allocs);
-
-	clockwork::model::PageMappedModelDef pagemappedmodel;
-	char* weights;
-	int weightsSize;
-	clockwork_model::makeModelDef(model2, pagesize, pagemappedmodel, weights, weightsSize);
-
-    std::ofstream outfile;
-    outfile.open(clockwork_meta_out);
-
-    pods::OutputStream out(outfile);
-    pods::BinarySerializer<decltype(out)> serializer(out);
-    if (serializer.save(pagemappedmodel) != pods::Error::NoError)
-    {
-        std::cerr << "serialization error\n";
-    } else {
-    	std::cout << "serialize success\n";
-    }
-
-    outfile.close();
+	std::cout << "Converting with page size " << config.pagesize << std::endl;
+	for (TVM_Input input : config.inputs) {
+		std::cout << "  batch=" << input.batchsize << " " << input.model_params_filename << std::endl;
+	}
+	std::cout << "Outputting to " << outfile_base << std::endl;
 
 
-	std::ofstream params_out(clockwork_params_out, std::ofstream::binary);
-	params_out.write(weights, weightsSize);
-	params_out.close();
+	for (TVM_Input input : config.inputs) {
+
+		// Load the TVM stuff
+		tvm_model::Model model = tvm_model::Model::LoadFromFile(input.model_json_filename);
+		tvm_model::Params params = tvm_model::Params::LoadFromFile(input.model_params_filename);
+		tvm_model::Allocs allocs = tvm_model::Allocs::ProfileModel(input.model_so_filename, input.model_json_filename, input.model_params_filename);
+
+		// Convert into a clockwork model
+		clockwork_model::Model model2 = clockwork_model::Model::fromTVM(model, params, allocs);
+
+		// Map the paged storage
+		clockwork_model::PageMappedStorage* mapped;
+		clockwork::model::PageMappedModelDef pagemappedmodel;
+		char* weights;
+		int weightsSize;
+		clockwork_model::makeModelDef(model2, config.pagesize, pagemappedmodel, weights, weightsSize, mapped, weights_mapping);
+
+		// Save the model's metadata
+		std::stringstream clockwork_meta_out;
+		clockwork_meta_out << outfile_base << "." << input.batchsize << ".clockwork";
+
+	    std::ofstream outfile;
+	    outfile.open(clockwork_meta_out.str());
+
+	    pods::OutputStream out(outfile);
+	    pods::BinarySerializer<decltype(out)> serializer(out);
+	    if (serializer.save(pagemappedmodel) != pods::Error::NoError)
+	    {
+	        std::cerr << "serialization error\n";
+	    } else {
+	    	std::cout << "serialize success\n";
+	    }
+	    outfile.close();
+
+	    // Copy the SO
+	    std::stringstream so_out;
+	    so_out << outfile_base << "." << input.batchsize << ".so";
+
+	    std::ifstream  src(input.model_so_filename, std::ios::binary);
+	    std::ofstream  dst(so_out.str(), std::ios::binary);
+		dst << src.rdbuf();
+
+	    // First time round, save the weights
+	    if (weights_mapping == nullptr) {
+	    	std::string clockwork_params_out = outfile_base + ".clockwork_params";
+
+			std::ofstream params_out(clockwork_params_out, std::ofstream::binary);
+			params_out.write(weights, weightsSize);
+			params_out.close();
+
+			weights_mapping = mapped;
+		}
+	}
 }
 
 void show_usage() {
@@ -69,6 +117,11 @@ void show_usage() {
 int main(int argc, char *argv[]) {
 	std::vector<std::string> non_argument_strings;
 
+	ConvertConfig config;
+	config.pagesize = 16 * 1024 * 1024;
+	config.output_dir = ".";
+	config.output_filename_prefix = "clockwork_model";
+
 	int pagesize = 16 * 1024 * 1024;
 	for (int i = 1; i < argc; ++i) {
 		std::string arg = argv[i];
@@ -77,6 +130,8 @@ int main(int argc, char *argv[]) {
 		    return 0;
 		} else if ((arg == "-p") || (arg == "--pagesize")) {
 		    pagesize = atoi(argv[++i]);
+		} else if ((arg == "-o") || (arg == "--output")) {
+		    config.output_dir = argv[++i];
 		} else {
 		  non_argument_strings.push_back(arg);
 		}
@@ -88,41 +143,21 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 
+	for (unsigned i = 1; i < non_argument_strings.size(); i+=2) {
+		TVM_Input input;
+		input.batchsize = atoi(non_argument_strings[i-1].c_str());
+		input.model_json_filename = non_argument_strings[i] + ".json";
+		input.model_so_filename = non_argument_strings[i] + ".so";
+		input.model_params_filename = non_argument_strings[i] + ".params";
 
-	// tvm_model::Params params = tvm_model::Params::LoadFromFile(non_argument_strings[0] + ".params");
-	// tvm_model::Params params2 = tvm_model::Params::LoadFromFile(non_argument_strings[1] + ".params");
+		config.inputs.push_back(input);
+	}
 
-	// std::unordered_map<std::string, std::string> datamap;
-	// for (auto &p : params.data) {
-	// 	std::string data(static_cast<char*>(p.second->dataptr()), p.second->Size());
-	// 	std::string name = p.first;
-	// 	datamap[data] = name;
-	// }
-	// int found = 0;
-	// int unfound = 0;
-	// for (auto &p : params2.data) {
-	// 	std::string data(static_cast<char*>(p.second->dataptr()), p.second->Size());
-	// 	if (datamap.find(data) == datamap.end()) {
-	// 		std::cout << "Unable to find " << p.first << std::endl;
-	// 		unfound++;
-	// 	} else {
-	// 		found++;
-	// 		// std::cout << p.first << " is " << datamap[data] << std::endl;
-	// 	}
-	// }
-	// std::cout << "found " << found << " unfound " << unfound << std::endl;
-
-	std::string model = non_argument_strings[0];
-	std::string so = model + ".so";
-	std::string json = model + ".json";
-	std::string params = model + ".params";
-	std::string clockwork = model + ".clockwork";
-	std::string clockwork_params = model + ".clockwork_params";
-
-	std::cout << "Processing " << model << std::endl;
-	std::cout << "  pagesize=" << pagesize << std::endl;
-
-	convert(pagesize, so, json, params, clockwork, clockwork_params);
+	try {
+		convert(config);
+	} catch (std::string &s) {
+		std::cout << "Convert failed: " << s << std::endl;
+	}
 
 	return 0;
 }
