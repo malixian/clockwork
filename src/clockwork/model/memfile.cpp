@@ -21,19 +21,14 @@ std::string memfd_filename(int memfd) {
 	return ss.str();
 }
 
-bool exists(const std::string& name) {
-	struct stat buf;
-	return (stat(name.c_str(), &buf) == 0);
-}
-
 Memfile Memfile::readFrom(const std::string &filename) {
-	CHECK(exists(filename)) << "Cannot create memfile from non-existent " << filename;
-
 	int memfd = make_memfd();
 	std::string memfilename = memfd_filename(memfd);
-    std::ofstream dst(memfilename,   std::ios::binary);
+    std::ofstream dst(memfilename, std::ios::binary);
+    CHECK(dst.good()) << "Bad memfile " << memfilename;
 
 	std::ifstream src(filename, std::ios::binary);
+	CHECK(src.good()) << "Unable to open file " << filename;
     dst << src.rdbuf();
 
     src.close();
