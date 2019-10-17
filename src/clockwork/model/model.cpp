@@ -19,6 +19,10 @@ Model::Model(Memfile so_memfile, std::string &serialized_spec, int weights_size,
 Model::~Model() {
 	if (hot_so != nullptr) uninstantiate_model_on_device();
 	if (warm_so != nullptr) uninstantiate_model_on_host();
+
+	for (unsigned i = 0; i < rate_limit_events.size(); i++) {
+		CUDA_CALL(cudaEventDestroy(rate_limit_events[i]));
+	}
 }
 
 void Model::instantiate_model_on_host() {

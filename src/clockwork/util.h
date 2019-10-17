@@ -39,6 +39,8 @@ void setCurrentThreadMaxPriority();
 
 
 void readFileAsString(const std::string &filename, std::string &dst);
+std::vector<std::string> listdir(std::string directory);
+bool exists(std::string filename);
 
 
 void initializeCudaStream(int priority = 0);

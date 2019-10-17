@@ -3,11 +3,13 @@ cmake_minimum_required(VERSION 3.4.1)
 project(clockwork)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -O2")
+set(CXX "g++-8")
+set(CC "gcc-8")
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 set(CMAKE_BUILD_TYPE Debug)
 
 find_package(Threads REQUIRED)
-find_package(Boost REQUIRED)
+find_package(Boost COMPONENTS system filesystem REQUIRED)
 
 # Introduce variables:
 # * CMAKE_INSTALL_LIBDIR
@@ -46,6 +48,7 @@ add_library(clockwork
 	src/clockwork/worker.cpp
 	src/clockwork/model/memfile.cpp
 	src/clockwork/model/model.cpp
+	src/clockwork/model/batched.cpp
 	src/clockwork/model/cuda.cpp
 	src/clockwork/model/so.cpp
 	src/clockwork/api/client_api.cpp
@@ -68,6 +71,8 @@ target_link_libraries(clockwork PUBLIC
 	tvm_runtime
 	tbb
 	nvidia-ml
+    ${Boost_SYSTEM_LIBRARY}
+    ${Boost_FILESYSTEM_LIBRARY}
 )
 
 add_executable (main
@@ -85,6 +90,8 @@ target_link_libraries(
 	tvm_runtime
 	tbb
 	nvidia-ml
+    ${Boost_SYSTEM_LIBRARY}
+    ${Boost_FILESYSTEM_LIBRARY}
 )
 
 add_executable (cudafatbin
@@ -102,6 +109,8 @@ target_link_libraries(
 	tvm_runtime
 	tbb
 	nvidia-ml
+    ${Boost_SYSTEM_LIBRARY}
+    ${Boost_FILESYSTEM_LIBRARY}
 )
 
 include_directories(clockwork-convert)
@@ -123,6 +132,8 @@ target_link_libraries(
 	tvm_runtime
 	tbb
 	nvidia-ml
+    ${Boost_SYSTEM_LIBRARY}
+    ${Boost_FILESYSTEM_LIBRARY}
 )
 
 add_executable (inflate
@@ -139,6 +150,8 @@ target_link_libraries(
 	tvm_runtime
 	tbb
 	nvidia-ml
+    ${Boost_SYSTEM_LIBRARY}
+    ${Boost_FILESYSTEM_LIBRARY}
 )
 
 add_executable (testmemory
@@ -155,6 +168,8 @@ target_link_libraries(
 	tvm_runtime
 	tbb
 	nvidia-ml
+    ${Boost_SYSTEM_LIBRARY}
+    ${Boost_FILESYSTEM_LIBRARY}
 )
 
 include_directories(test)
@@ -170,6 +185,7 @@ add_executable (tests
 	test/clockwork/test/testpriorityqueue.cpp
 	test/clockwork/test/testclient.cpp
 	test/clockwork/test/model/testmodel.cpp
+	test/clockwork/test/model/testbatched.cpp
 )
 
 target_link_libraries(
@@ -182,6 +198,8 @@ target_link_libraries(
 	tvm_runtime
 	tbb
 	nvidia-ml
+    ${Boost_SYSTEM_LIBRARY}
+    ${Boost_FILESYSTEM_LIBRARY}
 )
 
 add_executable (profile
@@ -203,6 +221,8 @@ target_link_libraries(
 	tvm_runtime
 	tbb
 	nvidia-ml
+    ${Boost_SYSTEM_LIBRARY}
+    ${Boost_FILESYSTEM_LIBRARY}
 )
 
 # protobuf imports
@@ -228,6 +248,7 @@ target_link_libraries(
     tvm_runtime
     proto
     ${Boost_SYSTEM_LIBRARY}
+    ${Boost_FILESYSTEM_LIBRARY}
 )
 
 
@@ -245,6 +266,7 @@ target_link_libraries(
     tvm_runtime
     proto
     ${Boost_SYSTEM_LIBRARY}
+    ${Boost_FILESYSTEM_LIBRARY}
 )
 
 
@@ -262,5 +284,6 @@ target_link_libraries(
     tvm_runtime
     proto
     ${Boost_SYSTEM_LIBRARY}
+    ${Boost_FILESYSTEM_LIBRARY}
 )
 

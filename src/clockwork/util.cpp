@@ -18,6 +18,10 @@
 #include <cuda_runtime.h>
 #include <dmlc/logging.h>
 #include <nvml.h>
+#include <boost/filesystem.hpp>
+#include <sys/stat.h>
+
+
 
 
 namespace clockwork {
@@ -171,6 +175,27 @@ void readFileAsString(const std::string &filename, std::string &dst) {
   in.close();
 }
 
+struct path_leaf_string
+{
+    std::string operator()(const boost::filesystem::directory_entry& entry) const
+    {
+        return entry.path().leaf().string();
+    }
+};
+
+std::vector<std::string> listdir(std::string directory) {
+  std::vector<std::string> filenames;
+  boost::filesystem::path p(directory);
+  boost::filesystem::directory_iterator start(p);
+  boost::filesystem::directory_iterator end;
+  std::transform(start, end, std::back_inserter(filenames), path_leaf_string());
+  return filenames;
+}
+
+bool exists(std::string filename) {
+  struct stat buffer;   
+  return (stat (filename.c_str(), &buffer) == 0); 
+}
 
 void initializeCudaStream(int priority) {
   CUDA_CALL(cudaSetDevice(0));
