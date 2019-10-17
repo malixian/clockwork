@@ -262,6 +262,11 @@ PageMappedStorage* PageMappedStorage::calculate(Model &model, size_t page_size, 
 	}
 
 	for (auto &l : model.storage_locations) {
+		if (l->Size() > page_size) {
+			std::stringstream e;
+			e << "Storage location " << l->id << " has size " << l->Size() << " > page_size=" << page_size;
+			throw e.str();
+		}
 		if (std::find(weights_storage.begin(), weights_storage.end(), l) == weights_storage.end()) {
 			workspace_storage.push_back(l);
 		}

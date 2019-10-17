@@ -22,6 +22,7 @@ using namespace clockwork;
 
 struct TVM_Input {
 	int batchsize;
+	std::string name;
 	std::string model_json_filename;
 	std::string model_so_filename;
 	std::string model_params_filename;
@@ -55,6 +56,8 @@ void convert(ConvertConfig config) {
 
 
 	for (TVM_Input input : config.inputs) {
+
+		std::cout << "Processing " << input.name << " batchsize=" << input.batchsize << std::endl;
 
 		// Load the TVM stuff
 		tvm_model::Model model = tvm_model::Model::LoadFromFile(input.model_json_filename);
@@ -120,7 +123,7 @@ int main(int argc, char *argv[]) {
 	ConvertConfig config;
 	config.pagesize = 16 * 1024 * 1024;
 	config.output_dir = ".";
-	config.output_filename_prefix = "clockwork_model";
+	config.output_filename_prefix = "model";
 
 	int pagesize = 16 * 1024 * 1024;
 	for (int i = 1; i < argc; ++i) {
@@ -146,6 +149,7 @@ int main(int argc, char *argv[]) {
 	for (unsigned i = 1; i < non_argument_strings.size(); i+=2) {
 		TVM_Input input;
 		input.batchsize = atoi(non_argument_strings[i-1].c_str());
+		input.name = non_argument_strings[i];
 		input.model_json_filename = non_argument_strings[i] + ".json";
 		input.model_so_filename = non_argument_strings[i] + ".so";
 		input.model_params_filename = non_argument_strings[i] + ".params";
