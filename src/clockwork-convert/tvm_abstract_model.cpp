@@ -280,10 +280,6 @@ PageMappedStorage* PageMappedStorage::calculate(Model &model, size_t page_size, 
 	} else {
 		mapped->weights = replicate_weights_mapping(model, existing_weights_mapping);
 	}
-
-	mapped->weights = pack(weights_storage, page_size);
-
-
 	mapped->workspace = pack(workspace_storage, page_size);
 
 	int maxWorkspacePages = 0;

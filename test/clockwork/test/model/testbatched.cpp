@@ -42,9 +42,6 @@ TEST_CASE("Batched models individually", "[batched2]") {
         std::stringstream batched_f;
         batched_f << f << "." << batch_size;
 
-        std::cout << "f is " << f << std::endl;
-        std::cout << "Input file is " << batched_f.str() << std::endl;
-
         Model* model = Model::loadFromDisk(batched_f.str()+".so", batched_f.str()+".clockwork", f+".clockwork_params");
 
         model->instantiate_model_on_host();
@@ -174,11 +171,11 @@ TEST_CASE("Batched models with partial batches", "[batched]") {
             INFO("batch_size=" << batch_size << " i=" << i);
             REQUIRE(actualOutputF[i] == expectedOutputF[i]);
         }
-
-        delete model;
         free(input);
         free(expected_output);
-        free_cuda_pages(weights_pages);
         free_cuda_pages(workspace_pages);
     }
+
+    delete model;
+    free_cuda_pages(weights_pages);
 }
