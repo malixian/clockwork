@@ -17,14 +17,16 @@ std::string get_exe_location() {
 }
 
 std::string get_clockwork_dir() {
-    int bufsize = 1024;
-    char buf[bufsize];
-    int len = readlink("/proc/self/exe", buf, bufsize);
-	return dirname(dirname(buf));
+    std::string exe_location = get_exe_location();
+	return dirname(dirname(exe_location.data()));
 }
 
 std::string get_example_model(std::string name) {
     return get_clockwork_dir() + "/resources/" + name + "/model";
+}
+
+std::string get_example_batched_model(std::string name) {
+    return get_example_model(name);
 }
 
 bool is_cuda_cache_disabled() {

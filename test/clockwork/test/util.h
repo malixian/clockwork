@@ -11,7 +11,8 @@ namespace util {
 
 std::string get_exe_location();
 std::string get_clockwork_dir();
-std::string get_example_model(std::string name = "resnet18_tesla-m40_batchsize1");
+std::string get_example_model(std::string name = "resnet18_tesla-m40_batchsize1"); 
+std::string get_example_batched_model(std::string name = "resnet18_tesla-m40"); 
 
 bool is_cuda_cache_disabled();
 bool is_force_ptx_jit_enabled();
