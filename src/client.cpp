@@ -1,5 +1,6 @@
 #include "clockwork/network/client.h"
 #include "clockwork/api/client_api.h"
+#include "clockwork/client.h"
 #include <cstdlib>
 #include <unistd.h>
 #include <libgen.h>
@@ -13,7 +14,7 @@ using namespace clockwork;
 
 uint64_t now()
 {
-    return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+	return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 }
 
 std::string get_clockwork_dir()
@@ -204,13 +205,16 @@ public:
 
 	void gap()
 	{
-		if (!burst_mode && (now() % (burst_gap + burst_length)) > burst_gap) {
+		if (!burst_mode && (now() % (burst_gap + burst_length)) > burst_gap)
+		{
 			burst_mode = true;
-			p_distribution = std::poisson_distribution<uint64_t>(pow(10, 9) / (base_rate * burst_factor)); 
-		} else if ( burst_mode && (now() % (burst_gap + burst_length)) <= burst_gap) {
+			p_distribution = std::poisson_distribution<uint64_t>(pow(10, 9) / (base_rate * burst_factor));
+		}
+		else if (burst_mode && (now() % (burst_gap + burst_length)) <= burst_gap)
+		{
 			burst_mode = false;
-			p_distribution = std::poisson_distribution<uint64_t>(pow(10, 9) / base_rate); 
-		} 
+			p_distribution = std::poisson_distribution<uint64_t>(pow(10, 9) / base_rate);
+		}
 		std::this_thread::sleep_for(std::chrono::nanoseconds(p_distribution(BurstyClient::generator)));
 	}
 
@@ -268,18 +272,17 @@ int main(int argc, char *argv[])
 	}
 	std::cout << "Starting Clockwork Client" << std::endl;
 
-	// Manages client-side connections to clockwork, has internal network IO thread
-	network::client::ConnectionManager *manager = new network::client::ConnectionManager();
+	clockwork::Client *client = clockwork::Connect(argv[1], argv[2]);
 
-	// Connect to clockwork
-	network::client::Connection *clockwork_connection = manager->connect(argv[1], argv[2]);
+	clockwork::Model *model = client->load_remote_model(get_example_model());
 
-	// Simple closed-loop client
-	// ClosedLoopClient *closed_loop = new ClosedLoopClient(clockwork_connection);
-	OpenLoopClient *open_loop = new OpenLoopClient(clockwork_connection, 100);
-	//BurstyClient *bursty = new BurstyClient(clockwork_connection, 5,10,3,5);
+	// OpenLoopClient *open_loop = new OpenLoopClient(client, 100);
 
-	manager->join();
+	while (true)
+	{
+		std::vector<uint8_t> input(model->input_size());
+		model->infer(input);
+	}
 
 	std::cout << "Clockwork Client Exiting" << std::endl;
 }

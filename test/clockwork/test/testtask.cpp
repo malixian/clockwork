@@ -142,7 +142,7 @@ public:
     RuntimeModel* rm;
     std::shared_ptr<Allocation> workspace;
 
-    TestCopyInputTask(MemoryManager* cache, int model_id, uint64_t earliest, uint64_t latest, size_t input_size, char* input) : CopyInputTask(cache, model_id, earliest, latest, input_size, input), workspace(nullptr) {}
+    TestCopyInputTask(MemoryManager* cache, int model_id, uint64_t earliest, uint64_t latest, unsigned batch_size, size_t input_size, char* input) : CopyInputTask(cache, model_id, earliest, latest, batch_size, input_size, input), workspace(nullptr) {}
 
     void run(cudaStream_t stream) {
         try {
@@ -186,7 +186,7 @@ public:
     int status_code;
     std::string error_message;
 
-    TestInferTask(RuntimeModel* rm, MemoryManager* cache, uint64_t earliest, uint64_t latest, std::shared_ptr<Allocation> workspace) : ExecTask(rm, cache, earliest, latest, workspace) {}
+    TestInferTask(RuntimeModel* rm, MemoryManager* cache, uint64_t earliest, uint64_t latest, unsigned batch_size, std::shared_ptr<Allocation> workspace) : ExecTask(rm, cache, earliest, latest, batch_size, workspace) {}
 
     void run(cudaStream_t stream) {
         try {
@@ -227,8 +227,9 @@ public:
     bool is_cancelled = false;
     int status_code;
     std::string error_message;
+    char* output;
 
-    TestCopyOutputTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, std::shared_ptr<Allocation> workspace) : CopyOutputTask(rm, manager, earliest, latest, workspace) {}
+    TestCopyOutputTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, unsigned batch_size, std::shared_ptr<Allocation> workspace) : CopyOutputTask(rm, manager, earliest, latest, batch_size, workspace) {}
 
     void run(cudaStream_t stream) {
         try {
@@ -252,6 +253,7 @@ public:
 
     void success(char* output) {
         is_success = true;
+        this->output = output;
     }
 
     void error(int status_code, std::string message) {
@@ -264,15 +266,20 @@ public:
 
 Model* make_model() {
     std::string f = clockwork::util::get_example_model();
-
-    Model* model = Model::loadFromDisk(f+".so", f+".clockwork", f+".clockwork_params");
-    model->instantiate_model_on_host();
-    model->instantiate_model_on_device();
+    Model* model = Model::loadFromDisk(f+".1.so", f+".1.clockwork", f+".clockwork_params");
     return model;
 }
 
-PageCache* make_cache(size_t total_size) {
-    return make_GPU_cache(total_size);
+BatchedModel* make_batched_model(int batch_size, Model* model) {
+    std::vector<std::pair<unsigned, Model*>> models = {{batch_size, model}};
+    BatchedModel* batched = new BatchedModel(model->weights_size, model->weights_pinned_host_memory, models);
+    batched->instantiate_models_on_host();
+    batched->instantiate_models_on_device();
+    return batched;    
+}
+
+PageCache* make_cache(size_t total_size, size_t page_size) {
+    return make_GPU_cache(total_size, page_size);
 }
 
 cudaStream_t make_stream() {
@@ -281,12 +288,16 @@ cudaStream_t make_stream() {
     return stream;
 }
 
-MemoryManager* make_manager(size_t cache_size) {
-    return new MemoryManager(make_cache(cache_size));
+MemoryManager* make_manager(size_t weights_cache_size, size_t weights_page_size, size_t workspace_cache_size, size_t workspace_page_size) {
+    return new MemoryManager(make_cache(weights_cache_size, weights_page_size), make_cache(workspace_cache_size, workspace_page_size));
 }
 
 MemoryManager* make_manager() {
-    return make_manager(1024L * 1024L * 1024L);
+    return make_manager(
+        1024L * 1024L * 1024L, 
+        16L * 1024L * 1024L,
+        1024L * 1024L * 1024L,
+        64L * 1024L * 1024L);
 }
 
 TEST_CASE("Load Model From Disk", "[task] [loadmodel]") {
@@ -331,7 +342,7 @@ TEST_CASE("Load Non-Existent Model From Disk", "[task] [loadmodel]") {
 
 TEST_CASE("Load Weights", "[task]") {
     Model* model = make_model();
-    RuntimeModel* rm = new RuntimeModel(model);
+    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model));
     cudaStream_t stream = make_stream();
     MemoryManager* manager = make_manager();
     manager->models->put(0, rm);
@@ -379,7 +390,7 @@ TEST_CASE("Load Weights Nonexistent Model", "[task]") {
 
 TEST_CASE("Load Weights Earliest", "[task]") {
     Model* model = make_model();
-    RuntimeModel* rm = new RuntimeModel(model);
+    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model));
     cudaStream_t stream = make_stream();
     MemoryManager* manager = make_manager();
     manager->models->put(0, rm);
@@ -401,7 +412,7 @@ TEST_CASE("Load Weights Earliest", "[task]") {
 
 TEST_CASE("Load Weights Latest", "[task]") {
     Model* model = make_model();
-    RuntimeModel* rm = new RuntimeModel(model);
+    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model));
     cudaStream_t stream = make_stream();
     MemoryManager* manager = make_manager();
     manager->models->put(0, rm);
@@ -423,9 +434,9 @@ TEST_CASE("Load Weights Latest", "[task]") {
 
 TEST_CASE("Load Weights Insufficient Cache", "[task]") {
     Model* model = make_model();
-    RuntimeModel* rm = new RuntimeModel(model);
+    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model));
     cudaStream_t stream = make_stream();
-    MemoryManager* manager = make_manager(16 * 1024 * 1024);
+    MemoryManager* manager = make_manager(16 * 1024 * 1024, 16 * 1024 * 1024, 64 * 1024 * 1024, 64 * 1024 * 1024);
     manager->models->put(0, rm);
 
     uint64_t now = util::now();
@@ -445,7 +456,7 @@ TEST_CASE("Load Weights Insufficient Cache", "[task]") {
 
 TEST_CASE("Load Weights Version Update", "[task]") {
     Model* model = make_model();
-    RuntimeModel* rm = new RuntimeModel(model);
+    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model));
     cudaStream_t stream = make_stream();
     MemoryManager* manager = make_manager();
     manager->models->put(0, rm);
@@ -475,7 +486,7 @@ TEST_CASE("Load Weights Version Update", "[task]") {
 
 TEST_CASE("Double Load Weights", "[task]") {
     Model* model = make_model();
-    RuntimeModel* rm = new RuntimeModel(model);
+    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model));
     cudaStream_t stream = make_stream();
     MemoryManager* manager = make_manager();
     manager->models->put(0, rm);
@@ -514,7 +525,7 @@ TEST_CASE("Double Load Weights", "[task]") {
 
 TEST_CASE("Evict Weights", "[task]") {
     Model* model = make_model();
-    RuntimeModel* rm = new RuntimeModel(model);
+    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model));
     cudaStream_t stream = make_stream();
     MemoryManager* manager = make_manager();
     manager->models->put(0, rm);
@@ -543,7 +554,7 @@ TEST_CASE("Evict Weights", "[task]") {
 
 TEST_CASE("Evict Non-Existent Weights", "[task]") {
     Model* model = make_model();
-    RuntimeModel* rm = new RuntimeModel(model);
+    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model));
     cudaStream_t stream = make_stream();
     MemoryManager* manager = make_manager();
     manager->models->put(0, rm);
@@ -563,7 +574,7 @@ TEST_CASE("Evict Non-Existent Weights", "[task]") {
 
 TEST_CASE("Double Evict", "[task]") {
     Model* model = make_model();
-    RuntimeModel* rm = new RuntimeModel(model);
+    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model));
     cudaStream_t stream = make_stream();
     MemoryManager* manager = make_manager();
     manager->models->put(0, rm);
@@ -625,18 +636,19 @@ TEST_CASE("Evict Weights Nonexistent Model", "[task]") {
 
 TEST_CASE("Copy Input", "[task]") {
     Model* model = make_model();
-    RuntimeModel* rm = new RuntimeModel(model);
+    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model));
     cudaStream_t stream = make_stream();
     MemoryManager* manager = make_manager();
     manager->models->put(0, rm);
 
     char* input = static_cast<char*>(malloc(model->input_size()));
 
-    TestCopyInputTask* copyinput = new TestCopyInputTask(manager, 0, 0, util::now() + 1000000000, model->input_size(), input);
+    TestCopyInputTask* copyinput = new TestCopyInputTask(manager, 0, 0, util::now() + 1000000000, 1, model->input_size(), input);
     copyinput->run(stream);
     while (!copyinput->is_complete());
     copyinput->process_completion();
 
+    INFO("Error " << copyinput->status_code << ": " << copyinput->error_message);
     REQUIRE(copyinput->is_success);
     REQUIRE(!copyinput->is_error);
 
@@ -647,14 +659,14 @@ TEST_CASE("Copy Input", "[task]") {
 
 TEST_CASE("Copy Input Wrong Size", "[task] [wrongsize]") {
     Model* model = make_model();
-    RuntimeModel* rm = new RuntimeModel(model);
+    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model));
     cudaStream_t stream = make_stream();
     MemoryManager* manager = make_manager();
     manager->models->put(0, rm);
 
     char* input = static_cast<char*>(malloc(10));
 
-    TestCopyInputTask* copyinput = new TestCopyInputTask(manager, 0, 0, util::now() + 1000000000, 10, input);
+    TestCopyInputTask* copyinput = new TestCopyInputTask(manager, 0, 0, util::now() + 1000000000, 1, 10, input);
     copyinput->run(stream);
     while (!copyinput->is_complete());
 
@@ -669,13 +681,14 @@ TEST_CASE("Copy Input Wrong Size", "[task] [wrongsize]") {
 
 TEST_CASE("Copy Input Nonexistent Model", "[task]") {
     Model* model = make_model();
+    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model));
     cudaStream_t stream = make_stream();
     MemoryManager* manager = make_manager();
 
     char* input = static_cast<char*>(malloc(model->input_size()));
 
     uint64_t now = util::now();
-    TestCopyInputTask* task = new TestCopyInputTask(manager, 0, now, util::now() + 1000000000, model->input_size(), input);
+    TestCopyInputTask* task = new TestCopyInputTask(manager, 0, now, util::now() + 1000000000, 1, model->input_size(), input);
 
     REQUIRE(task->eligible() == now);
 
@@ -692,7 +705,7 @@ TEST_CASE("Copy Input Nonexistent Model", "[task]") {
 
 TEST_CASE("Input and Infer", "[task]") {
     Model* model = make_model();
-    RuntimeModel* rm = new RuntimeModel(model);
+    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model));
     cudaStream_t stream = make_stream();
     MemoryManager* manager = make_manager();
     manager->models->put(0, rm);
@@ -711,7 +724,7 @@ TEST_CASE("Input and Infer", "[task]") {
 
     char* input = static_cast<char*>(malloc(model->input_size()));
 
-    TestCopyInputTask* copyinput = new TestCopyInputTask(manager, 0, 0, util::now() + 1000000000, model->input_size(), input);
+    TestCopyInputTask* copyinput = new TestCopyInputTask(manager, 0, 0, util::now() + 1000000000, 1, model->input_size(), input);
     copyinput->run(stream);
     REQUIRE(!copyinput->is_error);
     
@@ -721,7 +734,7 @@ TEST_CASE("Input and Infer", "[task]") {
     REQUIRE(copyinput->is_success);
     REQUIRE(!copyinput->is_error);
 
-    TestInferTask* infer = new TestInferTask(rm, manager, 0, util::now() + 1000000000, copyinput->workspace);
+    TestInferTask* infer = new TestInferTask(rm, manager, 0, util::now() + 1000000000, 1, copyinput->workspace);
     infer->run(stream);
     REQUIRE(!infer->is_error);
 
@@ -739,14 +752,14 @@ TEST_CASE("Input and Infer", "[task]") {
 
 TEST_CASE("Infer Without Weights", "[task]") {
     Model* model = make_model();
-    RuntimeModel* rm = new RuntimeModel(model);
+    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model));
     cudaStream_t stream = make_stream();
     MemoryManager* manager = make_manager();
     manager->models->put(0, rm);
 
     char* input = static_cast<char*>(malloc(model->input_size()));
 
-    TestCopyInputTask* copyinput = new TestCopyInputTask(manager, 0, 0, util::now() + 1000000000, model->input_size(), input);
+    TestCopyInputTask* copyinput = new TestCopyInputTask(manager, 0, 0, util::now() + 1000000000, 1, model->input_size(), input);
     copyinput->run(stream);
     REQUIRE(!copyinput->is_error);
     
@@ -756,7 +769,7 @@ TEST_CASE("Infer Without Weights", "[task]") {
     REQUIRE(copyinput->is_success);
     REQUIRE(!copyinput->is_error);
 
-    TestInferTask* infer = new TestInferTask(rm, manager, 0, util::now() + 1000000000, copyinput->workspace);
+    TestInferTask* infer = new TestInferTask(rm, manager, 0, util::now() + 1000000000, 1, copyinput->workspace);
     infer->run(stream);
     REQUIRE(!infer->is_success);
     REQUIRE(infer->is_error);
@@ -788,7 +801,7 @@ TEST_CASE("Input Infer and Output", "[task]") {
 
     RuntimeModel* rm = manager->models->get(0);
     REQUIRE(rm != nullptr);
-    model::Model* model = rm->model;
+    model::BatchedModel* model = rm->model;
 
     TestLoadWeightsTask* loadweights = new TestLoadWeightsTask(manager, 0, 0, util::now()+1000000000);
     loadweights->run(stream);
@@ -800,9 +813,9 @@ TEST_CASE("Input Infer and Output", "[task]") {
     REQUIRE(loadweights->is_success);
     REQUIRE(!loadweights->is_error);
 
-    char* input = static_cast<char*>(malloc(model->input_size()));
+    char* input = static_cast<char*>(malloc(model->input_size(1)));
 
-    TestCopyInputTask* copyinput = new TestCopyInputTask(manager, 0, 0, util::now() + 1000000000, model->input_size(), input);
+    TestCopyInputTask* copyinput = new TestCopyInputTask(manager, 0, 0, util::now() + 1000000000, 1, model->input_size(1), input);
     copyinput->run(stream);
     REQUIRE(!copyinput->is_error);
     
@@ -813,7 +826,7 @@ TEST_CASE("Input Infer and Output", "[task]") {
     REQUIRE(!copyinput->is_error);
     REQUIRE(copyinput->workspace != nullptr);
 
-    TestInferTask* infer = new TestInferTask(rm, manager, 0, util::now() + 1000000000, copyinput->workspace);
+    TestInferTask* infer = new TestInferTask(rm, manager, 0, util::now() + 1000000000, 1, copyinput->workspace);
     infer->run(stream);
     REQUIRE(!infer->is_error);
 
@@ -823,7 +836,7 @@ TEST_CASE("Input Infer and Output", "[task]") {
     REQUIRE(infer->is_success);
     REQUIRE(!infer->is_error);
 
-    TestCopyOutputTask* copyoutput = new TestCopyOutputTask(rm, manager, 0, util::now() + 1000000000, copyinput->workspace);
+    TestCopyOutputTask* copyoutput = new TestCopyOutputTask(rm, manager, 0, util::now() + 1000000000, 1, copyinput->workspace);
     copyoutput->run(stream);
     REQUIRE(!copyoutput->is_error);
 
@@ -840,5 +853,90 @@ TEST_CASE("Input Infer and Output", "[task]") {
     delete copyinput;
     delete infer;
     delete copyoutput;
+    delete manager;
+}
+
+
+
+
+TEST_CASE("Input Infer and Output Batched", "[task]") {
+    cudaStream_t stream = make_stream();
+    MemoryManager* manager = make_manager();
+
+    std::string model_path = clockwork::util::get_example_model("resnet18_tesla-m40");
+
+    TestLoadModelFromDiskTask* loadmodel = 
+        new TestLoadModelFromDiskTask(manager, 0, model_path, util::now(), util::now()+1000000000);
+
+    loadmodel->run(stream);
+    REQUIRE(loadmodel->is_success);
+    REQUIRE(!loadmodel->is_error);
+
+    RuntimeModel* rm = manager->models->get(0);
+    REQUIRE(rm != nullptr);
+    model::BatchedModel* model = rm->model;
+
+    TestLoadWeightsTask* loadweights = new TestLoadWeightsTask(manager, 0, 0, util::now()+1000000000);
+    loadweights->run(stream);
+    REQUIRE(!loadweights->is_error);
+    
+    while (!loadweights->is_complete());
+    loadweights->process_completion();
+
+    REQUIRE(loadweights->is_success);
+    REQUIRE(!loadweights->is_error);
+
+    for (unsigned batch_size = 1; batch_size <= 16; batch_size++) {
+
+        char* input = static_cast<char*>(malloc(model->input_size(batch_size)));
+
+        TestCopyInputTask* copyinput = new TestCopyInputTask(manager, 0, 0, util::now() + 1000000000, batch_size, model->input_size(batch_size), input);
+        copyinput->run(stream);
+        INFO("Error " << copyinput->status_code << ": " << copyinput->error_message);
+        REQUIRE(!copyinput->is_error);
+        
+        while (!copyinput->is_complete());
+        copyinput->process_completion();
+
+        INFO("Error " << copyinput->status_code << ": " << copyinput->error_message);
+        REQUIRE(!copyinput->is_error);
+        REQUIRE(copyinput->is_success);
+        REQUIRE(copyinput->workspace != nullptr);
+
+        TestInferTask* infer = new TestInferTask(rm, manager, 0, util::now() + 1000000000, batch_size, copyinput->workspace);
+        infer->run(stream);
+        INFO("Error " << infer->status_code << ": " << infer->error_message);
+        REQUIRE(!infer->is_error);
+
+        while (!infer->is_complete());
+        infer->process_completion();
+
+        INFO("Error " << infer->status_code << ": " << infer->error_message);
+        REQUIRE(!infer->is_error);
+        REQUIRE(infer->is_success);
+
+        TestCopyOutputTask* copyoutput = new TestCopyOutputTask(rm, manager, 0, util::now() + 1000000000, batch_size, copyinput->workspace);
+        copyoutput->run(stream);
+        INFO("Error " << copyoutput->status_code << ": " << copyoutput->error_message);
+        REQUIRE(!copyoutput->is_error);
+
+        while (!copyoutput->is_complete());
+        copyoutput->process_completion();
+
+        INFO("Error " << copyoutput->status_code << ": " << copyoutput->error_message);
+        REQUIRE(!copyoutput->is_error);
+        REQUIRE(copyoutput->is_success);
+
+        manager->io_cache->release(copyoutput->output);
+        manager->workspace_cache->unlock(copyinput->workspace);
+        manager->workspace_cache->free(copyinput->workspace);
+        free(input);
+        delete copyinput;
+        delete infer;
+        delete copyoutput;
+    }
+
+    delete loadweights;
+    delete loadmodel;
     delete manager;
 }

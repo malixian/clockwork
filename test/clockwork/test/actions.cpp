@@ -68,10 +68,11 @@ std::shared_ptr<workerapi::Infer> infer_action2(ClockworkWorker* worker) {
     return action;
 }
 
-std::shared_ptr<workerapi::Infer> infer_action(Model* model) {
+std::shared_ptr<workerapi::Infer> infer_action(int batch_size, BatchedModel* model) {
     auto action = infer_action();
-    action->input_size = model->input_size();
-    action->input = static_cast<char*>(malloc(model->input_size()));
+    action->batch_size = batch_size;
+    action->input_size = model->input_size(batch_size);
+    action->input = static_cast<char*>(malloc(model->input_size_with_padding(batch_size)));
     return action;
 }
 

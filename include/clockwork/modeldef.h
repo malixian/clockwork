@@ -130,9 +130,11 @@ struct PageMappedModelDef {
     std::vector<PageMappedDLTensorDef> inputs;
     std::vector<PageMappedDLTensorDef> outputs;
 
-    unsigned total_pages;
-    uint64_t configured_page_size;
+    uint64_t configured_weights_page_size;
     std::vector<PageDef> weights_pages;
+
+    uint64_t configured_workspace_page_size;
+    unsigned num_workspace_pages;
 
 
     PODS_SERIALIZABLE(1,         
@@ -143,9 +145,10 @@ struct PageMappedModelDef {
         PODS_MDR(ops),
         PODS_MDR(inputs),
         PODS_MDR(outputs),
-        PODS_MDR(total_pages),
-        PODS_MDR(configured_page_size),
-        PODS_MDR(weights_pages)
+        PODS_MDR(configured_weights_page_size),
+        PODS_MDR(weights_pages),
+        PODS_MDR(configured_workspace_page_size),
+        PODS_MDR(num_workspace_pages)
     )
 
     static void ReadFrom(const std::string &data, PageMappedModelDef &def);

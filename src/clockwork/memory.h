@@ -5,19 +5,19 @@
 #include <memory>
 #include <unordered_map>
 #include "clockwork/cache.h"
-#include "clockwork/model/model.h"
+#include "clockwork/model/batched.h"
 #include "tbb/concurrent_queue.h"
 
 namespace clockwork {
 
 class RuntimeModel {
 public:
-	model::Model* model;
+	model::BatchedModel* model;
 	std::atomic_flag in_use;
 	int version;
 	std::shared_ptr<Allocation> weights;
 
-	RuntimeModel(model::Model* model);
+	RuntimeModel(model::BatchedModel* model);
 
 	bool try_lock();
 	void lock();
@@ -67,7 +67,6 @@ public:
 	PageCache* workspace_cache;
 	ModelStore* models;
 
-	MemoryManager(PageCache* cache);
 	MemoryManager(PageCache* weights_cache, PageCache* workspace_cache);
 	~MemoryManager();
 };
@@ -79,7 +78,7 @@ public:
 };
 
 IOCache* make_IO_cache();
-PageCache* make_GPU_cache(size_t cache_size, size_t page_size = 16777216);
+PageCache* make_GPU_cache(size_t cache_size, size_t page_size);
 
 }
 

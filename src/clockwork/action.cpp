@@ -39,9 +39,9 @@ void LoadModelFromDiskAction::LoadModelFromDiskTaskImpl::success(RuntimeModel* r
 	result->id = load_model->action->id;
 	result->action_type = workerapi::loadModelFromDiskAction;
 	result->status = actionSuccess;
-	result->input_size = rm->model->input_size();
-	result->output_size = rm->model->output_size();
-	result->supported_batch_sizes.push_back(1);
+	result->input_size = rm->model->input_size(1);
+	result->output_size = rm->model->output_size(1);
+	result->supported_batch_sizes = rm->model->implemented_batch_sizes();
 
 	int page_size = load_model->runtime->manager->weights_cache->page_size;
 	result->weights_size_in_cache = rm->model->num_weights_pages(page_size) * page_size;
@@ -230,6 +230,7 @@ InferAction::CopyInputTaskImpl::CopyInputTaskImpl(InferAction* infer) : CopyInpu
 		infer->action->model_id,
 		infer->copy_input_earliest(),
 		infer->action->latest,
+		infer->action->batch_size,
 		infer->action->input_size,
 		infer->action->input), infer(infer) {
 }
@@ -268,6 +269,7 @@ InferAction::ExecTaskImpl::ExecTaskImpl(InferAction* infer) : ExecTask(
 		infer->runtime->manager, 
 		infer->action->earliest,
 		infer->action->latest, 
+		infer->action->batch_size,
 		infer->workspace), infer(infer) {
 }
 
@@ -303,6 +305,7 @@ InferAction::CopyOutputTaskImpl::CopyOutputTaskImpl(InferAction* infer) : CopyOu
 		infer->runtime->manager,
 		0,
 		18446744073709551615UL,
+		infer->action->batch_size,
 		infer->workspace), infer(infer) {
 }
 
@@ -363,7 +366,7 @@ void InferAction::handle_completion(char* output) {
 	extract_timing_async(&result->exec, exec->telemetry);
 	extract_timing_async(&result->copy_output, copy_output->telemetry);
 
-	result->output_size = rm->model->output_size();
+	result->output_size = rm->model->output_size(action->batch_size);
 	result->output = output;
 
 	// TODO: who / where frees the output memory?

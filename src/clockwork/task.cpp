@@ -100,19 +100,15 @@ void LoadModelFromDiskTask::run(cudaStream_t stream) {
 	// TODO: loadFromDisk will call cudaMallocHost; in future don't use this, and manage host memory manually
 	// TODO: for now just wrap dmlc error for failing to load model, since the existence of this task is a
 	//       giant hack anyway
-	model::Model* model;
+	model::BatchedModel* model;
 	try {
-		model = model::Model::loadFromDisk(
-			model_path + ".so",
-			model_path + ".clockwork",
-			model_path + ".clockwork_params"
-		);
+		model = model::BatchedModel::loadFromDisk(model_path);
 	} catch (dmlc::Error &error) {
 		throw TaskError(actionErrorInvalidModelPath, error.what());
 	}
 
-	model->instantiate_model_on_host();
-	model->instantiate_model_on_device();
+	model->instantiate_models_on_host();
+	model->instantiate_models_on_device();
 
 	RuntimeModel* rm = new RuntimeModel(model);
 
@@ -244,8 +240,8 @@ void EvictWeightsTask::run(cudaStream_t stream) {
 }
 
 
-CopyInputTask::CopyInputTask(MemoryManager* manager, int model_id, uint64_t earliest, uint64_t latest, size_t input_size, char* input) : 
-		manager(manager), model_id(model_id), earliest(earliest), latest(latest), input_size(input_size), input(input),
+CopyInputTask::CopyInputTask(MemoryManager* manager, int model_id, uint64_t earliest, uint64_t latest, unsigned batch_size, size_t input_size, char* input) : 
+		manager(manager), model_id(model_id), earliest(earliest), latest(latest), batch_size(batch_size), input_size(input_size), input(input),
 		rm(nullptr), workspace(nullptr) {
 }
 
@@ -272,11 +268,22 @@ void CopyInputTask::run(cudaStream_t stream) {
 		throw TaskError(actionErrorUnknownModel, "CopyInputTask could not find model with specified id");
 	}
 
-	if (rm->model->input_size() != input_size) {
-		throw TaskError(actionErrorInvalidInput, "CopyInputTask received incorrectly sized input");		
+	if (!rm->model->is_valid_batch_size(batch_size)) {
+		std::stringstream err;
+		err << "CopyInputTask received unsupported batch size " << batch_size;
+		throw TaskError(actionErrorInvalidBatchSize, err.str());
 	}
 
-	unsigned num_pages = rm->model->num_workspace_pages(manager->workspace_cache->page_size);
+	if (rm->model->input_size(batch_size) != input_size) {
+		std::stringstream err;
+		err << "CopyInputTask received incorrectly sized input"
+		    << " (expected " << rm->model->input_size(batch_size) 
+		    << ", got " << input_size
+		    << " (batch_size=" << batch_size << ")";
+		throw TaskError(actionErrorInvalidInput, err.str());		
+	}
+
+	unsigned num_pages = rm->model->num_workspace_pages(batch_size, manager->workspace_cache->page_size);
 	this->workspace = manager->workspace_cache->alloc(num_pages, []{});
 
 	if (this->workspace == nullptr) {
@@ -284,7 +291,7 @@ void CopyInputTask::run(cudaStream_t stream) {
 	}
 
 	this->record_async_begin(stream);
-	rm->model->transfer_input_to_device(input, workspace->page_pointers, stream);
+	rm->model->transfer_input_to_device(batch_size, input, workspace->page_pointers, stream);
 	this->record_async_end(stream);
 }
 
@@ -295,8 +302,8 @@ void CopyInputTask::process_completion() {
 
 
 
-ExecTask::ExecTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, std::shared_ptr<Allocation> workspace) : 
-		rm(rm), manager(manager), earliest(earliest), latest(latest), workspace(workspace),
+ExecTask::ExecTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, unsigned batch_size, std::shared_ptr<Allocation> workspace) : 
+		rm(rm), manager(manager), earliest(earliest), latest(latest), batch_size(batch_size), workspace(workspace),
 		weights(nullptr) {
 }
 
@@ -331,7 +338,7 @@ void ExecTask::run(cudaStream_t stream) {
 	}
 
 	this->record_async_begin(stream);
-	rm->model->call(weights->page_pointers, workspace->page_pointers, stream);
+	rm->model->call(batch_size, weights->page_pointers, workspace->page_pointers, stream);
 	this->record_async_end(stream);
 }
 
@@ -353,8 +360,8 @@ void ExecTask::process_completion() {
 
 
 
-CopyOutputTask::CopyOutputTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, std::shared_ptr<Allocation> workspace) : 
-		rm(rm), manager(manager), earliest(earliest), latest(latest), workspace(workspace), output(nullptr) {
+CopyOutputTask::CopyOutputTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, unsigned batch_size, std::shared_ptr<Allocation> workspace) : 
+		rm(rm), manager(manager), earliest(earliest), latest(latest), batch_size(batch_size), workspace(workspace), output(nullptr) {
 }
 
 CopyOutputTask::~CopyOutputTask() {
@@ -381,7 +388,7 @@ void CopyOutputTask::run(cudaStream_t stream) {
 	}
 
 	this->record_async_begin(stream);
-	rm->model->transfer_output_from_device(output, workspace->page_pointers, stream);
+	rm->model->transfer_output_from_device(batch_size, output, workspace->page_pointers, stream);
 	this->record_async_end(stream);
 }
 

@@ -136,6 +136,7 @@ private:
 
 	int model_id;
 	uint64_t earliest, latest;
+	unsigned batch_size;
 	size_t input_size;
 	char* input;
 
@@ -144,7 +145,7 @@ private:
 
 public:
 
-	CopyInputTask(MemoryManager* manager, int model_id, uint64_t earliest, uint64_t latest, size_t input_size, char* input);
+	CopyInputTask(MemoryManager* manager, int model_id, uint64_t earliest, uint64_t latest, unsigned batch_size, size_t input_size, char* input);
 	~CopyInputTask();
 
 	// Task
@@ -165,13 +166,14 @@ private:
 	MemoryManager* manager;
 	uint64_t earliest, latest;
 
+	unsigned batch_size;
 	int weights_version;
 	std::shared_ptr<Allocation> weights;
 	std::shared_ptr<Allocation> workspace;
 
 public:
 
-	ExecTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, std::shared_ptr<Allocation> workspace);
+	ExecTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, unsigned batch_size, std::shared_ptr<Allocation> workspace);
 	~ExecTask();
 
 	// Task
@@ -192,12 +194,13 @@ private:
 	MemoryManager* manager;
 
 	uint64_t earliest, latest;
+	unsigned batch_size;
 	char* output;
 
 	std::shared_ptr<Allocation> workspace;
 
 public:
-	CopyOutputTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, std::shared_ptr<Allocation> workspace);
+	CopyOutputTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, unsigned batch_size, std::shared_ptr<Allocation> workspace);
 	~CopyOutputTask();
 
 	// Task
