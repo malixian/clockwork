@@ -227,6 +227,7 @@ public:
     bool is_cancelled = false;
     int status_code;
     std::string error_message;
+    char* output;
 
     TestCopyOutputTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, unsigned batch_size, std::shared_ptr<Allocation> workspace) : CopyOutputTask(rm, manager, earliest, latest, batch_size, workspace) {}
 
@@ -252,6 +253,7 @@ public:
 
     void success(char* output) {
         is_success = true;
+        this->output = output;
     }
 
     void error(int status_code, std::string message) {
@@ -851,5 +853,90 @@ TEST_CASE("Input Infer and Output", "[task]") {
     delete copyinput;
     delete infer;
     delete copyoutput;
+    delete manager;
+}
+
+
+
+
+TEST_CASE("Input Infer and Output Batched", "[task]") {
+    cudaStream_t stream = make_stream();
+    MemoryManager* manager = make_manager();
+
+    std::string model_path = clockwork::util::get_example_model("resnet18_tesla-m40");
+
+    TestLoadModelFromDiskTask* loadmodel = 
+        new TestLoadModelFromDiskTask(manager, 0, model_path, util::now(), util::now()+1000000000);
+
+    loadmodel->run(stream);
+    REQUIRE(loadmodel->is_success);
+    REQUIRE(!loadmodel->is_error);
+
+    RuntimeModel* rm = manager->models->get(0);
+    REQUIRE(rm != nullptr);
+    model::BatchedModel* model = rm->model;
+
+    TestLoadWeightsTask* loadweights = new TestLoadWeightsTask(manager, 0, 0, util::now()+1000000000);
+    loadweights->run(stream);
+    REQUIRE(!loadweights->is_error);
+    
+    while (!loadweights->is_complete());
+    loadweights->process_completion();
+
+    REQUIRE(loadweights->is_success);
+    REQUIRE(!loadweights->is_error);
+
+    for (unsigned batch_size = 1; batch_size <= 16; batch_size++) {
+
+        char* input = static_cast<char*>(malloc(model->input_size(batch_size)));
+
+        TestCopyInputTask* copyinput = new TestCopyInputTask(manager, 0, 0, util::now() + 1000000000, batch_size, model->input_size(batch_size), input);
+        copyinput->run(stream);
+        INFO("Error " << copyinput->status_code << ": " << copyinput->error_message);
+        REQUIRE(!copyinput->is_error);
+        
+        while (!copyinput->is_complete());
+        copyinput->process_completion();
+
+        INFO("Error " << copyinput->status_code << ": " << copyinput->error_message);
+        REQUIRE(!copyinput->is_error);
+        REQUIRE(copyinput->is_success);
+        REQUIRE(copyinput->workspace != nullptr);
+
+        TestInferTask* infer = new TestInferTask(rm, manager, 0, util::now() + 1000000000, batch_size, copyinput->workspace);
+        infer->run(stream);
+        INFO("Error " << infer->status_code << ": " << infer->error_message);
+        REQUIRE(!infer->is_error);
+
+        while (!infer->is_complete());
+        infer->process_completion();
+
+        INFO("Error " << infer->status_code << ": " << infer->error_message);
+        REQUIRE(!infer->is_error);
+        REQUIRE(infer->is_success);
+
+        TestCopyOutputTask* copyoutput = new TestCopyOutputTask(rm, manager, 0, util::now() + 1000000000, batch_size, copyinput->workspace);
+        copyoutput->run(stream);
+        INFO("Error " << copyoutput->status_code << ": " << copyoutput->error_message);
+        REQUIRE(!copyoutput->is_error);
+
+        while (!copyoutput->is_complete());
+        copyoutput->process_completion();
+
+        INFO("Error " << copyoutput->status_code << ": " << copyoutput->error_message);
+        REQUIRE(!copyoutput->is_error);
+        REQUIRE(copyoutput->is_success);
+
+        manager->io_cache->release(copyoutput->output);
+        manager->workspace_cache->unlock(copyinput->workspace);
+        manager->workspace_cache->free(copyinput->workspace);
+        free(input);
+        delete copyinput;
+        delete infer;
+        delete copyoutput;
+    }
+
+    delete loadweights;
+    delete loadmodel;
     delete manager;
 }
