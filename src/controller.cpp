@@ -151,7 +151,7 @@ public:
 		infer->input_size = request.input_size;
 		infer->input = static_cast<char*>(request.input);
 		infer->earliest = next_action_start_time; // hard-coded for example's sake, assume it will take 12ms to load weights.  
-		infer->latest = next_action_start_time + 10000000000L;
+		infer->latest = next_action_start_time + 10000000000UL;
 
 		// When the infer result is received, call this callback
 		auto infer_complete = [this, callback, user_request_id, model_id] (std::shared_ptr<workerapi::Result> result) {
@@ -217,7 +217,7 @@ public:
 		load_model->model_id = model_id;
 		load_model->model_path = get_example_model();
 		load_model->earliest = 0;
-		load_model->latest = util::now() + 10000000000L;
+		load_model->latest = util::now() + 10000000000UL;
 
 		// When the result is received, call this callback
 		auto result_callback = [this, callback, user_request_id, model_id] (std::shared_ptr<workerapi::Result> result) {
