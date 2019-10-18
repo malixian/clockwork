@@ -29,6 +29,7 @@ const int actionErrorWeightsInUse = 22; // LoadWeightsAction failed because weig
 const int actionErrorWeightsChanged = 23; // Infer action failed because weights changed while executing
 
 const int actionErrorInvalidInput = 30; // Invalid input to an inference action
+const int actionErrorInvalidBatchSize = 31; // Invalid batch size input to an inference action
 
 const int actionErrorInvalidModelID = 40; // Invalid ID specified for load model
 const int actionErrorInvalidModelPath = 41; // Invalid path specified for load model

@@ -142,8 +142,8 @@ public:
 };
 
 model::Model* load_model_from_disk(std::string model_path) {
-    std::string so_filename = model_path + ".so";
-    std::string clockwork_filename = model_path + ".clockwork";
+    std::string so_filename = model_path + ".1.so";
+    std::string clockwork_filename = model_path + ".1.clockwork";
     std::string params_filename = model_path + ".clockwork_params";
     return model::Model::loadFromDisk(so_filename, clockwork_filename, params_filename);    
 }

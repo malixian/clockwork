@@ -79,7 +79,7 @@ TEST_CASE("Load model from disk", "[model]") {
     std::string f = clockwork::util::get_example_model();
 
     Model* model = nullptr;
-    REQUIRE_NOTHROW(model = Model::loadFromDisk(f+".so", f+".clockwork", f+".clockwork_params"));
+    REQUIRE_NOTHROW(model = Model::loadFromDisk(f+".1.so", f+".1.clockwork", f+".clockwork_params"));
     REQUIRE(model != nullptr);
     delete model;
 
@@ -90,7 +90,7 @@ TEST_CASE("Model lifecycle 1", "[model]") {
     std::string f = clockwork::util::get_example_model();
 
     Model* model = nullptr;
-    REQUIRE_NOTHROW(model = Model::loadFromDisk(f+".so", f+".clockwork", f+".clockwork_params"));
+    REQUIRE_NOTHROW(model = Model::loadFromDisk(f+".1.so", f+".1.clockwork", f+".clockwork_params"));
     REQUIRE(model != nullptr);
 
     int page_size;
@@ -115,7 +115,7 @@ TEST_CASE("Model Lifecycle 2", "[model]") {
     std::string f = clockwork::util::get_example_model();
 
     Model* model = nullptr;
-    REQUIRE_NOTHROW(model = Model::loadFromDisk(f+".so", f+".clockwork", f+".clockwork_params"));
+    REQUIRE_NOTHROW(model = Model::loadFromDisk(f+".1.so", f+".1.clockwork", f+".clockwork_params"));
     REQUIRE(model != nullptr);
     
     assert_is_cool(model);
@@ -157,7 +157,7 @@ TEST_CASE("Model Lifecycle 2", "[model]") {
 
 }
 
-TEST_CASE("Model produces correct output", "[e2e]") {
+TEST_CASE("Model produces correct output", "[e2e] [model]") {
 
     int weights_page_size = 16 * 1024 * 1024;
     int workspace_page_size = 64 * 1024 * 1024;
@@ -170,7 +170,7 @@ TEST_CASE("Model produces correct output", "[e2e]") {
 
     std::string f = clockwork::util::get_example_model();
 
-    Model* model = Model::loadFromDisk(f+".so", f+".clockwork", f+".clockwork_params");
+    Model* model = Model::loadFromDisk(f+".1.so", f+".1.clockwork", f+".clockwork_params");
     
     model->instantiate_model_on_host();
     model->instantiate_model_on_device();
@@ -205,7 +205,7 @@ TEST_CASE("Model produces correct output", "[e2e]") {
     }
 }
 
-TEST_CASE("Batched model produces correct output", "[e2e2]") {
+TEST_CASE("Batched model produces correct output", "[e2e2] [model]") {
 
     int weights_page_size = 16 * 1024 * 1024;
     int workspace_page_size = 64 * 1024 * 1024;
@@ -214,7 +214,7 @@ TEST_CASE("Batched model produces correct output", "[e2e2]") {
 
     std::string f = clockwork::util::get_example_model("resnet18_tesla-m40_batchsize2");
 
-    Model* model = Model::loadFromDisk(f+".so", f+".clockwork", f+".clockwork_params");
+    Model* model = Model::loadFromDisk(f+".2.so", f+".2.clockwork", f+".clockwork_params");
     
     model->instantiate_model_on_host();
     model->instantiate_model_on_device();

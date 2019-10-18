@@ -20,7 +20,7 @@ std::shared_ptr<workerapi::EvictWeights> evict_weights_action();
 
 std::shared_ptr<workerapi::Infer> infer_action();
 
-std::shared_ptr<workerapi::Infer> infer_action(Model* model);
+std::shared_ptr<workerapi::Infer> infer_action(int batch_size, BatchedModel* model);
 
 std::shared_ptr<workerapi::Infer> infer_action2(ClockworkWorker* worker);
 

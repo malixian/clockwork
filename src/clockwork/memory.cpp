@@ -3,7 +3,7 @@
 
 namespace clockwork {
 
-RuntimeModel::RuntimeModel(model::Model* model) : model(model), in_use(ATOMIC_FLAG_INIT), weights(nullptr), version(0) {
+RuntimeModel::RuntimeModel(model::BatchedModel* model) : model(model), in_use(ATOMIC_FLAG_INIT), weights(nullptr), version(0) {
 }
 
 bool RuntimeModel::try_lock() {

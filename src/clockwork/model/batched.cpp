@@ -59,6 +59,10 @@ void BatchedModel::instantiate_models_on_host() {
 	this->single_output_size = expected_output_size;
 }
 
+bool BatchedModel::is_valid_batch_size(unsigned batch_size) {
+	return batch_size < model_lookup.size();
+}
+
 void BatchedModel::check_batch_size(unsigned batch_size) {
 	CHECK(batch_size < model_lookup.size()) << "Unsupported batch size " << batch_size << " larger than maximum " << (model_lookup.size()-1);
 }
@@ -127,7 +131,7 @@ unsigned BatchedModel::input_size_with_padding(unsigned batch_size) {
 
 void BatchedModel::transfer_input_to_device(unsigned batch_size, const char* input_ptr, std::vector<char*> &workspace_pages, cudaStream_t stream) {
 	check_batch_size(batch_size);
-	model_lookup[batch_size]->transfer_input_to_device(input_ptr, workspace_pages, stream);
+	model_lookup[batch_size]->transfer_input_to_device(single_input_size * batch_size, input_ptr, workspace_pages, stream);
 }
 
 unsigned BatchedModel::output_size(unsigned batch_size) {
@@ -142,7 +146,7 @@ unsigned BatchedModel::output_size_with_padding(unsigned batch_size) {
 
 void BatchedModel::transfer_output_from_device(unsigned batch_size, char* output_ptr, std::vector<char*> &workspace_pages, cudaStream_t stream) {
 	check_batch_size(batch_size);
-	model_lookup[batch_size]->transfer_output_from_device(output_ptr, workspace_pages, stream);		
+	model_lookup[batch_size]->transfer_output_from_device(single_output_size * batch_size, output_ptr, workspace_pages, stream);		
 }
 
 void BatchedModel::call(unsigned batch_size, std::vector<char*> &weights_pages, std::vector<char*> &workspace_pages, cudaStream_t stream) {
@@ -185,6 +189,8 @@ BatchedModel* BatchedModel::loadFromDisk(std::string base_filename) {
 
 		batchsize *= 2;
 	}
+
+	CHECK(batchsize != 1) << "No valid batch sizes found for " << base_filename;
 
 	return new BatchedModel(weights_size, weights_pinned_host_memory, models);
 }

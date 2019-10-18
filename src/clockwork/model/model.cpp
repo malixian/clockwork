@@ -117,13 +117,18 @@ unsigned Model::input_size() {
 
 /* Preconditions: instantiate_model_on_host && set_workspace_pages */
 void Model::transfer_input_to_device(const char* input_ptr, std::vector<char*> &workspace_pages, cudaStream_t stream) {
+	transfer_input_to_device(spec->inputs[0].size, input_ptr, workspace_pages, stream);
+}
+
+void Model::transfer_input_to_device(size_t input_size, const char* input_ptr, std::vector<char*> &workspace_pages, cudaStream_t stream) {
 	CHECK(spec != nullptr) << "transfer_input_to_device spec is nullptr";
+	CHECK(input_size <= spec->inputs[0].size) << "transfer_input_to_device tried to transfer more bytes than allowed";
 	void* dst_ptr = workspace_pages[spec->inputs[0].page - weights_pages_count] + spec->inputs[0].page_offset;
 	CUDA_CALL(
 		cudaMemcpyAsync(
 			dst_ptr,
 			input_ptr, 
-			spec->inputs[0].size,
+			input_size,
 			cudaMemcpyHostToDevice,
 			stream
 		)
@@ -139,13 +144,18 @@ unsigned Model::output_size() {
 
 /* Preconditions: instantiate_model_on_host */
 void Model::transfer_output_from_device(char* output_ptr, std::vector<char*> &workspace_pages, cudaStream_t stream) {
+	transfer_output_from_device(spec->outputs[0].size, output_ptr, workspace_pages, stream);
+}
+
+void Model::transfer_output_from_device(size_t output_size, char* output_ptr, std::vector<char*> &workspace_pages, cudaStream_t stream) {
 	CHECK(spec != nullptr) << "transfer_output_from_device spec is nullptr";
+	CHECK(output_size <= spec->outputs[0].size) << "transfer_output_from_device tried to transfer more bytes than allowed";
 	void* src_ptr = workspace_pages[spec->outputs[0].page - weights_pages_count] + spec->outputs[0].page_offset;
 	CUDA_CALL(
 		cudaMemcpyAsync(
 			output_ptr, 
 			src_ptr,
-			spec->outputs[0].size, 
+			output_size,
 			cudaMemcpyDeviceToHost,
 			stream
 		)

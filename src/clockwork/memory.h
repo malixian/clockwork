@@ -5,19 +5,19 @@
 #include <memory>
 #include <unordered_map>
 #include "clockwork/cache.h"
-#include "clockwork/model/model.h"
+#include "clockwork/model/batched.h"
 #include "tbb/concurrent_queue.h"
 
 namespace clockwork {
 
 class RuntimeModel {
 public:
-	model::Model* model;
+	model::BatchedModel* model;
 	std::atomic_flag in_use;
 	int version;
 	std::shared_ptr<Allocation> weights;
 
-	RuntimeModel(model::Model* model);
+	RuntimeModel(model::BatchedModel* model);
 
 	bool try_lock();
 	void lock();

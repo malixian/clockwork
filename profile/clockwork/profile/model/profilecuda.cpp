@@ -62,7 +62,7 @@ TEST_CASE("Profile memory limit for cudaMalloc", "[profile] [cudaMalloc]") {
 }
 
 void profile_model(std::string model_name, std::string model_path, int expected_blob_size) {
-    std::string so_filename = model_path + ".so";
+    std::string so_filename = model_path + ".1.so";
     so::SharedObject so(so_filename);
     
     const char* cuda_blob = reinterpret_cast<const char*>(so.GetSymbol(tvm::runtime::symbol::tvm_dev_mblob));

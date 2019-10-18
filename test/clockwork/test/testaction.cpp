@@ -121,13 +121,17 @@ std::shared_ptr<ClockworkRuntime> make_runtime() {
     return std::make_shared<ClockworkRuntimeWrapper>();
 }
 
-Model* make_model_for_action() {
+BatchedModel* make_model_for_action() {
     std::string f = clockwork::util::get_example_model();
 
-    Model* model = Model::loadFromDisk(f+".so", f+".clockwork", f+".clockwork_params");
-    model->instantiate_model_on_host();
-    model->instantiate_model_on_device();
-    return model;
+    Model* model = Model::loadFromDisk(f+".1.so", f+".1.clockwork", f+".clockwork_params");
+
+    std::vector<std::pair<unsigned, Model*>> models = {{1, model}};
+    BatchedModel* batched = new BatchedModel(model->weights_size, model->weights_pinned_host_memory, models);
+
+    batched->instantiate_models_on_host();
+    batched->instantiate_models_on_device();
+    return batched;
 }
 
 TEST_CASE("Load Model From Disk Action", "[action] [loadmodel_action]") {
@@ -163,7 +167,7 @@ TEST_CASE("Load Model From Disk Action Multiple", "[action] [loadmodel_action]")
 }
 
 TEST_CASE("Load Weights Action", "[action] [loadweights_action]") {
-    Model* model = make_model_for_action();
+    BatchedModel* model = make_model_for_action();
     auto clockwork = make_runtime();
     clockwork->manager->models->put(0, new RuntimeModel(model));
 
@@ -178,7 +182,7 @@ TEST_CASE("Load Weights Action", "[action] [loadweights_action]") {
 }
 
 TEST_CASE("Load Weights Action Multiple", "[action] [loadweights_multiple]") {
-    Model* model = make_model_for_action();
+    BatchedModel* model = make_model_for_action();
     auto clockwork = make_runtime();
     clockwork->manager->models->put(0, new RuntimeModel(model));
 
@@ -196,7 +200,7 @@ TEST_CASE("Load Weights Action Multiple", "[action] [loadweights_multiple]") {
 }
 
 TEST_CASE("Load Weights Action Invalid Model", "[action]") {
-    Model* model = make_model_for_action();
+    BatchedModel* model = make_model_for_action();
     auto clockwork = make_runtime();
 
     auto load_weights = new TestLoadWeightsAction(clockwork.get(), load_weights_action());
@@ -210,7 +214,7 @@ TEST_CASE("Load Weights Action Invalid Model", "[action]") {
 }
 
 TEST_CASE("Load Evict Weights Action", "[action] [evict_action]") {
-    Model* model = make_model_for_action();
+    BatchedModel* model = make_model_for_action();
     auto clockwork = make_runtime();
     clockwork->manager->models->put(0, new RuntimeModel(model));
 
@@ -232,7 +236,7 @@ TEST_CASE("Load Evict Weights Action", "[action] [evict_action]") {
 }
 
 TEST_CASE("Evict without Weights Action", "[action] [evict_action]") {
-    Model* model = make_model_for_action();
+    BatchedModel* model = make_model_for_action();
     auto clockwork = make_runtime();
     clockwork->manager->models->put(0, new RuntimeModel(model));
 
@@ -247,7 +251,7 @@ TEST_CASE("Evict without Weights Action", "[action] [evict_action]") {
 }
 
 TEST_CASE("Infer Action", "[action] [infer_action]") {
-    Model* model = make_model_for_action();
+    BatchedModel* model = make_model_for_action();
     auto clockwork = make_runtime();
     clockwork->manager->models->put(0, new RuntimeModel(model));
 
@@ -257,7 +261,7 @@ TEST_CASE("Infer Action", "[action] [infer_action]") {
     load_weights->await();
     load_weights->check_success(true);
 
-    auto infer = new TestInferAction(clockwork.get(), infer_action(model));
+    auto infer = new TestInferAction(clockwork.get(), infer_action(1, model));
 
     infer->submit();
     infer->await();
@@ -269,7 +273,7 @@ TEST_CASE("Infer Action", "[action] [infer_action]") {
 }
 
 TEST_CASE("Infer Action Wrong Input Size", "[action] [nomodel]") {
-    Model* model = make_model_for_action();
+    BatchedModel* model = make_model_for_action();
     auto clockwork = make_runtime();
 
     auto action = infer_action();
@@ -285,7 +289,7 @@ TEST_CASE("Infer Action Wrong Input Size", "[action] [nomodel]") {
 }
 
 TEST_CASE("Infer Action Nonexistent Model", "[action] [nomodel]") {
-    Model* model = make_model_for_action();
+    BatchedModel* model = make_model_for_action();
     auto clockwork = make_runtime();
 
     auto infer = new TestInferAction(clockwork.get(), infer_action());
@@ -299,7 +303,7 @@ TEST_CASE("Infer Action Nonexistent Model", "[action] [nomodel]") {
 }
 
 TEST_CASE("Infer Action Nonexistent Weights", "[action] [noweights]") {
-    Model* model = make_model_for_action();
+    BatchedModel* model = make_model_for_action();
     auto clockwork = make_runtime();
 
     auto load_model = new TestLoadModelFromDiskAction(clockwork.get(), load_model_from_disk_action());
@@ -321,7 +325,7 @@ TEST_CASE("Infer Action Nonexistent Weights", "[action] [noweights]") {
 }
 
 TEST_CASE("Infer Action Multiple", "[action] [infer_action_multiple]") {
-    Model* model = make_model_for_action();
+    BatchedModel* model = make_model_for_action();
     auto clockwork = make_runtime();
     clockwork->manager->models->put(0, new RuntimeModel(model));
 
@@ -334,7 +338,7 @@ TEST_CASE("Infer Action Multiple", "[action] [infer_action_multiple]") {
     delete load_weights;
 
     for (unsigned i = 0; i < 2; i++) {
-        auto infer = new TestInferAction(clockwork.get(), infer_action(model));
+        auto infer = new TestInferAction(clockwork.get(), infer_action(1, model));
 
         infer->submit();
         infer->await();
@@ -347,17 +351,17 @@ TEST_CASE("Infer Action Multiple", "[action] [infer_action_multiple]") {
 }
 
 TEST_CASE("Make Many Models", "[action] [models]") {
-    std::vector<Model*> models;
+    std::vector<BatchedModel*> models;
     for (unsigned i = 0; i < 30; i++) {
         models.push_back(make_model_for_action());
     }
-    for (Model* model : models) {
+    for (BatchedModel* model : models) {
         delete model;
     }
 }
 
 TEST_CASE("Infer Action Multiple Concurrent", "[action] [infer_action_concurrent]") {
-    Model* model = make_model_for_action();
+    BatchedModel* model = make_model_for_action();
     auto clockwork = make_runtime();
     clockwork->manager->models->put(0, new RuntimeModel(model));
 
@@ -372,7 +376,7 @@ TEST_CASE("Infer Action Multiple Concurrent", "[action] [infer_action_concurrent
     std::vector<TestInferAction*> infers;
 
     for (unsigned i = 0; i < 2; i++) {
-        infers.push_back(new TestInferAction(clockwork.get(), infer_action(model)));
+        infers.push_back(new TestInferAction(clockwork.get(), infer_action(1, model)));
     }
 
     for (TestInferAction* infer : infers) {
@@ -390,7 +394,7 @@ TEST_CASE("Infer Action Multiple Concurrent", "[action] [infer_action_concurrent
 }
 
 TEST_CASE("Infer after Evict Action", "[action] [evict_action]") {
-    Model* model = make_model_for_action();
+    BatchedModel* model = make_model_for_action();
     auto clockwork = make_runtime();
     clockwork->manager->models->put(0, new RuntimeModel(model));
 
@@ -402,7 +406,7 @@ TEST_CASE("Infer after Evict Action", "[action] [evict_action]") {
 
     delete load_weights;
     
-    auto infer = new TestInferAction(clockwork.get(), infer_action(model));
+    auto infer = new TestInferAction(clockwork.get(), infer_action(1, model));
 
     infer->submit();
     infer->await();
@@ -418,7 +422,7 @@ TEST_CASE("Infer after Evict Action", "[action] [evict_action]") {
 
     delete evict_weights;
 
-    auto infer2 = new TestInferAction(clockwork.get(), infer_action(model));
+    auto infer2 = new TestInferAction(clockwork.get(), infer_action(1, model));
 
     infer2->submit();
     infer2->await();
@@ -448,8 +452,8 @@ TEST_CASE("Actions E2E", "[action] [e2e]") {
 
     delete load_weights;
     
-    Model* model = clockwork->manager->models->get(0)->model;
-    auto infer = new TestInferAction(clockwork.get(), infer_action(model));
+    BatchedModel* model = clockwork->manager->models->get(0)->model;
+    auto infer = new TestInferAction(clockwork.get(), infer_action(1, model));
 
     infer->submit();
     infer->await();
@@ -465,7 +469,7 @@ TEST_CASE("Actions E2E", "[action] [e2e]") {
 
     delete evict_weights;
 
-    auto infer2 = new TestInferAction(clockwork.get(), infer_action(model));
+    auto infer2 = new TestInferAction(clockwork.get(), infer_action(1, model));
 
     infer2->submit();
     infer2->await();
@@ -477,7 +481,7 @@ TEST_CASE("Actions E2E", "[action] [e2e]") {
 }
 
 TEST_CASE("Task Cancelled After Shutdown", "[action] [shutdown]") {
-    Model* model = make_model_for_action();
+    BatchedModel* model = make_model_for_action();
     auto clockwork = make_runtime();
     clockwork->manager->models->put(0, new RuntimeModel(model));
 

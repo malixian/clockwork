@@ -25,6 +25,7 @@ public:
 	/* Preconditions: none */
 	void instantiate_models_on_host();
 
+	bool is_valid_batch_size(unsigned batch_size);
 	void check_batch_size(unsigned batch_size);
 
 	/* Preconditions: instantiate_model_on_host */

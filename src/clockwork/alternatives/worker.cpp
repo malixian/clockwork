@@ -139,8 +139,8 @@ void Worker::loadRemoteModel(clientapi::LoadModelFromRemoteDiskRequest &request,
 		std::lock_guard<std::mutex> lock(managers_mutex);
 
 		model::Model* model = model::Model::loadFromDisk(
-			request.remote_path + ".so",
-			request.remote_path + ".clockwork",
+			request.remote_path + ".1.so", // TODO: proper batch size here
+			request.remote_path + ".1.clockwork",
 			request.remote_path + ".clockwork_params"
 		);
 		id = managers.size();

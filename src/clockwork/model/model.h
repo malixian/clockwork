@@ -95,12 +95,14 @@ public:
 
 	/* Preconditions: instantiate_model_on_host && set_workspace_pages */
 	void transfer_input_to_device(const char* input_ptr, std::vector<char*> &workspace_pages, cudaStream_t stream);
+	void transfer_input_to_device(size_t input_size, const char* input_ptr, std::vector<char*> &workspace_pages, cudaStream_t stream);
 
 	/* Preconditions: instantiate_model_on_host */
 	unsigned output_size();
 
 	/* Preconditions: instantiate_model_on_host && set_workspace_pages */
 	void transfer_output_from_device(char* output_ptr, std::vector<char*> &workspace_pages, cudaStream_t stream);
+	void transfer_output_from_device(size_t output_size, char* output_ptr, std::vector<char*> &workspace_pages, cudaStream_t stream);
 
 	/* Preconditions: instantiate_model_on_device */
 	void call(std::vector<char*> &weights_pages, std::vector<char*> &workspace_pages, cudaStream_t stream);
