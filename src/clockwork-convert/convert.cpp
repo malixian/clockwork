@@ -29,7 +29,8 @@ struct TVM_Input {
 };
 
 struct ConvertConfig {
-	int pagesize;
+	int weights_page_size;
+	int workspace_page_size;
 	std::vector<TVM_Input> inputs;
 	std::string output_dir;
 	std::string output_filename_prefix;
@@ -48,7 +49,9 @@ void convert(ConvertConfig config) {
 	// The base output filename
 	std::string outfile_base = config.output_dir + "/" + config.output_filename_prefix;
 
-	std::cout << "Converting with page size " << config.pagesize << std::endl;
+	std::cout << "Converting:" << std::endl;
+	std::cout << "   weights_page_size=" << config.weights_page_size << std::endl;
+	std::cout << "   workspace_page_size=" << config.workspace_page_size << std::endl;
 	for (TVM_Input input : config.inputs) {
 		std::cout << "  batch=" << input.batchsize << " " << input.model_params_filename << std::endl;
 	}
@@ -72,7 +75,7 @@ void convert(ConvertConfig config) {
 		clockwork::model::PageMappedModelDef pagemappedmodel;
 		char* weights;
 		int weightsSize;
-		clockwork_model::makeModelDef(model2, config.pagesize, pagemappedmodel, weights, weightsSize, mapped, weights_mapping);
+		clockwork_model::makeModelDef(model2, config.weights_page_size, config.workspace_page_size, pagemappedmodel, weights, weightsSize, mapped, weights_mapping);
 
 		// Save the model's metadata
 		std::stringstream clockwork_meta_out;
@@ -121,20 +124,25 @@ int main(int argc, char *argv[]) {
 	std::vector<std::string> non_argument_strings;
 
 	ConvertConfig config;
-	config.pagesize = 16 * 1024 * 1024;
+	config.weights_page_size = 16 * 1024 * 1024;
+	config.workspace_page_size = 64 * 1024 * 1024;
 	config.output_dir = ".";
 	config.output_filename_prefix = "model";
 
-	int pagesize = 16 * 1024 * 1024;
 	for (int i = 1; i < argc; ++i) {
 		std::string arg = argv[i];
 		if ((arg == "-h") || (arg == "--help")) {
 		    show_usage();
 		    return 0;
-		} else if ((arg == "-p") || (arg == "--pagesize")) {
-		    pagesize = atoi(argv[++i]);
+		} else if ((arg == "--weights_page_size")) {
+		    config.weights_page_size = atoi(argv[++i]);
+		} else if ((arg == "--workspace_page_size")) {
+		    config.workspace_page_size = atoi(argv[++i]);
 		} else if ((arg == "-o") || (arg == "--output")) {
 		    config.output_dir = argv[++i];
+		} else if ((arg == "-p") || (arg == "--page_size")) {
+		    config.workspace_page_size = atoi(argv[++i]);
+		    config.weights_page_size = config.workspace_page_size;
 		} else {
 		  non_argument_strings.push_back(arg);
 		}
