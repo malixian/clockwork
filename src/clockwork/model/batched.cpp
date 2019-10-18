@@ -13,7 +13,7 @@ BatchedModel::BatchedModel(int weights_size, char* weights_pinned_host_memory, s
 
 	unsigned batch_size = 0;
 	for (auto &p : models) {
-		while (batch_size < p.first) {
+		while (batch_size <= p.first) {
 			model_lookup.push_back(p.second);
 			batch_size++;
 		}
@@ -60,7 +60,7 @@ void BatchedModel::instantiate_models_on_host() {
 }
 
 void BatchedModel::check_batch_size(unsigned batch_size) {
-	CHECK(batch_size < model_lookup.size()) << "Unsupported batch size " << batch_size << " larger than maximum " << model_lookup.size();
+	CHECK(batch_size < model_lookup.size()) << "Unsupported batch size " << batch_size << " larger than maximum " << (model_lookup.size()-1);
 }
 
 void BatchedModel::uninstantiate_models_on_host() {

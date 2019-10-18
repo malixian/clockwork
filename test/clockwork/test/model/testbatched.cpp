@@ -28,7 +28,7 @@ char* batch(std::string data, int batch_size, int batch_size_with_padding) {
 }
 
 
-TEST_CASE("Batched models individually", "[batched2]") {
+TEST_CASE("Batched models individually", "[batched]") {
     // This test currently fails because the batched versions of the models are outputting incorrect answers.
     // Warrants further investigation
     for (unsigned batch_size = 1; batch_size <= 16; batch_size *= 2) {

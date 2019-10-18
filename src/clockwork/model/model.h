@@ -58,7 +58,7 @@ private:
 
 	// Warm
 	model::PageMappedModelDef* spec = nullptr;
-	unsigned weights_pages_count, workspace_pages_count, total_pages_count;
+	unsigned weights_pages_count, workspace_pages_count;
 
 	std::vector<OpExec>* op_execs = nullptr;
 	so::TVMWarmSharedObject* warm_so = nullptr;

@@ -271,8 +271,8 @@ Model* make_model() {
     return model;
 }
 
-PageCache* make_cache(size_t total_size) {
-    return make_GPU_cache(total_size);
+PageCache* make_cache(size_t total_size, size_t page_size) {
+    return make_GPU_cache(total_size, page_size);
 }
 
 cudaStream_t make_stream() {
@@ -281,12 +281,16 @@ cudaStream_t make_stream() {
     return stream;
 }
 
-MemoryManager* make_manager(size_t cache_size) {
-    return new MemoryManager(make_cache(cache_size));
+MemoryManager* make_manager(size_t weights_cache_size, size_t weights_page_size, size_t workspace_cache_size, size_t workspace_page_size) {
+    return new MemoryManager(make_cache(weights_cache_size, weights_page_size), make_cache(workspace_cache_size, workspace_page_size));
 }
 
 MemoryManager* make_manager() {
-    return make_manager(1024L * 1024L * 1024L);
+    return make_manager(
+        1024L * 1024L * 1024L, 
+        16L * 1024L * 1024L,
+        1024L * 1024L * 1024L,
+        64L * 1024L * 1024L);
 }
 
 TEST_CASE("Load Model From Disk", "[task] [loadmodel]") {
@@ -425,7 +429,7 @@ TEST_CASE("Load Weights Insufficient Cache", "[task]") {
     Model* model = make_model();
     RuntimeModel* rm = new RuntimeModel(model);
     cudaStream_t stream = make_stream();
-    MemoryManager* manager = make_manager(16 * 1024 * 1024);
+    MemoryManager* manager = make_manager(16 * 1024 * 1024, 16 * 1024 * 1024, 64 * 1024 * 1024, 64 * 1024 * 1024);
     manager->models->put(0, rm);
 
     uint64_t now = util::now();

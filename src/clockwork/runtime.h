@@ -71,10 +71,12 @@ public:
 	// TODO: currently we've hard-coded a whole bunch of defaults -- 10GB cache, 16MB pages
 
 	ClockworkRuntime() {
+		size_t weights_page_size = 16L * 1024L * 1024L; // 16MB hard-coded weights cache page size
 		size_t weights_cache_size = 10L * 1024L * 1024L * 1024L; // 10 GB hard-coded weights cache for now
+		size_t workspace_page_size = 64L * 1024L * 1024L; // 64MB hard-coded workspace cache page size
 		size_t workspace_cache_size = 512L * 1024L * 1024L; // Shouldn't need too much workspace cache
-		PageCache* weights_cache = make_GPU_cache(weights_cache_size);
-		PageCache* workspace_cache = make_GPU_cache(workspace_cache_size);
+		PageCache* weights_cache = make_GPU_cache(weights_cache_size, weights_page_size);
+		PageCache* workspace_cache = make_GPU_cache(workspace_cache_size, workspace_page_size);
 		manager = new MemoryManager(weights_cache, workspace_cache);
 
 	    load_model_executor = new Executor(CPU);
@@ -85,7 +87,7 @@ public:
 		checker = new AsyncTaskChecker();
 	}
 
-	~ClockworkRuntime() {
+	virtual ~ClockworkRuntime() {
 		delete manager;
 		delete load_model_executor;
 		delete weights_executor;

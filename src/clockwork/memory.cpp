@@ -79,13 +79,6 @@ bool ModelStore::put_if_absent(int model_id, RuntimeModel* model) {
 	return did_put;
 }
 
-MemoryManager::MemoryManager(PageCache* cache) : 
-			weights_cache(cache), 
-			workspace_cache(cache), 
-			models(new ModelStore()) {
-	this->io_cache = make_IO_cache();
-}
-
 MemoryManager::MemoryManager(PageCache* weights_cache, PageCache* workspace_cache) : 
 			weights_cache(weights_cache), 
 			workspace_cache(workspace_cache), 
@@ -99,6 +92,7 @@ MemoryManager::~MemoryManager() {
 		delete weights_cache;
 	}
 	delete workspace_cache;
+	delete io_cache;
 }
 
 
@@ -133,7 +127,7 @@ CUDAPageCache::~CUDAPageCache() {
 IOCache* make_IO_cache() {
 	 // TODO: don't hard-code
 	size_t cache_size = 512L * 1024L * 1024L;
-	size_t page_size = 16L * 1024L * 1024L;
+	size_t page_size = 64L * 1024L * 1024L;
 	return new IOCache(cache_size, page_size);
 }
 

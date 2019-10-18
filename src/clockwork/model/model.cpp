@@ -37,8 +37,7 @@ void Model::instantiate_model_on_host() {
 	spec = new model::PageMappedModelDef();
 	PageMappedModelDef::ReadFrom(serialized_spec, *spec);
 	weights_pages_count = spec->weights_pages.size();
-	workspace_pages_count = spec->total_pages - spec->weights_pages.size();
-	total_pages_count = spec->total_pages;
+	workspace_pages_count = spec->num_workspace_pages;
 
 	// 3: setup model executor
 	op_execs = new std::vector<OpExec>(spec->ops.size());
@@ -77,17 +76,17 @@ void Model::uninstantiate_model_on_device() {
 
 unsigned Model::num_weights_pages(unsigned page_size) {
 	CHECK(spec != nullptr) << "num_weights_pages spec is nullptr";
-	CHECK(spec->configured_page_size == page_size)
+	CHECK(spec->configured_weights_page_size == page_size)
 			<< "Clockwork model was configured with mismatched page size, found "
-			<< spec->configured_page_size << ", expected " << page_size;
+			<< spec->configured_weights_page_size << ", expected " << page_size;
 	return weights_pages_count;
 }
 
 unsigned Model::num_workspace_pages(unsigned page_size) {
 	CHECK(spec != nullptr) << "num_workspace_pages spec is nullptr";
-	CHECK(spec->configured_page_size == page_size)
+	CHECK(spec->configured_workspace_page_size == page_size)
 			<< "Clockwork model was configured with mismatched page size, found "
-			<< spec->configured_page_size << ", expected " << page_size;
+			<< spec->configured_workspace_page_size << ", expected " << page_size;
 	return workspace_pages_count;
 }
 
