@@ -74,7 +74,7 @@ public:
 	std::mutex actions_mutex;
 	std::unordered_map<int, std::function<void(std::shared_ptr<workerapi::Result>)>> action_callbacks;
 
-	std::unordered_map<int, bool> weights_loaded;
+	std::unordered_map<int, uint64_t> weights_available_at;
 
 	ControllerImpl(int client_port, std::vector<std::pair<std::string, std::string>> worker_host_port_pairs) :
 			Controller(client_port, worker_host_port_pairs), model_id_seed(0), action_id_seed(0) {}
@@ -118,29 +118,27 @@ public:
 		int model_id = request.model_id;
 		std::vector<std::shared_ptr<workerapi::Action>> actions;
 
-		uint64_t next_action_start_time = util::now();
-
-
 		// If weights aren't loaded, send a load_weights action
-		if (!weights_loaded[request.model_id]) {
+		if (weights_available_at.find(request.model_id) == weights_available_at.end()) {
 			auto load_weights = std::make_shared<workerapi::LoadWeights>();
 			load_weights->id = action_id_seed++;
 			load_weights->model_id = request.model_id;
-			load_weights->earliest = next_action_start_time;
-			load_weights->latest = next_action_start_time + 10000000000L;
+			load_weights->earliest = util::now();
+			load_weights->latest = load_weights->earliest + 10000000000L;
 
 			auto load_weights_complete = [this, user_request_id, model_id] (std::shared_ptr<workerapi::Result> result) {
 				std::cout << "Worker  -> " << result->str() << std::endl;
 
-				// Just mark the weights as loaded if they were loaded
-				if (auto load_weights_result = std::dynamic_pointer_cast<workerapi::LoadWeightsResult>(result)) {
-					weights_loaded[model_id] = true;
+				// If the result wasn't a success, then mark the weights as unavailble again
+				if (auto error_result = std::dynamic_pointer_cast<workerapi::ErrorResult>(result)) {
+					weights_available_at.erase(model_id);
 				}
 			};
 			save_callback(load_weights->id, load_weights_complete);
 			actions.push_back(load_weights);
 
-			next_action_start_time += 7000000UL; // if we have to load weights, for now just assume they take 7ms, so delay the inference by 7ms.
+			// Store when the weights will be available
+			weights_available_at[model_id] = util::now() + 7000000UL; // Assume it'll take 7 ms to load weights
 		}
 		
 		// Translate clientapi request into a workerapi action
@@ -150,8 +148,8 @@ public:
 		infer->batch_size = request.batch_size;
 		infer->input_size = request.input_size;
 		infer->input = static_cast<char*>(request.input);
-		infer->earliest = next_action_start_time; // hard-coded for example's sake, assume it will take 12ms to load weights.  
-		infer->latest = next_action_start_time + 10000000000UL;
+		infer->earliest = weights_available_at[model_id];
+		infer->latest = util::now() + 10000000000UL;
 
 		// When the infer result is received, call this callback
 		auto infer_complete = [this, callback, user_request_id, model_id] (std::shared_ptr<workerapi::Result> result) {
@@ -208,8 +206,6 @@ public:
 		int user_request_id = request.header.user_request_id;
 		int action_id = action_id_seed++;
 		int model_id = model_id_seed++;
-
-		weights_loaded[model_id] = false;
 		
 		// Translate clientapi request into a workerapi action
 		auto load_model = std::make_shared<workerapi::LoadModelFromDisk>();
