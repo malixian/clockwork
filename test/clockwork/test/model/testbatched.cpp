@@ -31,10 +31,11 @@ char* batch(std::string data, int batch_size, int batch_size_with_padding) {
 TEST_CASE("Batched models individually", "[batched2]") {
     // This test currently fails because the batched versions of the models are outputting incorrect answers.
     // Warrants further investigation
-    for (unsigned batch_size = 1; batch_size <= 4; batch_size *= 2) {
+    for (unsigned batch_size = 1; batch_size <= 16; batch_size *= 2) {
         INFO("Checking batch_size=" << batch_size);
 
-        int page_size = 16 * 1024 * 1024;
+        int weights_page_size = 16 * 1024 * 1024;
+        int workspace_page_size = 64 * 1024 * 1024;
         int input_size = 224*224*3*4;
         int output_size = 1000 * 1 * 4;
 
@@ -47,7 +48,7 @@ TEST_CASE("Batched models individually", "[batched2]") {
         model->instantiate_model_on_host();
         model->instantiate_model_on_device();
 
-        std::vector<char*> weights_pages = make_cuda_pages(page_size, model->num_weights_pages(page_size));
+        std::vector<char*> weights_pages = make_cuda_pages(weights_page_size, model->num_weights_pages(weights_page_size));
         model->transfer_weights_to_device(weights_pages, NULL);
         cuda_synchronize(NULL);
 
@@ -65,7 +66,7 @@ TEST_CASE("Batched models individually", "[batched2]") {
 
         char actual_output[output_size * batch_size];
 
-        std::vector<char*> workspace_pages = make_cuda_pages(page_size, model->num_workspace_pages(page_size));
+        std::vector<char*> workspace_pages = make_cuda_pages(workspace_page_size, model->num_workspace_pages(workspace_page_size));
 
         model->transfer_input_to_device(input, workspace_pages, NULL);
         cuda_synchronize(NULL);
@@ -104,7 +105,8 @@ TEST_CASE("Batched models with partial batches", "[batched]") {
     // This test currently fails because the batched versions of the models are outputting incorrect answers.
     // Warrants further investigation
 
-    int page_size = 16 * 1024 * 1024;
+    int weights_page_size = 16 * 1024 * 1024;
+    int workspace_page_size = 64 * 1024 * 1024;
     int input_size = 224*224*3*4;
     int output_size = 1000 * 1 * 4;
 
@@ -117,18 +119,18 @@ TEST_CASE("Batched models with partial batches", "[batched]") {
 
     // Check expected batch sizes
     std::vector<unsigned> batch_sizes = model->implemented_batch_sizes();
-    REQUIRE(batch_sizes.size() == 3);
+    REQUIRE(batch_sizes.size() == 5);
     unsigned i = 0;
     unsigned batch_size = 1;
-    for (; i < 3; i++) {
+    for (; i < batch_sizes.size(); i++) {
         REQUIRE(batch_sizes[i] == batch_size);
         batch_size *= 2;
     }
-    REQUIRE(model->max_batch_size() == 4);
+    REQUIRE(model->max_batch_size() == 16);
 
 
-    int num_weights_pages = model->num_weights_pages(page_size);
-    std::vector<char*> weights_pages = make_cuda_pages(page_size, num_weights_pages);
+    int num_weights_pages = model->num_weights_pages(weights_page_size);
+    std::vector<char*> weights_pages = make_cuda_pages(weights_page_size, num_weights_pages);
     model->transfer_weights_to_device(weights_pages, NULL);
 
     std::string single_input, single_output;
@@ -137,7 +139,7 @@ TEST_CASE("Batched models with partial batches", "[batched]") {
     REQUIRE(single_input.size() == input_size);
     REQUIRE(single_output.size() == output_size);
 
-    for (unsigned batch_size = 1; batch_size <= 4; batch_size++) {
+    for (unsigned batch_size = 1; batch_size <= batch_sizes[batch_sizes.size()-1]; batch_size++) {
 
         REQUIRE(model->input_size(batch_size) == input_size * batch_size);
         REQUIRE(model->output_size(batch_size) == output_size * batch_size);
@@ -146,7 +148,7 @@ TEST_CASE("Batched models with partial batches", "[batched]") {
         char* expected_output = batch(single_output, batch_size, model->padded_batch_size(batch_size));
         char actual_output[output_size * model->padded_batch_size(batch_size)];
 
-        std::vector<char*> workspace_pages = make_cuda_pages(page_size, model->num_workspace_pages(batch_size, page_size));
+        std::vector<char*> workspace_pages = make_cuda_pages(workspace_page_size, model->num_workspace_pages(batch_size, workspace_page_size));
 
         model->transfer_input_to_device(batch_size, input, workspace_pages, NULL);
         cuda_synchronize(NULL);

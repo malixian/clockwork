@@ -10,22 +10,24 @@
 using namespace clockwork::model;
 
 void assert_is_cool(Model* model) {
-    int page_size = 16 * 1024 * 1024;
+    int weights_page_size = 16 * 1024 * 1024;
+    int workspace_page_size = 64 * 1024 * 1024;
     char input[224*224*3*4];
     char output[1000*1*4];
     std::vector<char*> weights_pages;
     std::vector<char*> workspace_pages;
 
     REQUIRE_THROWS(model->uninstantiate_model_on_host());
-    REQUIRE_THROWS(model->num_weights_pages(page_size));
-    REQUIRE_THROWS(model->num_workspace_pages(page_size));
+    REQUIRE_THROWS(model->num_weights_pages(weights_page_size));
+    REQUIRE_THROWS(model->num_workspace_pages(workspace_page_size));
     REQUIRE_THROWS(model->input_size());
     REQUIRE_THROWS(model->output_size());
     REQUIRE_THROWS(model->call(weights_pages, workspace_pages, NULL));
 }
 
 void assert_is_warm(Model* model) {
-    int page_size = 16 * 1024 * 1024;
+    int weights_page_size = 16 * 1024 * 1024;
+    int workspace_page_size = 64 * 1024 * 1024;
     int input_size = 224*224*3*4;
     int output_size = 1000 * 1 * 4;
     char input[input_size];
@@ -38,25 +40,26 @@ void assert_is_warm(Model* model) {
     REQUIRE_THROWS(model->instantiate_model_on_host());
     REQUIRE_THROWS(model->call(weights_pages, workspace_pages, NULL));
 
-    REQUIRE(num_weights_pages == model->num_weights_pages(page_size));
-    REQUIRE(num_workspace_pages == model->num_workspace_pages(page_size));
+    REQUIRE(num_weights_pages == model->num_weights_pages(weights_page_size));
+    REQUIRE(num_workspace_pages == model->num_workspace_pages(workspace_page_size));
     REQUIRE(input_size == model->input_size());
     REQUIRE(output_size == model->output_size());
 }
 
 void assert_is_hot(Model* model) {
-    int page_size = 16 * 1024 * 1024;
+    int weights_page_size = 16 * 1024 * 1024;
+    int workspace_page_size = 64 * 1024 * 1024;
     int input_size = 224*224*3*4;
     int output_size = 1000 * 1 * 4;
     char input[input_size];
     char output[output_size];
     int num_weights_pages = 5;
     int num_workspace_pages = 2;
-    std::vector<char*> weights_pages = make_cuda_pages(page_size, num_weights_pages);
-    std::vector<char*> workspace_pages = make_cuda_pages(page_size, num_workspace_pages);
+    std::vector<char*> weights_pages = make_cuda_pages(weights_page_size, num_weights_pages);
+    std::vector<char*> workspace_pages = make_cuda_pages(workspace_page_size, num_workspace_pages);
 
-    REQUIRE(num_weights_pages == model->num_weights_pages(page_size));
-    REQUIRE(num_workspace_pages == model->num_workspace_pages(page_size));
+    REQUIRE(num_weights_pages == model->num_weights_pages(weights_page_size));
+    REQUIRE(num_workspace_pages == model->num_workspace_pages(workspace_page_size));
     REQUIRE(input_size == model->input_size());
     REQUIRE(output_size == model->output_size());
 
@@ -95,7 +98,7 @@ TEST_CASE("Model lifecycle 1", "[model]") {
     REQUIRE_THROWS(model->uninstantiate_model_on_host());
 
     REQUIRE_THROWS(model->num_weights_pages(page_size));
-    REQUIRE_THROWS(model->num_weights_pages(page_size));
+    REQUIRE_THROWS(model->num_workspace_pages(page_size));
 
     REQUIRE_NOTHROW(model->instantiate_model_on_host());
     REQUIRE_NOTHROW(model->uninstantiate_model_on_host());
@@ -156,13 +159,14 @@ TEST_CASE("Model Lifecycle 2", "[model]") {
 
 TEST_CASE("Model produces correct output", "[e2e]") {
 
-    int page_size = 16 * 1024 * 1024;
+    int weights_page_size = 16 * 1024 * 1024;
+    int workspace_page_size = 64 * 1024 * 1024;
     int input_size = 224*224*3*4;
     int output_size = 1000 * 1 * 4;
     int num_weights_pages = 5;
     int num_workspace_pages = 2;
-    std::vector<char*> weights_pages = make_cuda_pages(page_size, num_weights_pages);
-    std::vector<char*> workspace_pages = make_cuda_pages(page_size, num_workspace_pages);
+    std::vector<char*> weights_pages = make_cuda_pages(weights_page_size, num_weights_pages);
+    std::vector<char*> workspace_pages = make_cuda_pages(workspace_page_size, num_workspace_pages);
 
     std::string f = clockwork::util::get_example_model();
 
@@ -203,7 +207,8 @@ TEST_CASE("Model produces correct output", "[e2e]") {
 
 TEST_CASE("Batched model produces correct output", "[e2e2]") {
 
-    int page_size = 16 * 1024 * 1024;
+    int weights_page_size = 16 * 1024 * 1024;
+    int workspace_page_size = 64 * 1024 * 1024;
     int input_size = 2*224*224*3*4;
     int output_size = 1000 * 2 * 4;
 
@@ -214,7 +219,7 @@ TEST_CASE("Batched model produces correct output", "[e2e2]") {
     model->instantiate_model_on_host();
     model->instantiate_model_on_device();
 
-    std::vector<char*> weights_pages = make_cuda_pages(page_size, model->num_weights_pages(page_size));
+    std::vector<char*> weights_pages = make_cuda_pages(weights_page_size, model->num_weights_pages(weights_page_size));
     model->transfer_weights_to_device(weights_pages, NULL);
 
 
@@ -235,7 +240,7 @@ TEST_CASE("Batched model produces correct output", "[e2e2]") {
     std::memcpy(batched_expected_output + expectedOutput.size(), expectedOutput.data(), expectedOutput.size());
 
 
-    std::vector<char*> workspace_pages = make_cuda_pages(page_size, model->num_workspace_pages(page_size));
+    std::vector<char*> workspace_pages = make_cuda_pages(workspace_page_size, model->num_workspace_pages(workspace_page_size));
     model->transfer_input_to_device(batched_input, workspace_pages, NULL);
     model->call(weights_pages, workspace_pages, NULL);
 
