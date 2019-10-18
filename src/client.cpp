@@ -276,8 +276,8 @@ int main(int argc, char *argv[])
 
 	// Simple closed-loop client
 	// ClosedLoopClient *closed_loop = new ClosedLoopClient(clockwork_connection);
-	// OpenLoopClient *open_loop = new OpenLoopClient(clockwork_connection, 100);
-	BurstyClient *bursty = new BurstyClient(clockwork_connection, 5,10,3,5);
+	OpenLoopClient *open_loop = new OpenLoopClient(clockwork_connection, 100);
+	//BurstyClient *bursty = new BurstyClient(clockwork_connection, 5,10,3,5);
 
 	manager->join();
 
