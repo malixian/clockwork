@@ -131,7 +131,8 @@ void profile_model(std::string model_name, std::string model_path, int expected_
 TEST_CASE("Profile memory limit for cuModuleLoad - resnet18", "[profile] [resnet18] [cuModuleLoad]") {
     std::string model_name = "resnet18";
     std::string model_path = clockwork::util::get_example_model("resnet18_tesla-m40_batchsize1");
-    int expected_blob_size = 388408;
+    // TODO: the current resnet18 example model is NOT a fatbin and does JIT compilation
+    int expected_blob_size = 681463;
     profile_model(model_name, model_path, expected_blob_size);
 }
 

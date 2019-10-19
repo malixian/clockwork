@@ -121,7 +121,8 @@ public:
     std::atomic_int iterations;
     std::thread thread;
     std::atomic_bool started, ready, alive;
-    PageCache* cache;
+    PageCache* weights_cache;
+    PageCache* workspace_cache;
     Experiment* experiment;
     std::vector<model::Model*> models;
     std::string input;
@@ -160,7 +161,7 @@ public:
             experiment->shared.unlock();
             timestamps.push_back(util::hrt());
 
-            std::shared_ptr<Allocation> weights = cache->alloc(model->num_weights_pages(cache->page_size), []{});
+            std::shared_ptr<Allocation> weights = weights_cache->alloc(model->num_weights_pages(weights_cache->page_size), []{});
 
 
             experiment->copy_weights_mutex.lock();
@@ -178,7 +179,7 @@ public:
             REQUIRE(status == cudaSuccess);
             timestamps.push_back(util::hrt());
 
-            std::shared_ptr<Allocation> workspace = cache->alloc(model->num_workspace_pages(cache->page_size), []{});
+            std::shared_ptr<Allocation> workspace = workspace_cache->alloc(model->num_workspace_pages(workspace_cache->page_size), []{});
 
             experiment->copy_inputs_mutex.lock();
             experiment->shared.lock_shared();
@@ -231,10 +232,10 @@ public:
             REQUIRE(status == cudaSuccess);
             timestamps.push_back(util::hrt());
 
-            cache->unlock(workspace);
-            cache->unlock(weights);
-            cache->free(workspace);
-            cache->free(weights);
+            workspace_cache->unlock(workspace);
+            weights_cache->unlock(weights);
+            workspace_cache->free(workspace);
+            weights_cache->free(weights);
 
 
             experiment->shared.lock();
@@ -283,7 +284,7 @@ public:
             std::vector<std::chrono::high_resolution_clock::time_point> timestamps;
             timestamps.reserve(8);
 
-            std::shared_ptr<Allocation> weights = cache->alloc(model->num_weights_pages(cache->page_size), []{});
+            std::shared_ptr<Allocation> weights = weights_cache->alloc(model->num_weights_pages(weights_cache->page_size), []{});
 
 
             experiment->copy_weights_mutex.lock();
@@ -299,7 +300,7 @@ public:
             REQUIRE(status == cudaSuccess);
             timestamps.push_back(util::hrt());
 
-            std::shared_ptr<Allocation> workspace = cache->alloc(model->num_workspace_pages(cache->page_size), []{});
+            std::shared_ptr<Allocation> workspace = workspace_cache->alloc(model->num_workspace_pages(workspace_cache->page_size), []{});
 
             experiment->copy_inputs_mutex.lock();
             timestamps.push_back(util::hrt());
@@ -346,10 +347,10 @@ public:
             REQUIRE(status == cudaSuccess);
             timestamps.push_back(util::hrt());
 
-            cache->unlock(workspace);
-            cache->unlock(weights);
-            cache->free(workspace);
-            cache->free(weights);
+            workspace_cache->unlock(workspace);
+            weights_cache->unlock(weights);
+            workspace_cache->free(workspace);
+            weights_cache->free(weights);
 
             iterations++;
             experiment->progress++;
@@ -365,8 +366,8 @@ public:
 
     }
 
-    ModelExecWithModuleLoad(int i, Experiment* experiment, PageCache* cache, std::vector<model::Model*> models, std::string input) :
-            experiment(experiment), cache(cache), models(models), alive(true), input(input), iterations(0),
+    ModelExecWithModuleLoad(int i, Experiment* experiment, PageCache* weights_cache, PageCache* workspace_cache, std::vector<model::Model*> models, std::string input) :
+            experiment(experiment), weights_cache(weights_cache), workspace_cache(workspace_cache), models(models), alive(true), input(input), iterations(0),
             ready(false), started(false) {
         util::set_core((i+7) % util::get_num_cores());
         util::setCurrentThreadMaxPriority();
@@ -424,9 +425,13 @@ void warmup() {
     std::string model_name = "resnet50";
     std::string model_path = clockwork::util::get_example_model("resnet50_tesla-m40_batchsize1");
 
-    size_t page_size = 16 * 1024L * 1024L;
-    size_t cache_size = 512L * page_size;
-    PageCache* cache = make_cache(cache_size, page_size);
+    size_t weights_page_size = 16 * 1024L * 1024L;
+    size_t weights_cache_size = 512L * weights_page_size;
+    PageCache* weights_cache = make_cache(weights_cache_size, weights_page_size);
+
+    size_t workspace_page_size = 64 * 1024L * 1024L;
+    size_t workspace_cache_size = 16 * workspace_page_size;
+    PageCache* workspace_cache = make_cache(workspace_cache_size, workspace_page_size);
 
     model::Model* model = load_model_from_disk(model_path);
 
@@ -438,10 +443,10 @@ void warmup() {
     model->instantiate_model_on_host();
     model->instantiate_model_on_device();
     
-    std::shared_ptr<Allocation> weights = cache->alloc(model->num_weights_pages(cache->page_size), []{});
+    std::shared_ptr<Allocation> weights = weights_cache->alloc(model->num_weights_pages(weights_page_size), []{});
     model->transfer_weights_to_device(weights->page_pointers, util::Stream());
 
-    std::shared_ptr<Allocation> workspace = cache->alloc(model->num_workspace_pages(cache->page_size), []{});
+    std::shared_ptr<Allocation> workspace = workspace_cache->alloc(model->num_workspace_pages(workspace_page_size), []{});
     model->transfer_input_to_device(input.data(), workspace->page_pointers, util::Stream());
     
     model->call(weights->page_pointers, workspace->page_pointers, util::Stream());
@@ -452,23 +457,24 @@ void warmup() {
     status = cudaStreamSynchronize(util::Stream());
     REQUIRE(status == cudaSuccess);
 
-    cache->unlock(workspace);
-    cache->free(workspace);
+    workspace_cache->unlock(workspace);
+    workspace_cache->free(workspace);
 
-    cache->unlock(weights);
-    cache->free(weights);
+    weights_cache->unlock(weights);
+    weights_cache->free(weights);
 
     model->uninstantiate_model_on_device();
     model->uninstantiate_model_on_host();
 
-    status = cudaFreeHost(model->weights_pinned_host_memory);
+    status = cudaFree(workspace_cache->baseptr);
     REQUIRE(status == cudaSuccess);
 
-    status = cudaFree(cache->baseptr);
+    status = cudaFree(weights_cache->baseptr);
     REQUIRE(status == cudaSuccess);
 
     delete model;
-    delete cache;
+    delete workspace_cache;
+    delete weights_cache;
 }
 
 TEST_CASE("Warmup works", "[profile] [warmup]") {
@@ -488,9 +494,13 @@ void runMultiClientExperiment(int num_execs, int models_per_exec, bool duplicate
     std::string model_name = "resnet50";
     std::string model_path = clockwork::util::get_example_model("resnet50_tesla-m40_batchsize1");
 
-    size_t page_size = 16 * 1024L * 1024L;
-    size_t cache_size = 512L * page_size;
-    PageCache* cache = make_cache(cache_size, page_size);
+    size_t weights_page_size = 16 * 1024L * 1024L;
+    size_t weights_cache_size = 512L * weights_page_size;
+    PageCache* weights_cache = make_cache(weights_cache_size, weights_page_size);
+
+    size_t workspace_page_size = 64 * 1024L * 1024L;
+    size_t workspace_cache_size = 16 * workspace_page_size;
+    PageCache* workspace_cache = make_cache(workspace_cache_size, workspace_page_size);
 
     Experiment* experiment = new Experiment();
 
@@ -523,7 +533,7 @@ void runMultiClientExperiment(int num_execs, int models_per_exec, bool duplicate
         }
 
         ModelExecWithModuleLoad* exec = new ModelExecWithModuleLoad(i,
-            experiment, cache, models, input);
+            experiment, weights_cache, workspace_cache, models, input);
 
         execs.push_back(exec);
     }
@@ -606,7 +616,8 @@ void runMultiClientExperiment(int num_execs, int models_per_exec, bool duplicate
     }
 
     delete experiment;
-    delete cache;
+    delete workspace_cache;
+    delete weights_cache;
 }
 
 
