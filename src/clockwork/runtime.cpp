@@ -3,9 +3,9 @@
 
 namespace clockwork {
 
-Executor::Executor(TaskType type, int num_threads) : alive(true), type(type){
-	for (unsigned i = 0; i < num_threads; i++) {
-		threads.push_back(std::thread(&Executor::executorMain, this, i));
+Executor::Executor(TaskType type, std::vector<unsigned> cores) : alive(true), type(type){
+	for (unsigned i = 0; i < cores.size(); i++) {
+		threads.push_back(std::thread(&Executor::executorMain, this, i, cores[i]));
 	}
 }
 
@@ -26,8 +26,10 @@ void Executor::join() {
 	}
 }
 
-void Executor::executorMain(int executorId) {
-	// TODO: acquire core, bind to core, set thread priority
+void Executor::executorMain(unsigned executor_id, unsigned core) {
+	std::cout << TaskTypeName(type) << "-" << executor_id << " binding to core " << core << std::endl;
+	util::set_core(core);
+	util::setCurrentThreadMaxPriority();
 	util::initializeCudaStream();
 	cudaStream_t stream = util::Stream();
 
@@ -53,10 +55,9 @@ void Executor::executorMain(int executorId) {
 }
 
 
-AsyncTaskChecker::AsyncTaskChecker() : alive(true) {
-	unsigned num_threads = 1;
-	for (unsigned i = 0; i < num_threads; i++) {
-		threads.push_back(std::thread(&AsyncTaskChecker::executorMain, this, i));
+AsyncTaskChecker::AsyncTaskChecker(std::vector<unsigned> cores) : alive(true) {
+	for (unsigned i = 0; i < cores.size(); i++) {
+		threads.push_back(std::thread(&AsyncTaskChecker::executorMain, this, i, cores[i]));
 	}
 }
 
@@ -74,8 +75,10 @@ void AsyncTaskChecker::join() {
 	}
 }
 
-void AsyncTaskChecker::executorMain(int executorId) {
-	// TODO: acquire core, bind to core, set thread priority
+void AsyncTaskChecker::executorMain(unsigned executor_id, unsigned core) {
+	std::cout << "Checker-" << executor_id << " binding to core " << core << std::endl;
+	util::set_core(core);
+	util::setCurrentThreadMaxPriority();
 	util::initializeCudaStream();
 
 	std::vector<AsyncTask*> pending_tasks;

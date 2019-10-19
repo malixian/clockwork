@@ -29,70 +29,75 @@ private:
 
 	std::atomic_bool alive;
 
-	// Unfortunately for now we use mutexes
-	std::mutex mutex;
-	std::condition_variable condition;
+	std::atomic_flag in_use;
+	std::atomic_uint64_t version; 
 	std::priority_queue<container, std::vector<container>, std::greater<container>> queue;
 
 public:
 
-	time_release_priority_queue() : alive(true) {}
+	time_release_priority_queue() : alive(true), in_use(ATOMIC_FLAG_INIT), version(0) {}
 
 	bool enqueue(T* element, uint64_t priority) {
-		std::unique_lock<std::mutex> lock(mutex);
+		while (in_use.test_and_set());
 
 		// TODO: will have to convert priority to a chrono::timepoint
 		if (alive) {
 			queue.push(container{element, priority});
-			condition.notify_all();
+			version++;
 		}
+
+		in_use.clear();
 
 		return alive;
 	}
 
 	bool try_dequeue(T* &element) {
-		std::unique_lock<std::mutex> lock(mutex);
+		while (in_use.test_and_set());
 
-		if (!alive || queue.empty()) return false;
-
-		// TODO: instead of using util::now, which converts chrono::time_point to nanoseconds,
-		//       just directly use chrono::time_point
-		if (queue.top().priority > util::now()) return false;
+		if (!alive || queue.empty() || queue.top().priority > util::now()) {
+			in_use.clear();
+			return false;
+		}
 
 		element = queue.top().element;
 		queue.pop();
+
+		in_use.clear();
 		return true;
 	}
 
 	T* dequeue() {
-		std::unique_lock<std::mutex> lock(mutex);
-
-		while (alive && queue.empty()) {
-			condition.wait(lock);
-		}
-		if (!alive) return nullptr;
-
 		while (alive) {
-			const container &top = queue.top();
-			uint64_t now = util::now();
+			while (in_use.test_and_set());
 
-			if (top.priority <= now) break;
+			if (queue.empty()) {
+				uint64_t version_seen = version.load();
+				in_use.clear();
 
-			
-			// TODO: all of this timing should be std::chrono
-			const std::chrono::nanoseconds timeout(top.priority - now);
-			condition.wait_for(lock, timeout);
+				// Spin until something is enqueued
+				while (alive && version.load() == version_seen);
+
+			} else if (queue.top().priority > util::now()) {
+				uint64_t next_eligible = queue.top().priority;
+				uint64_t version_seen = version.load();
+				in_use.clear();
+
+				// Spin until the top element is eligible or something new is enqueued
+				while (alive && version.load() == version_seen && next_eligible > util::now());
+
+			} else {
+				T* element = queue.top().element;
+				queue.pop();
+				in_use.clear();
+				return element;
+
+			}
 		}
-
-		if (!alive) return nullptr;
-
-		T* element = queue.top().element;
-		queue.pop();
-		return element;
+		return nullptr;
 	}
 
 	std::vector<T*> drain() {
-		std::unique_lock<std::mutex> lock(mutex);
+		while (in_use.test_and_set());
 
 		std::vector<T*> elements;
 		while (!queue.empty()) {
@@ -100,13 +105,18 @@ public:
 			queue.pop();
 		}
 
+		in_use.clear();
+
 		return elements;
 	}
 
 	void shutdown() {
-		std::unique_lock<std::mutex> lock(mutex);
+		while (in_use.test_and_set());
+
 		alive = false;
-		condition.notify_all();
+		version++;
+
+		in_use.clear();
 	}
 	
 };
