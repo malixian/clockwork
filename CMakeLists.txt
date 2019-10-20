@@ -35,7 +35,16 @@ link_directories(
 	/usr/local/cuda/lib64
 )
 
-add_library(clockwork
+
+# Build a clockwork_proto lib containing the protobuf stuff
+find_package(Protobuf REQUIRED)
+include_directories(${Protobuf_INCLUDE_DIR})
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
+protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS proto/clockwork.proto)
+add_library(clockwork_proto ${PROTO_HDRS} ${PROTO_SRCS})
+target_link_libraries(clockwork_proto INTERFACE ${Protobuf_LIBRARIES})
+
+add_library( clockwork
 	src/clockwork/client.cpp
 	src/clockwork/task.cpp
 	src/clockwork/modeldef.cpp
@@ -65,7 +74,8 @@ add_library(clockwork
 	src/clockwork/alternatives/worker.cpp
 )
 
-target_link_libraries(clockwork PUBLIC
+target_link_libraries( clockwork PUBLIC
+	clockwork_proto
 	cuda
 	cudart
 	tvm_runtime
@@ -75,14 +85,11 @@ target_link_libraries(clockwork PUBLIC
     ${Boost_FILESYSTEM_LIBRARY}
 )
 
-add_executable (main
-	src/main.cc
-	src/clockwork/util.cpp
-)
-
-target_link_libraries(
-	main
+# cudafatbin is temporary / hacky 
+add_executable (cudafatbin src/cudafatbin.cc )
+target_link_libraries( cudafatbin
 	clockwork
+	clockwork_proto
 	Threads::Threads
 	dl
 	cuda
@@ -94,27 +101,9 @@ target_link_libraries(
     ${Boost_FILESYSTEM_LIBRARY}
 )
 
-add_executable (cudafatbin
-	src/cudafatbin.cc
-	src/clockwork/util.cpp
-)
 
-target_link_libraries(
-	cudafatbin
-	clockwork
-	Threads::Threads
-	dl
-	cuda
-	cudart
-	tvm_runtime
-	tbb
-	nvidia-ml
-    ${Boost_SYSTEM_LIBRARY}
-    ${Boost_FILESYSTEM_LIBRARY}
-)
-
+# Converts from TVM models to clockwork models
 include_directories(clockwork-convert)
-
 add_executable (convert
 	src/clockwork/tvm/decoupled_graph_runtime.cc
 	src/clockwork-convert/tvm_model.cpp
@@ -122,9 +111,9 @@ add_executable (convert
 	src/clockwork-convert/convert.cpp
 )
 
-target_link_libraries(
-	convert
+target_link_libraries( convert
 	clockwork
+	clockwork_proto
 	Threads::Threads
 	dl
 	cuda
@@ -136,13 +125,12 @@ target_link_libraries(
     ${Boost_FILESYSTEM_LIBRARY}
 )
 
-add_executable (inflate
-	src/inflate.cpp
-)
 
-target_link_libraries(
-	inflate
+# Inflate telemetry files from binary to human-readable
+add_executable (inflate src/inflate.cpp )
+target_link_libraries( inflate
 	clockwork
+	clockwork_proto
 	Threads::Threads
 	dl
 	cuda
@@ -154,26 +142,9 @@ target_link_libraries(
     ${Boost_FILESYSTEM_LIBRARY}
 )
 
-add_executable (testmemory
-	src/testmemory.cpp
-)
 
-target_link_libraries(
-	testmemory
-	clockwork
-	Threads::Threads
-	dl
-	cuda
-	cudart
-	tvm_runtime
-	tbb
-	nvidia-ml
-    ${Boost_SYSTEM_LIBRARY}
-    ${Boost_FILESYSTEM_LIBRARY}
-)
-
+# All tests
 include_directories(test)
-
 add_executable (tests
 	test/tests.cpp
 	test/clockwork/test/util.cpp
@@ -184,13 +155,13 @@ add_executable (tests
 	test/clockwork/test/testcache.cpp
 	test/clockwork/test/testpriorityqueue.cpp
 	test/clockwork/test/testclient.cpp
+	test/clockwork/test/testnetwork.cpp
 	test/clockwork/test/model/testmodel.cpp
 	test/clockwork/test/model/testbatched.cpp
 )
-
-target_link_libraries(
-	tests
+target_link_libraries( tests
 	clockwork
+	clockwork_proto
 	Threads::Threads
 	dl
 	cuda
@@ -202,7 +173,9 @@ target_link_libraries(
     ${Boost_FILESYSTEM_LIBRARY}
 )
 
-add_executable (profile
+
+# Like tests, but does profiling
+add_executable ( profile
 	profile/profile.cpp
 	test/clockwork/test/util.cpp
 	profile/clockwork/profile/check.cpp
@@ -210,10 +183,9 @@ add_executable (profile
 	profile/clockwork/profile/model/profilecuda.cpp
 	profile/clockwork/profile/model/profilemodel.cpp
 )
-
-target_link_libraries(
-	profile
+target_link_libraries( profile
 	clockwork
+	clockwork_proto
 	Threads::Threads
 	dl
 	cuda
@@ -225,64 +197,50 @@ target_link_libraries(
     ${Boost_FILESYSTEM_LIBRARY}
 )
 
-# protobuf imports
-find_package(Protobuf REQUIRED)
-include_directories(${Protobuf_INCLUDE_DIR})
-include_directories(${CMAKE_CURRENT_BINARY_DIR})
-protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS proto/clockwork.proto)
-add_library(proto ${PROTO_HDRS} ${PROTO_SRCS})
-target_link_libraries(proto INTERFACE ${Protobuf_LIBRARIES})
 
-
-add_executable (worker
-	src/worker.cpp
-)
-
+# Standalone clockwork worker
+add_executable (worker src/worker.cpp )
 target_link_libraries(
     worker
-    clockwork
+	clockwork
+	clockwork_proto
     Threads::Threads
     dl
     cuda
     cudart
     tvm_runtime
-    proto
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
 
 
-add_executable (controller
-	src/controller.cpp
-)
-
+# Standalone clockwork controller 
+add_executable (controller src/controller.cpp )
 target_link_libraries(
     controller
-    clockwork
+	clockwork
+	clockwork_proto
     Threads::Threads
     dl
     cuda
     cudart
     tvm_runtime
-    proto
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
 
 
-add_executable (client
-	src/client.cpp
-)
-
+# Standalone clockwork workload generating client
+add_executable (client src/client.cpp )
 target_link_libraries(
     client
-    clockwork
+	clockwork
+	clockwork_proto
     Threads::Threads
     dl
     cuda
     cudart
     tvm_runtime
-    proto
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )

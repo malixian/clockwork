@@ -23,6 +23,8 @@ tasks, and checking async task completion.
 
 namespace clockwork {
 
+class ClockworkRuntime;
+
 class Executor {
 private:
 	std::atomic_bool alive;
@@ -32,12 +34,12 @@ private:
 public:
 	const TaskType type;
 
-	Executor(TaskType type, int num_threads = 1);
+	Executor(TaskType type, std::vector<unsigned> cores);
 
 	void enqueue(Task* task);
 	void shutdown();
 	void join();
-	void executorMain(int executorId);
+	void executorMain(unsigned executor_id, unsigned core);
 };
 
 class AsyncTaskChecker {
@@ -48,12 +50,12 @@ private:
 
 public:
 
-	AsyncTaskChecker();
+	AsyncTaskChecker(std::vector<unsigned> cores);
 
 	void enqueue(AsyncTask* task);
 	void shutdown();
 	void join();
-	void executorMain(int executorId);
+	void executorMain(unsigned executor_id, unsigned core);
 };
 
 class ClockworkRuntime {
@@ -79,12 +81,16 @@ public:
 		PageCache* workspace_cache = make_GPU_cache(workspace_cache_size, workspace_page_size);
 		manager = new MemoryManager(weights_cache, workspace_cache);
 
-	    load_model_executor = new Executor(CPU);
-		weights_executor = new Executor(PCIe_H2D_Weights);
-		inputs_executor = new Executor(PCIe_H2D_Inputs);
-		gpu_executor = new Executor(GPU);
-		outputs_executor = new Executor(PCIe_D2H_Output);
-		checker = new AsyncTaskChecker();
+		unsigned gpu_device_id = 0; // Initially we're only using GPU 0
+		auto cores = util::get_gpu_core_affinity(gpu_device_id);
+		int i = cores.size()-1;
+
+	    load_model_executor = new Executor(CPU, {cores[i--]});
+		weights_executor = new Executor(PCIe_H2D_Weights, {cores[i--]});
+		inputs_executor = new Executor(PCIe_H2D_Inputs, {cores[i--]});
+		gpu_executor = new Executor(GPU, {cores[i--]});
+		outputs_executor = new Executor(PCIe_D2H_Output, {cores[i--]});
+		checker = new AsyncTaskChecker({cores[i--]});
 	}
 
 	virtual ~ClockworkRuntime() {

@@ -152,11 +152,15 @@ TEST_CASE("Priority Queue Blocking Dequeue", "[queue] [shutdown]") {
 
     int* e = q.dequeue();
 
-    INFO("Blocking dequeue returned before shutdown signaller completed");
-    REQUIRE(s.signalled_shutdown);
+    {
+        INFO("Blocking dequeue returned before shutdown signaller completed");
+        REQUIRE(s.signalled_shutdown);
+    }
 
-    INFO("Blocking dequeue should have returned a nullptr");
-    REQUIRE(e == nullptr);
+    {
+        INFO("Blocking dequeue should have returned a nullptr");
+        REQUIRE(e == nullptr);
+    }
 
     s.thread.join();
 }
