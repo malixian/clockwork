@@ -362,9 +362,15 @@ void InferAction::handle_completion(char* output) {
 	result->action_type = workerapi::inferAction;
 	result->status = actionSuccess;
 
+	exec->telemetry->action_id = action->id;
+	exec->telemetry->model_id = action->model_id;
+	exec->telemetry->task_type = workerapi::inferAction;
+
 	extract_timing_async(&result->copy_input, copy_input->telemetry);
 	extract_timing_async(&result->exec, exec->telemetry);
 	extract_timing_async(&result->copy_output, copy_output->telemetry);
+
+	runtime->telemetry_logger->log(exec->telemetry);
 
 	result->output_size = rm->model->output_size(action->batch_size);
 	result->output = output;

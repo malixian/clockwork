@@ -6,34 +6,37 @@
 #include "clockwork/api/client_api.h"
 #include "clockwork/network/client.h"
 
-namespace clockwork {
+namespace clockwork
+{
 
-class NetworkClient : public Client {
+class NetworkClient : public Client
+{
 public:
 	std::atomic_int request_id_seed;
 	int user_id;
-	network::client::ConnectionManager* manager;
-	network::client::Connection* connection;
+	network::client::ConnectionManager *manager;
+	network::client::Connection *connection;
 
-	NetworkClient(network::client::ConnectionManager* manager, network::client::Connection* connection);
+	NetworkClient(network::client::ConnectionManager *manager, network::client::Connection *connection);
 	virtual ~NetworkClient();
 
-	virtual Model* get_model(int model_id);
-	virtual std::future<Model*> get_model_async(int model_id);
-	virtual Model* upload_model(std::vector<uint8_t> &serialized_model);
-	virtual std::future<Model*> upload_model_async(std::vector<uint8_t> &serialized_model);
-	virtual Model* load_remote_model(std::string model_path);
-	virtual std::future<Model*> load_remote_model_async(std::string model_path);
+	virtual Model *get_model(int model_id);
+	virtual std::future<Model *> get_model_async(int model_id);
+	virtual Model *upload_model(std::vector<uint8_t> &serialized_model);
+	virtual std::future<Model *> upload_model_async(std::vector<uint8_t> &serialized_model);
+	virtual Model *load_remote_model(std::string model_path);
+	virtual std::future<Model *> load_remote_model_async(std::string model_path);
 };
 
-class ModelImpl : public Model {
+class ModelImpl : public Model
+{
 public:
-	NetworkClient* client;
+	NetworkClient *client;
 
 	const int model_id_;
 	const int input_size_;
 
-	ModelImpl(NetworkClient* client, int model_id, int input_size);
+	ModelImpl(NetworkClient *client, int model_id, int input_size);
 
 	virtual int id();
 	virtual int input_size();
@@ -42,47 +45,50 @@ public:
 	virtual std::future<std::vector<uint8_t>> infer_async(std::vector<uint8_t> &input);
 	virtual void evict();
 	virtual std::future<void> evict_async();
-
 };
 
-
-NetworkClient::NetworkClient(network::client::ConnectionManager* manager, network::client::Connection* connection) : 
-		manager(manager), connection(connection), user_id(0), request_id_seed(0) {
+NetworkClient::NetworkClient(network::client::ConnectionManager *manager, network::client::Connection *connection) : manager(manager), connection(connection), user_id(0), request_id_seed(0)
+{
 }
 
-NetworkClient::~NetworkClient() {
+NetworkClient::~NetworkClient()
+{
 	// TODO: delete connection and manager
 }
 
-Model* NetworkClient::get_model(int model_id) {
+Model *NetworkClient::get_model(int model_id)
+{
 	// TODO: add RPC to get model info from server.  For now just hard code...
 	return get_model_async(model_id).get();
 }
 
-std::future<Model*> NetworkClient::get_model_async(int model_id) {
-	auto promise = std::make_shared<std::promise<Model*>>();
+std::future<Model *> NetworkClient::get_model_async(int model_id)
+{
+	auto promise = std::make_shared<std::promise<Model *>>();
 	promise->set_value(new ModelImpl(this, model_id, 602112));
 	return promise->get_future();
 }
 
-Model* NetworkClient::upload_model(std::vector<uint8_t> &serialized_model) {
+Model *NetworkClient::upload_model(std::vector<uint8_t> &serialized_model)
+{
 	return upload_model_async(serialized_model).get();
 }
 
-std::future<Model*> NetworkClient::upload_model_async(std::vector<uint8_t> &serialized_model) {
-	auto promise = std::make_shared<std::promise<Model*>>();
+std::future<Model *> NetworkClient::upload_model_async(std::vector<uint8_t> &serialized_model)
+{
+	auto promise = std::make_shared<std::promise<Model *>>();
 	promise->set_exception(std::make_exception_ptr(std::runtime_error("upload_model not implemented")));
 	return promise->get_future();
 }
 
-
-
-Model* NetworkClient::load_remote_model(std::string model_path) {
+Model *NetworkClient::load_remote_model(std::string model_path)
+{
 	return load_remote_model_async(model_path).get();
 }
 
-std::future<Model*> NetworkClient::load_remote_model_async(std::string model_path) {
-	auto promise = std::make_shared<std::promise<Model*>>();
+std::future<Model *> NetworkClient::load_remote_model_async(std::string model_path)
+{
+	auto promise = std::make_shared<std::promise<Model *>>();
 
 	clientapi::LoadModelFromRemoteDiskRequest load_model;
 	load_model.header.user_id = 0;
@@ -91,33 +97,38 @@ std::future<Model*> NetworkClient::load_remote_model_async(std::string model_pat
 
 	std::cout << "<--  " << load_model.str() << std::endl;
 
-	connection->loadRemoteModel(load_model, [this, promise] (clientapi::LoadModelFromRemoteDiskResponse &response) {
+	connection->loadRemoteModel(load_model, [this, promise](clientapi::LoadModelFromRemoteDiskResponse &response) {
 		std::cout << " --> " << response.str() << std::endl;
-		if (response.header.status == clockworkSuccess) {
+		if (response.header.status == clockworkSuccess)
+		{
 			promise->set_value(new ModelImpl(this, response.model_id, response.input_size));
-		} else {
+		}
+		else
+		{
 			auto exception = std::runtime_error(response.header.message);
-			promise->set_exception(std::make_exception_ptr(exception));	
+			promise->set_exception(std::make_exception_ptr(exception));
 		}
 	});
 
 	return promise->get_future();
 }
 
-ModelImpl::ModelImpl(NetworkClient* client, int model_id, int input_size) : 
-		client(client), model_id_(model_id), input_size_(input_size) {
+ModelImpl::ModelImpl(NetworkClient *client, int model_id, int input_size) : client(client), model_id_(model_id), input_size_(input_size)
+{
 }
 
 int ModelImpl::id() { return model_id_; }
 
 int ModelImpl::input_size() { return input_size_; }
 
-std::vector<uint8_t> ModelImpl::infer(std::vector<uint8_t> &input) {
+std::vector<uint8_t> ModelImpl::infer(std::vector<uint8_t> &input)
+{
 	auto future = infer_async(input);
 	return future.get();
 }
 
-std::future<std::vector<uint8_t>> ModelImpl::infer_async(std::vector<uint8_t> &input) {
+std::future<std::vector<uint8_t>> ModelImpl::infer_async(std::vector<uint8_t> &input)
+{
 	CHECK(input_size_ == input.size()) << "Infer called with incorrect input size";
 
 	auto promise = std::make_shared<std::promise<std::vector<uint8_t>>>();
@@ -135,12 +146,15 @@ std::future<std::vector<uint8_t>> ModelImpl::infer_async(std::vector<uint8_t> &i
 
 	std::cout << "<--  " << request.str() << std::endl;
 
-	client->connection->infer(request, [this, promise, input_data] (clientapi::InferenceResponse &response) {
+	client->connection->infer(request, [this, promise, input_data](clientapi::InferenceResponse &response) {
 		std::cout << " --> " << response.str() << std::endl;
-		if (response.header.status == clockworkSuccess) {
-			uint8_t* output = static_cast<uint8_t*>(response.output);
+		if (response.header.status == clockworkSuccess)
+		{
+			uint8_t *output = static_cast<uint8_t *>(response.output);
 			promise->set_value(std::vector<uint8_t>(output, output + response.output_size));
-		} else {
+		}
+		else
+		{
 			auto exception = std::runtime_error(response.header.message);
 			promise->set_exception(std::make_exception_ptr(exception));
 		}
@@ -151,28 +165,30 @@ std::future<std::vector<uint8_t>> ModelImpl::infer_async(std::vector<uint8_t> &i
 	return promise->get_future();
 }
 
-
-void ModelImpl::evict() {
+void ModelImpl::evict()
+{
 	auto future = evict_async();
 	future.get();
 }
 
-std::future<void> ModelImpl::evict_async() {
+std::future<void> ModelImpl::evict_async()
+{
 	auto promise = std::make_shared<std::promise<void>>();
 	promise->set_exception(std::make_exception_ptr(std::runtime_error("evict not implemented")));
 	return promise->get_future();
 }
 
-Client* Connect(const std::string &hostname, const std::string &port) {
-	// ConnectionManager internally has a thread for doing IO.  
+Client *Connect(const std::string &hostname, const std::string &port)
+{
+	// ConnectionManager internally has a thread for doing IO.
 	// For now just have a separate thread per client
 	// Ideally clients would share threads, but for now that's nitpicking
-	network::client::ConnectionManager* manager = new network::client::ConnectionManager();
+	network::client::ConnectionManager *manager = new network::client::ConnectionManager();
 
 	// Connect to clockwork
-	network::client::Connection* clockwork_connection = manager->connect(hostname, port);
+	network::client::Connection *clockwork_connection = manager->connect(hostname, port);
 
 	return new NetworkClient(manager, clockwork_connection);
 }
 
-}
+} // namespace clockwork

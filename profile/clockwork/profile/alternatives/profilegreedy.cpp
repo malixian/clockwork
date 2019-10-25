@@ -303,7 +303,7 @@ void runMultiClientExperiment(int num_execs, int models_per_exec, int requests_p
         usleep(100000);
     }
 
-    std::vector<RequestTelemetry*> telemetry = logger->take();
+    std::vector<RequestTelemetry*> telemetry = logger->take_request();
 
 
     std::vector<std::string> series_names = {

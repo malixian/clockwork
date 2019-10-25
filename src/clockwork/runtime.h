@@ -9,6 +9,7 @@
 #include <cuda_runtime.h>
 #include "tvm/runtime/cuda_common.h"
 #include "clockwork/telemetry.h"
+#include "clockwork/telemetry_logger.h"
 #include "clockwork/cache.h"
 #include "clockwork/model/model.h"
 #include "clockwork/priority_queue.h"
@@ -70,6 +71,8 @@ public:
 
 	AsyncTaskChecker* checker;
 
+	TelemetryFileLogger* telemetry_logger; 
+
 	// TODO: currently we've hard-coded a whole bunch of defaults -- 10GB cache, 16MB pages
 
 	ClockworkRuntime() {
@@ -91,6 +94,8 @@ public:
 		gpu_executor = new Executor(GPU, {cores[i--]});
 		outputs_executor = new Executor(PCIe_D2H_Output, {cores[i--]});
 		checker = new AsyncTaskChecker({cores[i--]});
+
+		telemetry_logger = new TelemetryFileLogger("telemetry.raw");
 	}
 
 	virtual ~ClockworkRuntime() {

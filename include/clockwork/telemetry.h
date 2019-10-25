@@ -9,7 +9,7 @@
 namespace clockwork {
 
 struct TaskTelemetry {
-	int task_type, executor_id;
+	int task_type, executor_id, model_id, action_id;
 	std::chrono::high_resolution_clock::time_point created, enqueued, 
 		eligible_for_dequeue, dequeued, exec_complete, async_complete;
 	float async_wait, async_duration;
@@ -28,13 +28,15 @@ struct RequestTelemetry {
 };
 
 struct SerializedTaskTelemetry {
-	int task_type, executor_id;
+	int task_type, executor_id, model_id, action_id;
 	uint64_t created, enqueued, eligible_for_dequeue, dequeued, exec_complete, async_complete;
 	uint64_t async_wait, async_duration;
 
 	PODS_SERIALIZABLE(1,
 		PODS_MDR(task_type),
 		PODS_MDR(executor_id),
+		PODS_MDR(model_id),
+		PODS_MDR(action_id),
 		PODS_MDR(created),
 		PODS_MDR(enqueued),
 		PODS_MDR(eligible_for_dequeue),
