@@ -8,7 +8,7 @@ If this README hasn't been updated, it means the system is still a work-in-progr
 
 ## 1. CUDA
 
-Make sure CUDA is installed and on your PATH
+Make sure CUDA is installed and on your PATH.  MPI cluster machines have CUDA 9 installed by default.  You can check if CUDA is installed and the version by running `nvcc --version`
 
 ## 2. Installing TVM
 
@@ -33,7 +33,7 @@ echo "export TVM_HOME=`pwd`" >> ~/.bashrc
 source ~/.bashrc
 ```
 
-Optionally you can add `$TVM_HOME` to your `LD_LIBRARY_PATH` and `DYLD_LIBRARY_PATH` environment variables
+Add `$TVM_HOME` to your `LD_LIBRARY_PATH` and `DYLD_LIBRARY_PATH` environment variables
 
 ## 3. Apt packages
 
@@ -129,3 +129,7 @@ Some of these values can be checked by running the Clockwork profiler with:
 ```
 ./profile [check]
 ```
+
+# Troubleshooting
+
+Currently, the CMakeLists assumes CUDA lives in either `/usr/local/cuda/lib64` (the default location in Ubuntu 14.x) or `/usr/lib/x86_64-linux-gnu/nvidia/current` (the default location for MPI cluster machines).  If you get build errors saying cannot find CUDA or cannot find nvidia-ml, then you'll need to update the `include_directories` and `link_directories` directives in the CMakeLists.txt with the CUDA location on your machine.
