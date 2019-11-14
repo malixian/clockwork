@@ -2,7 +2,7 @@
 
 namespace clockwork {
 
-std::atomic_int id_seed = 0;
+std::atomic_int id_seed(0);
 
 std::shared_ptr<workerapi::LoadModelFromDisk> load_model_from_disk_action() {
     auto action = std::make_shared<workerapi::LoadModelFromDisk>();

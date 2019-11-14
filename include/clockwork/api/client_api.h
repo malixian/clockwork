@@ -1,6 +1,7 @@
 #ifndef _CLOCKWORK_API_CLIENT_API_H_
 #define _CLOCKWORK_API_CLIENT_API_H_
 
+#include <vector>
 #include <functional>
 #include <string>
 #include "clockwork/api/api_common.h"

@@ -12,13 +12,17 @@ namespace util {
 std::string get_exe_location() {
     int bufsize = 1024;
     char buf[bufsize];
-    int len = readlink("/proc/self/exe", buf, bufsize);
+    int len = readlink("/proc/self/exe", buf, bufsize-1);
+    buf[len] = '\0';
     return std::string(buf, len);
 }
 
 std::string get_clockwork_dir() {
-    std::string exe_location = get_exe_location();
-	return dirname(dirname(exe_location.data()));
+    int bufsize = 1024;
+    char buf[bufsize];
+    int len = readlink("/proc/self/exe", buf, bufsize-1);
+    buf[len] = '\0';
+	return dirname(dirname(buf));
 }
 
 std::string get_example_model(std::string name) {

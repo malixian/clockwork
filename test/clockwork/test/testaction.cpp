@@ -17,10 +17,12 @@ using namespace clockwork::model;
 
 class TestAction {
 public:
-    std::atomic_bool is_success = false;
-    std::atomic_bool is_error = false;
+    std::atomic_bool is_success;
+    std::atomic_bool is_error;
     int status_code;
     std::string error_message;
+
+    TestAction() : is_success(false), is_error(false) {}
 
     void setsuccess() {
         is_success = true;

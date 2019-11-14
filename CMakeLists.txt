@@ -33,6 +33,7 @@ link_directories(
 	$ENV{TVM_HOME}/build
 	$ENV{TVM_HOME}/3rdparty/dmlc-core/build
 	/usr/local/cuda/lib64
+	/usr/lib/x86_64-linux-gnu/nvidia/current
 )
 
 

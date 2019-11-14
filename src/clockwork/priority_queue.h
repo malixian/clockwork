@@ -30,7 +30,7 @@ private:
 	std::atomic_bool alive;
 
 	std::atomic_flag in_use;
-	std::atomic_uint64_t version; 
+	std::atomic<uint64_t> version;
 	std::priority_queue<container, std::vector<container>, std::greater<container>> queue;
 
 public:
