@@ -79,7 +79,7 @@ public:
 	ControllerImpl(int client_port, std::vector<std::pair<std::string, std::string>> worker_host_port_pairs) :
 			Controller(client_port, worker_host_port_pairs), model_id_seed(0), action_id_seed(0) {}
 
-	int save_callback(int id, std::function<void(std::shared_ptr<workerapi::Result>)> callback) {
+	void save_callback(int id, std::function<void(std::shared_ptr<workerapi::Result>)> callback) {
 		std::lock_guard<std::mutex> lock(actions_mutex);
 
 		auto it = action_callbacks.find(id);
