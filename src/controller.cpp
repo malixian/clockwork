@@ -82,7 +82,10 @@ public:
 	int save_callback(int id, std::function<void(std::shared_ptr<workerapi::Result>)> callback) {
 		std::lock_guard<std::mutex> lock(actions_mutex);
 
-		action_callbacks[id] = callback;
+		auto it = action_callbacks.find(id);
+		CHECK(it == action_callbacks.end()) << "ID " << id << " already exists";
+
+		action_callbacks.insert(std::make_pair(id, callback));
 	}
 
 	std::function<void(std::shared_ptr<workerapi::Result>)> get_callback(int id) {
