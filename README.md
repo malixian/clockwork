@@ -21,7 +21,6 @@ git checkout clockwork
 
 Build TVM
 ```
-mkdir build
 cd build
 cmake ..
 make -j40
@@ -134,3 +133,5 @@ Some of these values can be checked by running the Clockwork profiler with:
 # Troubleshooting
 
 Currently, the CMakeLists assumes CUDA lives in either `/usr/local/cuda/lib64` (the default location in Ubuntu 14.x) or `/usr/lib/x86_64-linux-gnu/nvidia/current` (the default location for MPI cluster machines).  If you get build errors saying cannot find CUDA or cannot find nvidia-ml, then you'll need to update the `include_directories` and `link_directories` directives in the CMakeLists.txt with the CUDA location on your machine.
+
+Undefined reference to tvm::runtime::ManagedCuda... -- this probably means you didn't build TVM properly.  Make sure you haven't modified or deleted the file `build/config.cmake` in the TVM repository.  `make clean` and `make` TVM again.
