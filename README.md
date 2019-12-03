@@ -25,6 +25,7 @@ mkdir build
 cd build
 cmake ..
 make -j40
+cd ..
 ```
 
 Set `TVM_HOME` environment variable
@@ -33,7 +34,7 @@ echo "export TVM_HOME=`pwd`" >> ~/.bashrc
 source ~/.bashrc
 ```
 
-Add `$TVM_HOME` to your `LD_LIBRARY_PATH` and `DYLD_LIBRARY_PATH` environment variables
+Add `$TVM_HOME/build` to your `LD_LIBRARY_PATH` and `DYLD_LIBRARY_PATH` environment variables
 
 ## 3. Apt packages
 
