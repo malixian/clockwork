@@ -172,6 +172,7 @@ void Connection::closed() {
 }
 
 Server::Server(ClockworkWorker* worker, int port) :
+		is_started(false),
 		worker(worker), 
 		network_thread(&Server::run, this, port) {
 }
@@ -186,11 +187,13 @@ void Server::shutdown(bool awaitShutdown) {
 }
 
 void Server::join() {
+	while (!is_started);
 	network_thread.join();
 }
 
 void Server::run(int port) {
 	try {
+		is_started.store(true);
 		tcp::acceptor acceptor(io_service, tcp::endpoint(tcp::v4(), port));
 		start_accept(&acceptor);
 		std::cout << "Running io service thread" << std::endl;

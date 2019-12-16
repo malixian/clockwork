@@ -139,14 +139,11 @@ BatchedModel* make_model_for_action() {
 TEST_CASE("Load Model From Disk Action", "[action] [loadmodel_action]") {
     auto clockwork = make_runtime();
 
-    auto load_model = new TestLoadModelFromDiskAction(clockwork.get(), load_model_from_disk_action());
+    TestLoadModelFromDiskAction load_model(clockwork.get(), load_model_from_disk_action());
 
-    load_model->submit();
-    load_model->await();
-    load_model->check_success(true);
-
-    delete load_model;
-    
+    load_model.submit();
+    load_model.await();
+    load_model.check_success(true);
 }
 
 TEST_CASE("Load Model From Disk Action Multiple", "[action] [loadmodel_action]") {
@@ -156,13 +153,11 @@ TEST_CASE("Load Model From Disk Action Multiple", "[action] [loadmodel_action]")
         auto action = load_model_from_disk_action();
         action->model_id = i;
 
-        auto load_model = new TestLoadModelFromDiskAction(clockwork.get(), action);
+        TestLoadModelFromDiskAction load_model(clockwork.get(), action);
 
-        load_model->submit();
-        load_model->await();
-        load_model->check_success(true);
-
-        delete load_model;
+        load_model.submit();
+        load_model.await();
+        load_model.check_success(true);
     }
 
     
@@ -173,14 +168,11 @@ TEST_CASE("Load Weights Action", "[action] [loadweights_action]") {
     auto clockwork = make_runtime();
     clockwork->manager->models->put(0, new RuntimeModel(model));
 
-    auto load_weights = new TestLoadWeightsAction(clockwork.get(), load_weights_action());
+    TestLoadWeightsAction load_weights(clockwork.get(), load_weights_action());
 
-    load_weights->submit();
-    load_weights->await();
-    load_weights->check_success(true);
-
-    delete load_weights;
-    
+    load_weights.submit();
+    load_weights.await();
+    load_weights.check_success(true);    
 }
 
 TEST_CASE("Load Weights Action Multiple", "[action] [loadweights_multiple]") {
@@ -189,30 +181,23 @@ TEST_CASE("Load Weights Action Multiple", "[action] [loadweights_multiple]") {
     clockwork->manager->models->put(0, new RuntimeModel(model));
 
     for (unsigned i = 0; i < 5; i++) {
-        auto load_weights = new TestLoadWeightsAction(clockwork.get(), load_weights_action());
+        TestLoadWeightsAction load_weights(clockwork.get(), load_weights_action());
 
-        load_weights->submit();
-        load_weights->await();
-        load_weights->check_success(true);
-
-        delete load_weights;
+        load_weights.submit();
+        load_weights.await();
+        load_weights.check_success(true);
     }
-
-    
 }
 
 TEST_CASE("Load Weights Action Invalid Model", "[action]") {
     BatchedModel* model = make_model_for_action();
     auto clockwork = make_runtime();
 
-    auto load_weights = new TestLoadWeightsAction(clockwork.get(), load_weights_action());
+    TestLoadWeightsAction load_weights(clockwork.get(), load_weights_action());
 
-    load_weights->submit();
-    load_weights->await();
-    load_weights->check_success(false, actionErrorUnknownModel);
-
-    delete load_weights;
-    
+    load_weights.submit();
+    load_weights.await();
+    load_weights.check_success(false, actionErrorUnknownModel);
 }
 
 TEST_CASE("Load Evict Weights Action", "[action] [evict_action]") {
@@ -220,21 +205,17 @@ TEST_CASE("Load Evict Weights Action", "[action] [evict_action]") {
     auto clockwork = make_runtime();
     clockwork->manager->models->put(0, new RuntimeModel(model));
 
-    auto load_weights = new TestLoadWeightsAction(clockwork.get(), load_weights_action());
+    TestLoadWeightsAction load_weights(clockwork.get(), load_weights_action());
 
-    load_weights->submit();
-    load_weights->await();
-    load_weights->check_success(true);
+    load_weights.submit();
+    load_weights.await();
+    load_weights.check_success(true);
 
-    auto evict_weights = new TestEvictWeightsAction(clockwork.get(), evict_weights_action());
+    TestEvictWeightsAction evict_weights(clockwork.get(), evict_weights_action());
 
-    evict_weights->submit();
-    evict_weights->await();
-    evict_weights->check_success(true);
-
-    delete load_weights;
-    delete evict_weights;
-    
+    evict_weights.submit();
+    evict_weights.await();
+    evict_weights.check_success(true);
 }
 
 TEST_CASE("Evict without Weights Action", "[action] [evict_action]") {
@@ -242,14 +223,11 @@ TEST_CASE("Evict without Weights Action", "[action] [evict_action]") {
     auto clockwork = make_runtime();
     clockwork->manager->models->put(0, new RuntimeModel(model));
 
-    auto evict_weights = new TestEvictWeightsAction(clockwork.get(), evict_weights_action());
+    TestEvictWeightsAction evict_weights(clockwork.get(), evict_weights_action());
 
-    evict_weights->submit();
-    evict_weights->await();
-    evict_weights->check_success(false, actionErrorModelWeightsNotPresent);
-
-    delete evict_weights;
-    
+    evict_weights.submit();
+    evict_weights.await();
+    evict_weights.check_success(false, actionErrorModelWeightsNotPresent);
 }
 
 TEST_CASE("Infer Action", "[action] [infer_action]") {
@@ -257,21 +235,17 @@ TEST_CASE("Infer Action", "[action] [infer_action]") {
     auto clockwork = make_runtime();
     clockwork->manager->models->put(0, new RuntimeModel(model));
 
-    auto load_weights = new TestLoadWeightsAction(clockwork.get(), load_weights_action());
+    TestLoadWeightsAction load_weights(clockwork.get(), load_weights_action());
 
-    load_weights->submit();
-    load_weights->await();
-    load_weights->check_success(true);
+    load_weights.submit();
+    load_weights.await();
+    load_weights.check_success(true);
 
-    auto infer = new TestInferAction(clockwork.get(), infer_action(1, model));
+    TestInferAction infer(clockwork.get(), infer_action(1, model));
 
-    infer->submit();
-    infer->await();
-    infer->check_success(true);
-
-    delete load_weights;
-    delete infer;
-    
+    infer.submit();
+    infer.await();
+    infer.check_success(true);
 }
 
 TEST_CASE("Infer Action Wrong Input Size", "[action] [nomodel]") {
@@ -280,50 +254,39 @@ TEST_CASE("Infer Action Wrong Input Size", "[action] [nomodel]") {
 
     auto action = infer_action();
     action->input_size = 10;
-    auto infer = new TestInferAction(clockwork.get(), action);
+    TestInferAction infer(clockwork.get(), action);
 
-    infer->submit();
-    infer->await();
-    infer->check_success(false, actionErrorUnknownModel);
-
-    delete infer;
-    
+    infer.submit();
+    infer.await();
+    infer.check_success(false, actionErrorUnknownModel);
 }
 
 TEST_CASE("Infer Action Nonexistent Model", "[action] [nomodel]") {
     BatchedModel* model = make_model_for_action();
     auto clockwork = make_runtime();
 
-    auto infer = new TestInferAction(clockwork.get(), infer_action());
+    TestInferAction infer(clockwork.get(), infer_action());
 
-    infer->submit();
-    infer->await();
-    infer->check_success(false, actionErrorUnknownModel);
-
-    delete infer;
-    
+    infer.submit();
+    infer.await();
+    infer.check_success(false, actionErrorUnknownModel);
 }
 
 TEST_CASE("Infer Action Nonexistent Weights", "[action] [noweights]") {
     BatchedModel* model = make_model_for_action();
     auto clockwork = make_runtime();
 
-    auto load_model = new TestLoadModelFromDiskAction(clockwork.get(), load_model_from_disk_action());
+    TestLoadModelFromDiskAction load_model(clockwork.get(), load_model_from_disk_action());
 
-    load_model->submit();
-    load_model->await();
-    load_model->check_success(true);
+    load_model.submit();
+    load_model.await();
+    load_model.check_success(true);
 
-    delete load_model;
+    TestInferAction infer(clockwork.get(), infer_action());
 
-    auto infer = new TestInferAction(clockwork.get(), infer_action());
-
-    infer->submit();
-    infer->await();
-    infer->check_success(false, actionErrorModelWeightsNotPresent);
-
-    delete infer;
-    
+    infer.submit();
+    infer.await();
+    infer.check_success(false, actionErrorModelWeightsNotPresent);
 }
 
 TEST_CASE("Infer Action Multiple", "[action] [infer_action_multiple]") {
@@ -331,25 +294,19 @@ TEST_CASE("Infer Action Multiple", "[action] [infer_action_multiple]") {
     auto clockwork = make_runtime();
     clockwork->manager->models->put(0, new RuntimeModel(model));
 
-    auto load_weights = new TestLoadWeightsAction(clockwork.get(), load_weights_action());
+    TestLoadWeightsAction load_weights(clockwork.get(), load_weights_action());
 
-    load_weights->submit();
-    load_weights->await();
-    load_weights->check_success(true);
-
-    delete load_weights;
+    load_weights.submit();
+    load_weights.await();
+    load_weights.check_success(true);
 
     for (unsigned i = 0; i < 2; i++) {
-        auto infer = new TestInferAction(clockwork.get(), infer_action(1, model));
+        TestInferAction infer(clockwork.get(), infer_action(1, model));
 
-        infer->submit();
-        infer->await();
-        infer->check_success(true);
-
-        delete infer;
+        infer.submit();
+        infer.await();
+        infer.check_success(true);
     }
-
-    
 }
 
 TEST_CASE("Make Many Models", "[action] [models]") {
@@ -367,32 +324,26 @@ TEST_CASE("Infer Action Multiple Concurrent", "[action] [infer_action_concurrent
     auto clockwork = make_runtime();
     clockwork->manager->models->put(0, new RuntimeModel(model));
 
-    auto load_weights = new TestLoadWeightsAction(clockwork.get(), load_weights_action());
+    TestLoadWeightsAction load_weights(clockwork.get(), load_weights_action());
 
-    load_weights->submit();
-    load_weights->await();
-    load_weights->check_success(true);
+    load_weights.submit();
+    load_weights.await();
+    load_weights.check_success(true);
 
-    delete load_weights;
-
-    std::vector<TestInferAction*> infers;
+    std::vector<std::shared_ptr<TestInferAction>> infers;
 
     for (unsigned i = 0; i < 2; i++) {
-        infers.push_back(new TestInferAction(clockwork.get(), infer_action(1, model)));
+        infers.push_back(std::make_shared<TestInferAction>(clockwork.get(), infer_action(1, model)));
     }
 
-    for (TestInferAction* infer : infers) {
+    for (auto infer : infers) {
         infer->submit();
     }
 
-    for (TestInferAction* infer : infers) {
+    for (auto infer : infers) {
         infer->await();
         infer->check_success(true);
-
-        delete infer;
-    }
-
-    
+    }    
 }
 
 TEST_CASE("Infer after Evict Action", "[action] [evict_action]") {
@@ -400,39 +351,29 @@ TEST_CASE("Infer after Evict Action", "[action] [evict_action]") {
     auto clockwork = make_runtime();
     clockwork->manager->models->put(0, new RuntimeModel(model));
 
-    auto load_weights = new TestLoadWeightsAction(clockwork.get(), load_weights_action());
+    TestLoadWeightsAction load_weights(clockwork.get(), load_weights_action());
 
-    load_weights->submit();
-    load_weights->await();
-    load_weights->check_success(true);
-
-    delete load_weights;
+    load_weights.submit();
+    load_weights.await();
+    load_weights.check_success(true);
     
-    auto infer = new TestInferAction(clockwork.get(), infer_action(1, model));
+    TestInferAction infer(clockwork.get(), infer_action(1, model));
 
-    infer->submit();
-    infer->await();
-    infer->check_success(true);
+    infer.submit();
+    infer.await();
+    infer.check_success(true);
 
-    delete infer;
+    TestEvictWeightsAction evict_weights(clockwork.get(), evict_weights_action());
 
-    auto evict_weights = new TestEvictWeightsAction(clockwork.get(), evict_weights_action());
+    evict_weights.submit();
+    evict_weights.await();
+    evict_weights.check_success(true);
 
-    evict_weights->submit();
-    evict_weights->await();
-    evict_weights->check_success(true);
+    TestInferAction infer2(clockwork.get(), infer_action(1, model));
 
-    delete evict_weights;
-
-    auto infer2 = new TestInferAction(clockwork.get(), infer_action(1, model));
-
-    infer2->submit();
-    infer2->await();
-    infer2->check_success(false, actionErrorModelWeightsNotPresent);
-
-    delete infer2;
-
-    
+    infer2.submit();
+    infer2.await();
+    infer2.check_success(false, actionErrorModelWeightsNotPresent);   
 }
 
 TEST_CASE("Actions E2E", "[action] [e2e]") {

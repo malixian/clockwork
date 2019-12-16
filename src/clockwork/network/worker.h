@@ -52,6 +52,7 @@ public:
 /* Worker-side server that accepts connections from the Controller */
 class Server : public workerapi::Controller {
 private:
+	std::atomic_bool is_started;
 	ClockworkWorker* worker;
 	std::thread network_thread;
 	asio::io_service io_service;

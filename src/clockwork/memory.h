@@ -33,6 +33,8 @@ private:
 public:
 
 	ModelStore();
+
+	// This will delete all models that are in the modelstore
 	~ModelStore();
 
 	RuntimeModel* get(int model_id);
@@ -68,6 +70,8 @@ public:
 	ModelStore* models;
 
 	MemoryManager(PageCache* weights_cache, PageCache* workspace_cache);
+
+	// This will delete the caches and the model store, possibly triggering freeing of cache memory
 	~MemoryManager();
 };
 
