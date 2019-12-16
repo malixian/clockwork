@@ -177,6 +177,7 @@ WorkerConnection* WorkerManager::connect(std::string host, std::string port, wor
 		io_service.stop();
 		CHECK(false) << "Exception in network thread: " << m;
 	}
+	return nullptr;
 }
 
 ClientConnection::ClientConnection(asio::io_service &io_service, clientapi::ClientAPI* api) :

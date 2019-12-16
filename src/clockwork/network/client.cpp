@@ -114,6 +114,7 @@ Connection* ConnectionManager::connect(std::string host, std::string port) {
 		io_service.stop();
 		CHECK(false) << "Exception in network thread: " << m;
 	}
+	return nullptr;
 }
 
 }
