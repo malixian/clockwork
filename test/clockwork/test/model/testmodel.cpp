@@ -253,13 +253,9 @@ TEST_CASE("Batched model produces correct output", "[e2e2] [model]") {
     auto max_index_expect_1 = std::distance(expectedOutputF, std::max_element(expectedOutputF, expectedOutputF + 1000));
     REQUIRE(max_index_expect_1 == max_index_actual_1);
 
-    std::cout << "max_index_actual_1 is " << max_index_actual_1 << std::endl;
-
     auto max_index_actual_2 = std::distance(actualOutputF+1000, std::max_element(actualOutputF+1000, actualOutputF + 2000));
     auto max_index_expect_2 = std::distance(expectedOutputF+1000, std::max_element(expectedOutputF+1000, expectedOutputF + 2000));
     REQUIRE(max_index_expect_2 == max_index_actual_2);
-
-    std::cout << "max_index_actual_2 is " << max_index_actual_2 << std::endl;
 
     for (unsigned i = 0; i < output_size/4; i++) {
         REQUIRE(actualOutputF[i] == expectedOutputF[i]);
