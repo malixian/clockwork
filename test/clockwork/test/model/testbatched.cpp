@@ -48,8 +48,8 @@ TEST_CASE("Batched models individually", "[batched]") {
         model->instantiate_model_on_host();
         model->instantiate_model_on_device();
 
-        std::vector<char*> weights_pages = make_cuda_pages(weights_page_size, model->num_weights_pages(weights_page_size));
-        model->transfer_weights_to_device(weights_pages, NULL);
+        auto weights_pages = make_cuda_pages(weights_page_size, model->num_weights_pages(weights_page_size));
+        model->transfer_weights_to_device(weights_pages->pages, NULL);
         cuda_synchronize(NULL);
 
         std::string single_input, single_output;
@@ -66,13 +66,13 @@ TEST_CASE("Batched models individually", "[batched]") {
 
         char actual_output[output_size * batch_size];
 
-        std::vector<char*> workspace_pages = make_cuda_pages(workspace_page_size, model->num_workspace_pages(workspace_page_size));
+        auto workspace_pages = make_cuda_pages(workspace_page_size, model->num_workspace_pages(workspace_page_size));
 
-        model->transfer_input_to_device(input, workspace_pages, NULL);
+        model->transfer_input_to_device(input, workspace_pages->pages, NULL);
         cuda_synchronize(NULL);
-        model->call(weights_pages, workspace_pages, NULL);
+        model->call(weights_pages->pages, workspace_pages->pages, NULL);
         cuda_synchronize(NULL);
-        model->transfer_output_from_device(actual_output, workspace_pages, NULL);
+        model->transfer_output_from_device(actual_output, workspace_pages->pages, NULL);
         cuda_synchronize(NULL);
 
         float* actualOutputF = static_cast<float*>(static_cast<void*>(actual_output));
@@ -95,8 +95,6 @@ TEST_CASE("Batched models individually", "[batched]") {
         delete model;
         free(input);
         free(expected_output);
-        free_cuda_pages(weights_pages);
-        free_cuda_pages(workspace_pages);
     }
 }
 
@@ -130,8 +128,8 @@ TEST_CASE("Batched models with partial batches", "[batched]") {
 
 
     int num_weights_pages = model->num_weights_pages(weights_page_size);
-    std::vector<char*> weights_pages = make_cuda_pages(weights_page_size, num_weights_pages);
-    model->transfer_weights_to_device(weights_pages, NULL);
+    auto weights_pages = make_cuda_pages(weights_page_size, num_weights_pages);
+    model->transfer_weights_to_device(weights_pages->pages, NULL);
 
     std::string single_input, single_output;
     clockwork::util::readFileAsString(f+".input", single_input);
@@ -148,13 +146,13 @@ TEST_CASE("Batched models with partial batches", "[batched]") {
         char* expected_output = batch(single_output, batch_size, model->padded_batch_size(batch_size));
         char actual_output[output_size * model->padded_batch_size(batch_size)];
 
-        std::vector<char*> workspace_pages = make_cuda_pages(workspace_page_size, model->num_workspace_pages(batch_size, workspace_page_size));
+        auto workspace_pages = make_cuda_pages(workspace_page_size, model->num_workspace_pages(batch_size, workspace_page_size));
 
-        model->transfer_input_to_device(batch_size, input, workspace_pages, NULL);
+        model->transfer_input_to_device(batch_size, input, workspace_pages->pages, NULL);
         cuda_synchronize(NULL);
-        model->call(batch_size, weights_pages, workspace_pages, NULL);
+        model->call(batch_size, weights_pages->pages, workspace_pages->pages, NULL);
         cuda_synchronize(NULL);
-        model->transfer_output_from_device(batch_size, actual_output, workspace_pages, NULL);
+        model->transfer_output_from_device(batch_size, actual_output, workspace_pages->pages, NULL);
         cuda_synchronize(NULL);
 
         float* actualOutputF = static_cast<float*>(static_cast<void*>(actual_output));
@@ -175,9 +173,7 @@ TEST_CASE("Batched models with partial batches", "[batched]") {
         }
         free(input);
         free(expected_output);
-        free_cuda_pages(workspace_pages);
     }
 
     delete model;
-    free_cuda_pages(weights_pages);
 }

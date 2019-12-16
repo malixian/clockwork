@@ -100,10 +100,11 @@ unsigned BatchedModel::max_batch_size() {
 unsigned BatchedModel::padded_batch_size(unsigned batch_size) {
 	check_batch_size(batch_size);
 	for (auto &p : models) {
-		if (batch_size < p.first) {
+		if (batch_size <= p.first) {
 			return p.first;
 		}
 	}
+	return models[models.size() - 1].first;
 }
 
 unsigned BatchedModel::num_weights_pages(unsigned page_size) {

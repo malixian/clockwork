@@ -55,23 +55,20 @@ void assert_is_hot(Model* model) {
     char output[output_size];
     int num_weights_pages = 5;
     int num_workspace_pages = 2;
-    std::vector<char*> weights_pages = make_cuda_pages(weights_page_size, num_weights_pages);
-    std::vector<char*> workspace_pages = make_cuda_pages(workspace_page_size, num_workspace_pages);
-
+    auto weights_pages = make_cuda_pages(weights_page_size, num_weights_pages);
+    auto workspace_pages = make_cuda_pages(workspace_page_size, num_workspace_pages);
+ 
     REQUIRE(num_weights_pages == model->num_weights_pages(weights_page_size));
     REQUIRE(num_workspace_pages == model->num_workspace_pages(workspace_page_size));
     REQUIRE(input_size == model->input_size());
     REQUIRE(output_size == model->output_size());
 
-    REQUIRE_NOTHROW(model->transfer_weights_to_device(weights_pages, NULL));
-    REQUIRE_NOTHROW(model->transfer_input_to_device(input, workspace_pages, NULL));
-    REQUIRE_NOTHROW(model->transfer_output_from_device(output, workspace_pages, NULL));
-    REQUIRE_NOTHROW(model->call(weights_pages, workspace_pages, NULL));
+    REQUIRE_NOTHROW(model->transfer_weights_to_device(weights_pages->pages, NULL));
+    REQUIRE_NOTHROW(model->transfer_input_to_device(input, workspace_pages->pages, NULL));
+    REQUIRE_NOTHROW(model->transfer_output_from_device(output, workspace_pages->pages, NULL));
+    REQUIRE_NOTHROW(model->call(weights_pages->pages, workspace_pages->pages, NULL));
 
     cuda_synchronize(NULL);
-
-    free_cuda_pages(weights_pages);
-    free_cuda_pages(workspace_pages);
 }
 
 TEST_CASE("Load model from disk", "[model]") {
@@ -165,8 +162,8 @@ TEST_CASE("Model produces correct output", "[e2e] [model]") {
     int output_size = 1000 * 1 * 4;
     int num_weights_pages = 5;
     int num_workspace_pages = 2;
-    std::vector<char*> weights_pages = make_cuda_pages(weights_page_size, num_weights_pages);
-    std::vector<char*> workspace_pages = make_cuda_pages(workspace_page_size, num_workspace_pages);
+    auto weights_pages = make_cuda_pages(weights_page_size, num_weights_pages);
+    auto workspace_pages = make_cuda_pages(workspace_page_size, num_workspace_pages);
 
     std::string f = clockwork::util::get_example_model();
 
@@ -174,7 +171,7 @@ TEST_CASE("Model produces correct output", "[e2e] [model]") {
     
     model->instantiate_model_on_host();
     model->instantiate_model_on_device();
-    model->transfer_weights_to_device(weights_pages, NULL);
+    model->transfer_weights_to_device(weights_pages->pages, NULL);
 
     std::ifstream in(f+".input");
     std::string input_filename = f+".input";
@@ -185,9 +182,9 @@ TEST_CASE("Model produces correct output", "[e2e] [model]") {
     clockwork::util::readFileAsString(output_filename, expectedOutput);
 
     REQUIRE(input.size() == input_size);
-    model->transfer_input_to_device(input.data(), workspace_pages, NULL);
-    model->call(weights_pages, workspace_pages, NULL);
-    model->transfer_output_from_device(actualOutput, workspace_pages, NULL);
+    model->transfer_input_to_device(input.data(), workspace_pages->pages, NULL);
+    model->call(weights_pages->pages, workspace_pages->pages, NULL);
+    model->transfer_output_from_device(actualOutput, workspace_pages->pages, NULL);
 
     REQUIRE(output_size == expectedOutput.size());
 
@@ -219,8 +216,8 @@ TEST_CASE("Batched model produces correct output", "[e2e2] [model]") {
     model->instantiate_model_on_host();
     model->instantiate_model_on_device();
 
-    std::vector<char*> weights_pages = make_cuda_pages(weights_page_size, model->num_weights_pages(weights_page_size));
-    model->transfer_weights_to_device(weights_pages, NULL);
+    auto weights_pages = make_cuda_pages(weights_page_size, model->num_weights_pages(weights_page_size));
+    model->transfer_weights_to_device(weights_pages->pages, NULL);
 
 
 
@@ -240,12 +237,12 @@ TEST_CASE("Batched model produces correct output", "[e2e2] [model]") {
     std::memcpy(batched_expected_output + expectedOutput.size(), expectedOutput.data(), expectedOutput.size());
 
 
-    std::vector<char*> workspace_pages = make_cuda_pages(workspace_page_size, model->num_workspace_pages(workspace_page_size));
-    model->transfer_input_to_device(batched_input, workspace_pages, NULL);
-    model->call(weights_pages, workspace_pages, NULL);
+    auto workspace_pages = make_cuda_pages(workspace_page_size, model->num_workspace_pages(workspace_page_size));
+    model->transfer_input_to_device(batched_input, workspace_pages->pages, NULL);
+    model->call(weights_pages->pages, workspace_pages->pages, NULL);
 
     char actualOutput[output_size];
-    model->transfer_output_from_device(actualOutput, workspace_pages, NULL);
+    model->transfer_output_from_device(actualOutput, workspace_pages->pages, NULL);
 
     cuda_synchronize(NULL);
 

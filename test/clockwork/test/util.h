@@ -5,6 +5,7 @@
 #include <vector>
 #include <cuda_runtime.h>
 #include <utility>
+#include <memory>
 
 namespace clockwork{
 namespace util {
@@ -25,8 +26,19 @@ void nvml();
 
 namespace model {
 
-std::vector<char*> make_cuda_pages(int page_size, int num_pages);
-void free_cuda_pages(std::vector<char*> pages);
+class cuda_page_alloc {
+private:
+	void* base_ptr;
+
+public:
+	std::vector<char*> pages;
+
+	cuda_page_alloc(int page_size, int num_pages);
+	~cuda_page_alloc();
+};
+
+std::shared_ptr<cuda_page_alloc> make_cuda_pages(int page_size, int num_pages);
+
 void cuda_synchronize(cudaStream_t stream);
 
 }

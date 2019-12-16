@@ -542,6 +542,8 @@ TEST_CASE("Multiple Baseptrs", "[cache]") {
     REQUIRE( cache->freePages.isEmpty() );
     REQUIRE( !cache->lockedAllocations.isEmpty() );
     REQUIRE( cache->unlockedAllocations.isEmpty() );
+    REQUIRE( alloc1->page_pointers[0] == baseptr_1 );
+    REQUIRE( alloc1->page_pointers[1] == baseptr_2 );
 
     std::shared_ptr<Allocation> alloc2 = nullptr;
     alloc2 = cache->alloc(1, []{});

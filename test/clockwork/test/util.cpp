@@ -117,20 +117,23 @@ void nvml() {
 
 namespace model {
 
-std::vector<char*> make_cuda_pages(int page_size, int num_pages) {
-    void* base_ptr;
+
+cuda_page_alloc::cuda_page_alloc(int page_size, int num_pages) {
     cudaError_t status = cudaMalloc(&base_ptr, page_size * num_pages);
     REQUIRE(status == cudaSuccess);
-    std::vector<char*> pages(num_pages);
+
     for (unsigned i = 0; i < num_pages; i++) {
-        pages[i] = static_cast<char*>(base_ptr) + i * page_size;
+        pages.push_back(static_cast<char*>(base_ptr) + (i * page_size));
     }
-    return pages;
 }
 
-void free_cuda_pages(std::vector<char*> pages) {
-    cudaError_t status = cudaFree(pages[0]);
+cuda_page_alloc::~cuda_page_alloc() {
+    cudaError_t status = cudaFree(base_ptr);
     REQUIRE(status == cudaSuccess);
+}
+
+std::shared_ptr<cuda_page_alloc> make_cuda_pages(int page_size, int num_pages) {
+    return std::make_shared<cuda_page_alloc>(page_size, num_pages);
 }
 
 void cuda_synchronize(cudaStream_t stream) {
