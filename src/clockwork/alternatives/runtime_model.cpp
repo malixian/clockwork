@@ -1,7 +1,7 @@
 #include <dmlc/logging.h>
 #include "clockwork/alternatives/runtime_model.h"
 
-using namespace clockwork;
+using namespace clockwork::alternatives;
 
 RuntimeModel::RuntimeModel(PageCache* cache, model::Model* model) : cache(cache), model(model), in_use(ATOMIC_FLAG_INIT) {
 	model->instantiate_model_on_host();

@@ -511,3 +511,49 @@ TEST_CASE("Test IOCache Release", "[iocache]") {
     }
 
 }
+
+
+TEST_CASE("Multiple Baseptrs", "[cache]") {
+
+    using namespace clockwork;
+
+    size_t ptr_size = 100;
+
+    char* baseptr_1 = static_cast<char*>(malloc(ptr_size));
+    char* baseptr_2 = static_cast<char*>(malloc(ptr_size));
+
+    std::vector<std::pair<char*, size_t>> baseptrs = {{{baseptr_1, ptr_size}, {baseptr_2, ptr_size}}};
+    
+    size_t page_size = 100;
+    
+    PageCache* cache = new PageCache(baseptrs, ptr_size * baseptrs.size(), page_size);
+
+    REQUIRE( !cache->freePages.isEmpty() );
+    REQUIRE(cache->freePages.size() == 2);
+    REQUIRE( cache->lockedAllocations.isEmpty() );
+    REQUIRE( cache->unlockedAllocations.isEmpty() );
+
+
+    std::shared_ptr<Allocation> alloc1 = cache->alloc(2, []{});
+    REQUIRE( alloc1 != nullptr);
+    REQUIRE( alloc1->evicted == false );
+    REQUIRE( alloc1->usage_count == 1 );
+    REQUIRE( alloc1->pages.size() == 2 );
+    REQUIRE( cache->freePages.isEmpty() );
+    REQUIRE( !cache->lockedAllocations.isEmpty() );
+    REQUIRE( cache->unlockedAllocations.isEmpty() );
+
+    std::shared_ptr<Allocation> alloc2 = nullptr;
+    alloc2 = cache->alloc(1, []{});
+    REQUIRE(alloc2 == nullptr);
+    REQUIRE( alloc1->evicted == false );
+    REQUIRE( alloc1->usage_count == 1 );
+    REQUIRE( alloc1->pages.size() == 2 );
+    REQUIRE( cache->freePages.isEmpty() );
+    REQUIRE( !cache->lockedAllocations.isEmpty() );
+    REQUIRE( cache->unlockedAllocations.isEmpty() );
+
+    cache->unlock(alloc1);
+    cache->free(alloc1);
+    REQUIRE(cache->freePages.size() == 2);
+}

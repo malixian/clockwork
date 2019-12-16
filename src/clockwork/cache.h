@@ -122,15 +122,17 @@ class PageCache {
 private:
 	std::recursive_mutex mutex;
 	const bool allowEvictions;
+	std::vector<char*> baseptrs;
 
 public:
-	char* baseptr;
-	const uint64_t size, page_size;
+	const size_t size, page_size;
 	const unsigned n_pages;
 	LinkedList<Page*> freePages;
 	LinkedList<std::shared_ptr<Allocation>> lockedAllocations, unlockedAllocations;
 
-	PageCache(char* baseptr, uint64_t total_size, uint64_t page_size, const bool allowEvictions = true);
+	PageCache(char* baseptr, size_t total_size, size_t page_size, const bool allowEvictions = true);
+	PageCache(std::vector<std::pair<char*, size_t>> baseptrs, size_t total_size, size_t page_size, const bool allowEvictions = true);
+
 	virtual ~PageCache() {}
 
 	/* 

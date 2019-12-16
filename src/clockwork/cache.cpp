@@ -3,7 +3,7 @@
 
 namespace clockwork {
 
-PageCache::PageCache(char* baseptr, uint64_t total_size, uint64_t page_size, bool allowEvictions) : size(total_size), baseptr(baseptr), page_size(page_size), n_pages(total_size/page_size), allowEvictions(allowEvictions) {
+PageCache::PageCache(char* baseptr, size_t total_size, size_t page_size, bool allowEvictions) : size(total_size), page_size(page_size), n_pages(total_size/page_size), allowEvictions(allowEvictions) {
 	CHECK(total_size % page_size == 0) << "Cannot create page cache -- page_size " << page_size << " does not equally divide total_size " << total_size;
 
 	// Construct and link pages
@@ -12,6 +12,30 @@ PageCache::PageCache(char* baseptr, uint64_t total_size, uint64_t page_size, boo
 		p->ptr = baseptr + i * page_size;
 		p->current_allocation = nullptr;
 		freePages.pushBack(p);
+	}
+
+	baseptrs.push_back(baseptr);
+}
+
+PageCache::PageCache(std::vector<std::pair<char*, size_t>> baseptrs, size_t total_size, size_t page_size, bool allowEvictions) : size(total_size), page_size(page_size), n_pages(total_size/page_size), allowEvictions(allowEvictions) {
+	size_t total_baseptr_sizes = 0;
+	for (auto &p : baseptrs) {
+		CHECK(p.second % page_size == 0) << "Cannot create page cache -- page_size " << page_size << " does not equally divide allocated " << p.second;
+		total_baseptr_sizes += p.second;
+	}
+	CHECK(total_size == total_baseptr_sizes) << "Cannot create page cache -- received incorrect allocated memory";
+
+	// Construct and link pages
+	for (auto &p : baseptrs) {
+		char* baseptr = p.first;
+		size_t ptr_size = p.second;
+		for (size_t offset = 0; offset < p.second; offset += page_size) {
+			Page* p = new Page();
+			p->ptr = baseptr + offset;
+			p->current_allocation = nullptr;
+			freePages.pushBack(p);
+		}
+		this->baseptrs.push_back(baseptr);
 	}
 }
 

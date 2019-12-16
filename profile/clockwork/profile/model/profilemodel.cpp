@@ -10,7 +10,7 @@
 #include "clockwork/test/util.h"
 #include "clockwork/model/so.h"
 #include "clockwork/model/cuda.h"
-#include "clockwork/cache.h"
+#include "clockwork/memory.h"
 #include "clockwork/model/model.h"
 #include <sys/mman.h>
 
@@ -412,13 +412,6 @@ void get_model_inputs_and_outputs(std::string model_path, std::string &input, st
     clockwork::util::readFileAsString(output_filename, output);
 }
 
-PageCache* make_cache(size_t size, size_t page_size) { 
-    void* baseptr;
-    cudaError_t status = cudaMalloc(&baseptr, size);
-    REQUIRE(status == cudaSuccess);
-    return new PageCache(static_cast<char*>(baseptr), size, page_size);
-}
-
 void warmup() {
     util::initializeCudaStream();
 
@@ -427,11 +420,11 @@ void warmup() {
 
     size_t weights_page_size = 16 * 1024L * 1024L;
     size_t weights_cache_size = 512L * weights_page_size;
-    PageCache* weights_cache = make_cache(weights_cache_size, weights_page_size);
+    PageCache* weights_cache = make_GPU_cache(weights_cache_size, weights_page_size);
 
     size_t workspace_page_size = 64 * 1024L * 1024L;
     size_t workspace_cache_size = 16 * workspace_page_size;
-    PageCache* workspace_cache = make_cache(workspace_cache_size, workspace_page_size);
+    PageCache* workspace_cache = make_GPU_cache(workspace_cache_size, workspace_page_size);
 
     model::Model* model = load_model_from_disk(model_path);
 
@@ -466,12 +459,6 @@ void warmup() {
     model->uninstantiate_model_on_device();
     model->uninstantiate_model_on_host();
 
-    status = cudaFree(workspace_cache->baseptr);
-    REQUIRE(status == cudaSuccess);
-
-    status = cudaFree(weights_cache->baseptr);
-    REQUIRE(status == cudaSuccess);
-
     delete model;
     delete workspace_cache;
     delete weights_cache;
@@ -496,11 +483,11 @@ void runMultiClientExperiment(int num_execs, int models_per_exec, bool duplicate
 
     size_t weights_page_size = 16 * 1024L * 1024L;
     size_t weights_cache_size = 512L * weights_page_size;
-    PageCache* weights_cache = make_cache(weights_cache_size, weights_page_size);
+    PageCache* weights_cache = make_GPU_cache(weights_cache_size, weights_page_size);
 
     size_t workspace_page_size = 64 * 1024L * 1024L;
     size_t workspace_cache_size = 16 * workspace_page_size;
-    PageCache* workspace_cache = make_cache(workspace_cache_size, workspace_page_size);
+    PageCache* workspace_cache = make_GPU_cache(workspace_cache_size, workspace_page_size);
 
     Experiment* experiment = new Experiment();
 

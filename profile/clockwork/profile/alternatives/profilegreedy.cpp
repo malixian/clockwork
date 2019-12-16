@@ -12,6 +12,7 @@
 #include "clockwork/model/cuda.h"
 #include "clockwork/cache.h"
 #include "clockwork/model/model.h"
+#include "clockwork/memory.h"
 #include <sys/mman.h>
 #include "clockwork/alternatives/model_manager.h"
 
@@ -148,13 +149,6 @@ model::Model* load_model_from_disk(std::string model_path) {
     return model::Model::loadFromDisk(so_filename, clockwork_filename, params_filename);    
 }
 
-PageCache* make_cache(size_t size, size_t page_size) { 
-    void* baseptr;
-    cudaError_t status = cudaMalloc(&baseptr, size);
-    REQUIRE(status == cudaSuccess);
-    return new PageCache(static_cast<char*>(baseptr), size, page_size);
-}
-
 
 struct Series {
     std::vector<std::vector<float>> data;
@@ -224,7 +218,7 @@ void runMultiClientExperiment(int num_execs, int models_per_exec, int requests_p
 
     size_t page_size = 16 * 1024L * 1024L;
     size_t cache_size = 512L * page_size;
-    PageCache* cache = make_cache(cache_size, page_size);
+    PageCache* cache = make_GPU_cache(cache_size, page_size);
 
     Runtime* runtime = clockwork::alternatives::newGreedyRuntime(1, 3);
 

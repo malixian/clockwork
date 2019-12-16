@@ -8,6 +8,7 @@
 #include "clockwork/cache.h"
 
 namespace clockwork {
+namespace alternatives {
 
 
 /* The runtime model hooks into a pagecache and handles page evictions.
@@ -74,6 +75,7 @@ public:
 	
 };
 
+}
 }
 
 #endif
