@@ -173,9 +173,10 @@ void Connection::closed() {
 
 Server::Server(ClockworkWorker* worker, int port) :
 		worker(worker), 
-		network_thread(&Server::run, this, port),
-		alive(true) {
+		network_thread(&Server::run, this, port) {
 }
+
+Server::~Server() {}
 
 void Server::shutdown(bool awaitShutdown) {
 	io_service.stop();
@@ -185,7 +186,7 @@ void Server::shutdown(bool awaitShutdown) {
 }
 
 void Server::join() {
-	while (alive.load());
+	network_thread.join();
 }
 
 void Server::run(int port) {
@@ -200,7 +201,6 @@ void Server::run(int port) {
 		CHECK(false) << "Exception in network thread: " << m;
 	}
 	std::cout << "Server exiting" << std::endl;
-	alive.store(false);
 }
 
 // workerapi::Controller::sendResult

@@ -53,7 +53,6 @@ public:
 class Server : public workerapi::Controller {
 private:
 	ClockworkWorker* worker;
-	std::atomic_bool alive;
 	std::thread network_thread;
 	asio::io_service io_service;
 
@@ -61,6 +60,7 @@ private:
 
 public:
 	Server(ClockworkWorker* worker, int port = 12345);
+	~Server();
 
 	void shutdown(bool awaitShutdown);
 	void join();

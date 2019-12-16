@@ -6,14 +6,13 @@
 using namespace clockwork;
 
 TEST_CASE("Test Worker Server Shutdown", "[network]") {
+	clockwork::ClockworkWorker clockwork;
+    clockwork::network::worker::Server server(&clockwork);
+    clockwork.controller = &server;
 
-    auto clockwork = new clockwork::ClockworkWorker();
-    auto server = new clockwork::network::worker::Server(clockwork);
-    clockwork->controller = server;
+    clockwork.shutdown(false);
+    server.shutdown(false);
 
-    clockwork->shutdown(false);
-    server->shutdown(false);
-
-    clockwork->join();
-    server->join();
+    clockwork.join();
+    server.join();
 }
