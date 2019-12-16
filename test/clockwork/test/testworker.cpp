@@ -55,7 +55,6 @@ TEST_CASE("Test Worker", "[worker]") {
     controller.expect(actionSuccess);
 
     worker.shutdown(true);
-    
 }
 
 TEST_CASE("Test Infer No Weights", "[worker] [noweights]") {

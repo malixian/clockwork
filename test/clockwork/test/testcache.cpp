@@ -484,13 +484,13 @@ TEST_CASE("Test IOCache", "[iocache]") {
     size_t cache_size = 512L * 1024L * 1024L;
     size_t page_size = 16L * 1024L * 1024L;
     int num_pages = cache_size / page_size;
-    IOCache* cache = new IOCache(cache_size, page_size);
+    IOCache cache(cache_size, page_size);
 
     char* ptr = nullptr;
     for (unsigned i = 0; i < num_pages; i++) {
-        REQUIRE(cache->take(ptr));
+        REQUIRE(cache.take(ptr));
     }
-    REQUIRE(!cache->take(ptr));
+    REQUIRE(!cache.take(ptr));
 
 }
 
@@ -502,14 +502,13 @@ TEST_CASE("Test IOCache Release", "[iocache]") {
     size_t cache_size = 512L * 1024L * 1024L;
     size_t page_size = 16L * 1024L * 1024L;
     int num_pages = cache_size / page_size;
-    IOCache* cache = new IOCache(cache_size, page_size);
+    IOCache cache(cache_size, page_size);
 
     char* ptr = nullptr;
     for (unsigned i = 0; i < num_pages * 3; i++) {
-        REQUIRE(cache->take(ptr));
-        cache->release(ptr);
+        REQUIRE(cache.take(ptr));
+        cache.release(ptr);
     }
-
 }
 
 
@@ -558,4 +557,7 @@ TEST_CASE("Multiple Baseptrs", "[cache]") {
     cache->unlock(alloc1);
     cache->free(alloc1);
     REQUIRE(cache->freePages.size() == 2);
+
+    free(baseptr_1);
+    free(baseptr_2);
 }

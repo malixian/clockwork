@@ -133,6 +133,10 @@ public:
     ShutdownSignaller(clockwork::time_release_priority_queue<int> &q) : 
             q(q), signalled_shutdown(false), thread(&ShutdownSignaller::run, this) {
     }
+    ~ShutdownSignaller() {
+        while (!signalled_shutdown);
+        thread.join();
+    }
     void run() {
         using namespace clockwork;
         uint64_t start = util::now();
@@ -161,8 +165,6 @@ TEST_CASE("Priority Queue Blocking Dequeue", "[queue] [shutdown]") {
         INFO("Blocking dequeue should have returned a nullptr");
         REQUIRE(e == nullptr);
     }
-
-    s.thread.join();
 }
 
 class Dequeuer {
@@ -173,6 +175,10 @@ public:
     std::vector<int*> dequeued;
     Dequeuer(clockwork::time_release_priority_queue<int> &q) : 
             q(q), complete(false), thread(&Dequeuer::run, this) {
+    }
+    ~Dequeuer() {
+        while (!complete);
+        thread.join();
     }
     void run() {
         using namespace clockwork;
@@ -227,8 +233,6 @@ TEST_CASE("Priority Queue Shutdown", "[queue] [shutdown]") {
     }
     INFO("Dequeuer thread never unblocked");
     REQUIRE(d.complete.load());
-
-    d.thread.join();
 }
 
 TEST_CASE("Priority Queue Enqueue after Shutdown", "[queue] [shutdown]") {

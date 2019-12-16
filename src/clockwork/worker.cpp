@@ -7,6 +7,7 @@ ClockworkWorker::ClockworkWorker() : runtime(new ClockworkRuntime()) {
 }
 
 ClockworkWorker::~ClockworkWorker() {
+	this->shutdown(false);
     delete runtime;
 }
 
