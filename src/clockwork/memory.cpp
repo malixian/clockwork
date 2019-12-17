@@ -79,6 +79,22 @@ bool ModelStore::put_if_absent(int model_id, RuntimeModel* model) {
 	return did_put;
 }
 
+// MemoryManager::MemoryManager(MemoryPool* host_io_pool, 
+// 			PageCache* device_weights_cache, 
+// 			MemoryPool* device_workspace_pool, 
+// 			MemoryPool* device_io_pool) : 
+// 		models(new ModelStore()), host_io_pool(host_io_pool),
+// 		device_weights_cache(device_weights_cache), device_workspace_pool(device_workspace_pool),
+// 		device_io_pool(device_io_pool) {}
+
+// MemoryManager::~MemoryManager() {
+// 	delete models;
+// 	delete host_io_pool;
+// 	delete device_weights_cache;
+// 	delete device_workspace_pool;
+// 	delete device_io_pool;
+// }
+
 MemoryManager::MemoryManager(PageCache* weights_cache, PageCache* workspace_cache) : 
 			weights_cache(weights_cache), 
 			workspace_cache(workspace_cache), 
@@ -120,6 +136,8 @@ void IOCache::release(char* ptr) {
 
 MemoryPool::MemoryPool(char* base_ptr, size_t size) : base_ptr(base_ptr), size(size) {
 }
+
+MemoryPool::~MemoryPool() {}
 
 // Allocate `amount` of memory; returns nullptr if out of memory
 std::shared_ptr<MemoryAllocation> MemoryPool::alloc(size_t amount) {
@@ -189,11 +207,35 @@ void MemoryPool::free(std::shared_ptr<MemoryAllocation> &allocation) {
 	}
 }
 
+CUDAMemoryPool::CUDAMemoryPool(char* base_ptr, size_t size) : MemoryPool(base_ptr, size) {}
+
+CUDAMemoryPool::~CUDAMemoryPool() {
+	CUDA_CALL(cudaFree(base_ptr));
+}
+
+CUDAMemoryPool* CUDAMemoryPool::create(size_t size) {
+	void* baseptr;
+	CUDA_CALL(cudaMalloc(&baseptr, size));
+	return new CUDAMemoryPool(static_cast<char*>(baseptr), size);
+}
+
+CUDAHostMemoryPool::CUDAHostMemoryPool(char* base_ptr, size_t size) : MemoryPool(base_ptr, size) {}
+
+CUDAHostMemoryPool::~CUDAHostMemoryPool() {
+	CUDA_CALL(cudaFreeHost(base_ptr));
+}
+
+CUDAHostMemoryPool* CUDAHostMemoryPool::create(size_t size) {
+	void* baseptr;
+	CUDA_CALL(cudaMallocHost(&baseptr, size));
+	return new CUDAHostMemoryPool(static_cast<char*>(baseptr), size);	
+}
+
 IOCache* make_IO_cache() {
-	 // TODO: don't hard-code
-	size_t cache_size = 512L * 1024L * 1024L;
-	size_t page_size = 64L * 1024L * 1024L;
-	return new IOCache(cache_size, page_size);
+        // TODO: don't hard-code
+       size_t cache_size = 512L * 1024L * 1024L;
+       size_t page_size = 64L * 1024L * 1024L;
+       return new IOCache(cache_size, page_size);
 }
 
 }

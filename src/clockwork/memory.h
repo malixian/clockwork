@@ -77,6 +77,26 @@ public:
 	~MemoryManager();
 };
 
+// class MemoryManager {
+// public:
+// 	// TODO: host-side weights cache
+// 	MemoryPool* host_io_pool; // Host-side memory pool for inference inputs and outputs
+
+// 	PageCache* device_weights_cache; // Device-side page cache for model weights
+// 	MemoryPool* device_workspace_pool; // Device-side memory pool for inference workspace
+// 	MemoryPool* device_io_pool; // Device-side memory pool for inference inputs and outputs
+
+// 	ModelStore* models; // Models
+
+
+// 	MemoryManager(MemoryPool* host_io_pool, 
+// 			PageCache* device_weights_cache, 
+// 			MemoryPool* device_workspace_pool, 
+// 			MemoryPool* device_io_pool);
+
+// 	virtual ~MemoryManager();
+// };
+
 class MemoryAllocation {
 public:
 	std::atomic_bool freed;
@@ -93,14 +113,14 @@ private:
 
 	// Currently outstanding allocations
 	std::deque<std::shared_ptr<MemoryAllocation>> allocations;
-	
+
+public:
 	// The memory that we're managing
 	char* base_ptr;
 	size_t size;
 
-public:
-
 	MemoryPool(char* base_ptr, size_t size);
+	virtual ~MemoryPool();
 
 	// Allocate `amount` of memory; returns nullptr if out of memory
 	std::shared_ptr<MemoryAllocation> alloc(size_t amount);
@@ -108,6 +128,22 @@ public:
 	// Return the memory back to the pool
 	void free(std::shared_ptr<MemoryAllocation> &allocation);
 
+};
+
+class CUDAMemoryPool : public MemoryPool {
+public:
+	CUDAMemoryPool(char* base_ptr, size_t size);
+	virtual ~CUDAMemoryPool();
+
+	static CUDAMemoryPool* create(size_t size);
+};
+
+class CUDAHostMemoryPool : public MemoryPool {
+public:
+	CUDAHostMemoryPool(char* base_ptr, size_t size);
+	virtual ~CUDAHostMemoryPool();
+
+	static CUDAHostMemoryPool* create(size_t size);
 };
 
 IOCache* make_IO_cache();

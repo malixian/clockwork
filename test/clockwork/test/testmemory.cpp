@@ -203,3 +203,17 @@ TEST_CASE("MemoryPool Staggered Free Order", "[mempool]") {
     REQUIRE(pool.alloc(600) != nullptr);
     REQUIRE(pool.alloc(100) == nullptr);
 }
+
+TEST_CASE("CUDAMemoryPool", "[mempool]") {
+    using namespace clockwork;
+
+    CUDAMemoryPool* pool = CUDAMemoryPool::create(1000);
+    delete pool;
+}
+
+TEST_CASE("CUDAHostMemoryPool", "[mempool]") {
+    using namespace clockwork;
+
+    CUDAHostMemoryPool* pool = CUDAHostMemoryPool::create(1000);
+    delete pool;
+}
