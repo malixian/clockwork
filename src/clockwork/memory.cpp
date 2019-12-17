@@ -140,7 +140,7 @@ MemoryPool::MemoryPool(char* base_ptr, size_t size) : base_ptr(base_ptr), size(s
 MemoryPool::~MemoryPool() {}
 
 // Allocate `amount` of memory; returns nullptr if out of memory
-std::shared_ptr<MemoryAllocation> MemoryPool::alloc(size_t amount) {
+char* MemoryPool::alloc(size_t amount) {
 	std::lock_guard<std::mutex> lock(mutex);
 
 	// Simple case when there are no outstanding allocations
@@ -149,7 +149,8 @@ std::shared_ptr<MemoryAllocation> MemoryPool::alloc(size_t amount) {
 
 		auto allocation = std::make_shared<MemoryAllocation>(base_ptr, 0, amount);
 		allocations.push_back(allocation);
-		return allocation;
+		ptr_allocations[base_ptr] = allocation;
+		return base_ptr;
 	}
 
 	auto front = allocations.front();
@@ -164,7 +165,8 @@ std::shared_ptr<MemoryAllocation> MemoryPool::alloc(size_t amount) {
 
 			auto allocation = std::make_shared<MemoryAllocation>(base_ptr, offset, amount);
 			allocations.push_back(allocation);
-			return allocation;
+			ptr_allocations[base_ptr + offset] = allocation;
+			return base_ptr + offset;
 		}
 
 		if (amount <= front->offset) {
@@ -172,7 +174,8 @@ std::shared_ptr<MemoryAllocation> MemoryPool::alloc(size_t amount) {
 
 			auto allocation = std::make_shared<MemoryAllocation>(base_ptr, 0, amount);
 			allocations.push_back(allocation);
-			return allocation;
+			ptr_allocations[base_ptr] = allocation;
+			return base_ptr;
 		}
 
 		// Doesn't fit in pool
@@ -187,7 +190,8 @@ std::shared_ptr<MemoryAllocation> MemoryPool::alloc(size_t amount) {
 
 			auto allocation = std::make_shared<MemoryAllocation>(base_ptr, offset, amount);
 			allocations.push_back(allocation);
-			return allocation;
+			ptr_allocations[base_ptr + offset] = allocation;
+			return base_ptr + offset;
 		}
 
 		// Doesn't fit in pool
@@ -196,8 +200,15 @@ std::shared_ptr<MemoryAllocation> MemoryPool::alloc(size_t amount) {
 }
 
 // Return the memory back to the pool
-void MemoryPool::free(std::shared_ptr<MemoryAllocation> &allocation) {
+void MemoryPool::free(char* ptr) {
 	std::lock_guard<std::mutex> lock(mutex);
+
+	auto it = ptr_allocations.find(ptr);
+	if (it == ptr_allocations.end()) return;
+
+	auto allocation = it->second;
+
+	ptr_allocations.erase(it);
 
 	allocation->freed.store(true);
 

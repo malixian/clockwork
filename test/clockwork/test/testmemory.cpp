@@ -14,7 +14,7 @@ TEST_CASE("MemoryPool Alloc", "[mempool]") {
 
     auto alloc1 = pool.alloc(1000);
     REQUIRE(alloc1 != nullptr);
-    REQUIRE(alloc1->ptr == baseptr);
+    REQUIRE(alloc1 == baseptr);
 }
 
 TEST_CASE("MemoryPool Free", "[mempool]") {

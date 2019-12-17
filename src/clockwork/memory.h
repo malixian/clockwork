@@ -112,6 +112,7 @@ private:
 	std::mutex mutex;
 
 	// Currently outstanding allocations
+	std::unordered_map<char*, std::shared_ptr<MemoryAllocation>> ptr_allocations;
 	std::deque<std::shared_ptr<MemoryAllocation>> allocations;
 
 public:
@@ -123,10 +124,10 @@ public:
 	virtual ~MemoryPool();
 
 	// Allocate `amount` of memory; returns nullptr if out of memory
-	std::shared_ptr<MemoryAllocation> alloc(size_t amount);
+	char* alloc(size_t amount);
 
 	// Return the memory back to the pool
-	void free(std::shared_ptr<MemoryAllocation> &allocation);
+	void free(char* ptr);
 
 };
 
