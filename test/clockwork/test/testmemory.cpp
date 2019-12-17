@@ -1,0 +1,205 @@
+#include <catch2/catch.hpp>
+
+#include <cstdlib>
+
+#include "clockwork/memory.h"
+
+TEST_CASE("MemoryPool Alloc", "[mempool]") {
+
+    using namespace clockwork;
+
+    size_t size = 1000;
+    char* baseptr = static_cast<char*>(malloc(size));
+    MemoryPool pool(baseptr, size);
+
+    auto alloc1 = pool.alloc(1000);
+    REQUIRE(alloc1 != nullptr);
+    REQUIRE(alloc1->ptr == baseptr);
+}
+
+TEST_CASE("MemoryPool Free", "[mempool]") {
+
+    using namespace clockwork;
+
+    size_t size = 1000;
+    char* baseptr = static_cast<char*>(malloc(size));
+    MemoryPool pool(baseptr, size);
+
+    auto alloc = pool.alloc(1000);
+    pool.free(alloc);
+
+    REQUIRE(pool.alloc(1000) != nullptr);
+}
+
+TEST_CASE("MemoryPool Free Multiple", "[mempool]") {
+
+    using namespace clockwork;
+
+    size_t size = 1000;
+    char* baseptr = static_cast<char*>(malloc(size));
+    MemoryPool pool(baseptr, size);
+
+    auto alloc = pool.alloc(1000);
+    pool.free(alloc);
+
+    alloc = pool.alloc(1000);
+    REQUIRE(alloc != nullptr);
+    REQUIRE(pool.alloc(1000) == nullptr);
+
+    pool.free(alloc);
+    alloc = pool.alloc(1000);
+    REQUIRE(alloc != nullptr);
+    REQUIRE(pool.alloc(1000) == nullptr);
+}
+
+TEST_CASE("MemoryPool Exhaust", "[mempool]") {
+
+    using namespace clockwork;
+
+    size_t size = 1000;
+    char* baseptr = static_cast<char*>(malloc(size));
+    MemoryPool pool(baseptr, size);
+
+    auto alloc1 = pool.alloc(1000);
+
+    REQUIRE(pool.alloc(1) == nullptr);
+    REQUIRE(pool.alloc(1) == nullptr);    
+}
+
+TEST_CASE("MemoryPool Multiple Alloc", "[mempool]") {
+
+    using namespace clockwork;
+
+    size_t size = 1000;
+    char* baseptr = static_cast<char*>(malloc(size));
+    MemoryPool pool(baseptr, size);
+
+    for (unsigned i = 0; i < 10; i++) {
+        auto alloc = pool.alloc(100);
+        REQUIRE(alloc != nullptr);
+    }
+    REQUIRE(pool.alloc(1) == nullptr);
+}
+
+TEST_CASE("MemoryPool Indivisible Limit", "[mempool]") {
+
+    using namespace clockwork;
+
+    size_t size = 1000;
+    char* baseptr = static_cast<char*>(malloc(size));
+    MemoryPool pool(baseptr, size);
+
+    auto alloc1 = pool.alloc(800);
+    REQUIRE(alloc1 != nullptr);
+
+    REQUIRE(pool.alloc(300) == nullptr);
+
+    auto alloc2 = pool.alloc(200);
+    REQUIRE(alloc2 != nullptr);
+}
+
+TEST_CASE("MemoryPool Wrap", "[mempool]") {
+
+    using namespace clockwork;
+
+    size_t size = 1000;
+    char* baseptr = static_cast<char*>(malloc(size));
+    MemoryPool pool(baseptr, size);
+
+    auto alloc1 = pool.alloc(700);
+    REQUIRE(alloc1 != nullptr);
+
+    REQUIRE(pool.alloc(500) == nullptr);
+
+    auto alloc2 = pool.alloc(100);
+    REQUIRE(alloc2 != nullptr);
+
+    pool.free(alloc1);
+
+    REQUIRE(pool.alloc(800) == nullptr);
+
+    auto alloc3 = pool.alloc(700);
+    REQUIRE(alloc3 != nullptr);
+}
+
+TEST_CASE("MemoryPool Wrap 2", "[mempool]") {
+
+    using namespace clockwork;
+
+    size_t size = 1000;
+    char* baseptr = static_cast<char*>(malloc(size));
+    MemoryPool pool(baseptr, size);
+
+    auto alloc1 = pool.alloc(700);
+    REQUIRE(alloc1 != nullptr);
+
+    auto alloc2 = pool.alloc(300);
+    REQUIRE(alloc2 != nullptr);
+
+    pool.free(alloc1);
+
+    auto alloc3 = pool.alloc(300);
+    REQUIRE(alloc3 != nullptr);
+
+    auto alloc4 = pool.alloc(400);
+    REQUIRE(alloc4 != nullptr);
+}
+
+TEST_CASE("MemoryPool Inverted Free Order", "[mempool]") {
+
+    using namespace clockwork;
+
+    size_t size = 1000;
+    char* baseptr = static_cast<char*>(malloc(size));
+    MemoryPool pool(baseptr, size);
+
+    auto alloc1 = pool.alloc(500);
+    REQUIRE(alloc1 != nullptr);
+
+    auto alloc2 = pool.alloc(500);
+    REQUIRE(alloc2 != nullptr);
+
+    REQUIRE(pool.alloc(500) == nullptr);
+
+    pool.free(alloc2);
+
+    REQUIRE(pool.alloc(500) == nullptr);
+
+    pool.free(alloc1);
+
+    REQUIRE(pool.alloc(500) != nullptr);
+    REQUIRE(pool.alloc(500) != nullptr);
+    REQUIRE(pool.alloc(500) == nullptr);
+}
+
+TEST_CASE("MemoryPool Staggered Free Order", "[mempool]") {
+
+    using namespace clockwork;
+
+    size_t size = 1000;
+    char* baseptr = static_cast<char*>(malloc(size));
+    MemoryPool pool(baseptr, size);
+
+    auto alloc1 = pool.alloc(300);
+    REQUIRE(alloc1 != nullptr);
+
+    auto alloc2 = pool.alloc(300);
+    REQUIRE(alloc2 != nullptr);
+
+    REQUIRE(pool.alloc(500) == nullptr);
+
+    pool.free(alloc2);
+
+    REQUIRE(pool.alloc(500) == nullptr);
+
+    auto alloc3 = pool.alloc(300);
+    REQUIRE(alloc3 != nullptr);
+
+    REQUIRE(pool.alloc(500) == nullptr);
+
+    pool.free(alloc1);
+
+    REQUIRE(pool.alloc(700) == nullptr);
+    REQUIRE(pool.alloc(600) != nullptr);
+    REQUIRE(pool.alloc(100) == nullptr);
+}

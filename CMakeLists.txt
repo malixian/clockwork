@@ -154,6 +154,7 @@ add_executable (tests
 	test/clockwork/test/testaction.cpp
 	test/clockwork/test/testworker.cpp
 	test/clockwork/test/testcache.cpp
+	test/clockwork/test/testmemory.cpp
 	test/clockwork/test/testpriorityqueue.cpp
 	test/clockwork/test/testclient.cpp
 	test/clockwork/test/testnetwork.cpp

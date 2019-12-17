@@ -116,6 +116,79 @@ void IOCache::release(char* ptr) {
 	ptrs.push(ptr);
 }
 
+
+
+MemoryPool::MemoryPool(char* base_ptr, size_t size) : base_ptr(base_ptr), size(size) {
+}
+
+// Allocate `amount` of memory; returns nullptr if out of memory
+std::shared_ptr<MemoryAllocation> MemoryPool::alloc(size_t amount) {
+	std::lock_guard<std::mutex> lock(mutex);
+
+	// Simple case when there are no outstanding allocations
+	if (allocations.size() == 0) {
+		if (amount > size) return nullptr; // Too big for the pool
+
+		auto allocation = std::make_shared<MemoryAllocation>(base_ptr, 0, amount);
+		allocations.push_back(allocation);
+		return allocation;
+	}
+
+	auto front = allocations.front();
+	auto back = allocations.back();
+
+	if (front->offset <= back->offset) {
+		// Case where memory is one contiguous range
+
+		size_t offset = back->offset + back->size;
+		if (offset + amount <= size) {
+			// Fits in pool
+
+			auto allocation = std::make_shared<MemoryAllocation>(base_ptr, offset, amount);
+			allocations.push_back(allocation);
+			return allocation;
+		}
+
+		if (amount <= front->offset) {
+			// Fits in pool
+
+			auto allocation = std::make_shared<MemoryAllocation>(base_ptr, 0, amount);
+			allocations.push_back(allocation);
+			return allocation;
+		}
+
+		// Doesn't fit in pool
+		return nullptr;
+
+	} else {
+		// Case where memory wraps round
+
+		size_t offset = back->offset + back->size;
+		if (offset + amount <= front->offset) {
+			// Fits in pool
+
+			auto allocation = std::make_shared<MemoryAllocation>(base_ptr, offset, amount);
+			allocations.push_back(allocation);
+			return allocation;
+		}
+
+		// Doesn't fit in pool
+		return nullptr;
+	}
+}
+
+// Return the memory back to the pool
+void MemoryPool::free(std::shared_ptr<MemoryAllocation> &allocation) {
+	std::lock_guard<std::mutex> lock(mutex);
+
+	allocation->freed.store(true);
+
+	// Pop all freed allocations from the queue
+	while (allocations.size() > 0 && allocations.front()->freed) {
+		allocations.pop_front();
+	}
+}
+
 IOCache* make_IO_cache() {
 	 // TODO: don't hard-code
 	size_t cache_size = 512L * 1024L * 1024L;

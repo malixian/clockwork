@@ -4,6 +4,8 @@
 #include <atomic>
 #include <memory>
 #include <unordered_map>
+#include <deque>
+#include <memory>
 #include "clockwork/cache.h"
 #include "clockwork/model/batched.h"
 #include "tbb/concurrent_queue.h"
@@ -73,6 +75,39 @@ public:
 
 	// This will delete the caches and the model store, possibly triggering freeing of cache memory
 	~MemoryManager();
+};
+
+class MemoryAllocation {
+public:
+	std::atomic_bool freed;
+	char* ptr;
+	size_t offset, size;
+
+	MemoryAllocation(char* base_ptr, size_t offset, size_t size) : freed(false), ptr(base_ptr + offset), offset(offset), size(size) {}
+};
+
+// Simple manager for workspace memory that allocates in a circular buffer
+class MemoryPool {
+private:
+	std::mutex mutex;
+
+	// Currently outstanding allocations
+	std::deque<std::shared_ptr<MemoryAllocation>> allocations;
+	
+	// The memory that we're managing
+	char* base_ptr;
+	size_t size;
+
+public:
+
+	MemoryPool(char* base_ptr, size_t size);
+
+	// Allocate `amount` of memory; returns nullptr if out of memory
+	std::shared_ptr<MemoryAllocation> alloc(size_t amount);
+
+	// Return the memory back to the pool
+	void free(std::shared_ptr<MemoryAllocation> &allocation);
+
 };
 
 IOCache* make_IO_cache();
