@@ -68,11 +68,13 @@ add_library( clockwork
 	src/clockwork/network/worker.cpp
 	src/clockwork/network/controller.cpp
 	src/clockwork/network/client.cpp
-	src/clockwork/alternatives/runtime_model.cpp
-	src/clockwork/alternatives/model_manager.cpp
-	src/clockwork/alternatives/threadpoolruntime.cpp
-	src/clockwork/alternatives/greedyruntime.cpp
-	src/clockwork/alternatives/worker.cpp
+
+### No point maintaining the below any more
+#	src/clockwork/alternatives/runtime_model.cpp
+#	src/clockwork/alternatives/model_manager.cpp
+#	src/clockwork/alternatives/threadpoolruntime.cpp
+#	src/clockwork/alternatives/greedyruntime.cpp
+#	src/clockwork/alternatives/worker.cpp
 )
 
 target_link_libraries( clockwork PUBLIC
@@ -181,10 +183,13 @@ add_executable ( profile
 	profile/profile.cpp
 	test/clockwork/test/util.cpp
 	profile/clockwork/profile/check.cpp
-	profile/clockwork/profile/alternatives/profilegreedy.cpp
 	profile/clockwork/profile/model/profilecuda.cpp
 	profile/clockwork/profile/model/profilemodel.cpp
+	
+### No point maintaining the below any more
+#	profile/clockwork/profile/alternatives/profilegreedy.cpp
 )
+
 target_link_libraries( profile
 	clockwork
 	clockwork_proto
