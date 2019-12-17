@@ -45,29 +45,28 @@ public:
 
 	/* Preconditions: instantiate_model_on_host */
 	unsigned num_weights_pages(unsigned page_size);
-
-	/* Preconditions: instantiate_model_on_host */
-	unsigned num_workspace_pages(unsigned batch_size, unsigned page_size);
+	size_t workspace_memory_size(unsigned batch_size);
+	size_t io_memory_size(unsigned batch_size);
 
 	/* Preconditions: set_weights_pages */
 	void transfer_weights_to_device(std::vector<char*> &weights_pages, cudaStream_t stream);
 
 	/* Preconditions: instantiate_model_on_host */
-	unsigned input_size(unsigned batch_size);
-	unsigned input_size_with_padding(unsigned batch_size);
+	size_t input_size(unsigned batch_size);
+	size_t input_size_with_padding(unsigned batch_size);
 
 	/* Preconditions: instantiate_model_on_host && set_workspace_pages */
-	void transfer_input_to_device(unsigned batch_size, const char* input_ptr, std::vector<char*> &workspace_pages, cudaStream_t stream);
+	void transfer_input_to_device(unsigned batch_size, const char* input_ptr, char* &dst_io_memory, cudaStream_t stream);
 
 	/* Preconditions: instantiate_model_on_host */
-	unsigned output_size(unsigned batch_size);
-	unsigned output_size_with_padding(unsigned batch_size);
+	size_t output_size(unsigned batch_size);
+	size_t output_size_with_padding(unsigned batch_size);
 
 	/* Preconditions: instantiate_model_on_host && set_workspace_pages */
-	void transfer_output_from_device(unsigned batch_size, char* output_ptr, std::vector<char*> &workspace_pages, cudaStream_t stream);
+	void transfer_output_from_device(unsigned batch_size, char* output_ptr, char* &src_io_memory, cudaStream_t stream);
 
 	/* Preconditions: instantiate_model_on_device */
-	void call(unsigned batch_size, std::vector<char*> &weights_pages, std::vector<char*> &workspace_pages, cudaStream_t stream);
+	void call(unsigned batch_size, std::vector<char*> &weights_pages, char* &io_memory, char* &workspace_memory, cudaStream_t stream);
 
 public:
 

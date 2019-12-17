@@ -252,9 +252,9 @@ void InferAction::CopyInputTaskImpl::process_completion() {
 	}
 }
 
-void InferAction::CopyInputTaskImpl::success(RuntimeModel* rm, std::shared_ptr<Allocation> workspace) {
+void InferAction::CopyInputTaskImpl::success(RuntimeModel* rm, char* io_memory) {
 	infer->rm = rm;
-	infer->workspace = workspace;
+	infer->io_memory = io_memory;
 	infer->exec = new ExecTaskImpl(infer);
 	infer->runtime->gpu_executor->enqueue(infer->exec);
 }
@@ -270,7 +270,7 @@ InferAction::ExecTaskImpl::ExecTaskImpl(InferAction* infer) : ExecTask(
 		infer->action->earliest,
 		infer->action->latest, 
 		infer->action->batch_size,
-		infer->workspace), infer(infer) {
+		infer->io_memory), infer(infer) {
 }
 
 void InferAction::ExecTaskImpl::run(cudaStream_t stream) {
@@ -306,7 +306,7 @@ InferAction::CopyOutputTaskImpl::CopyOutputTaskImpl(InferAction* infer) : CopyOu
 		0,
 		18446744073709551615UL,
 		infer->action->batch_size,
-		infer->workspace), infer(infer) {
+		infer->io_memory), infer(infer) {
 }
 
 void InferAction::CopyOutputTaskImpl::run(cudaStream_t stream) {
@@ -336,14 +336,14 @@ void InferAction::CopyOutputTaskImpl::cancel() {
 }
 
 InferAction::InferAction(ClockworkRuntime* runtime, std::shared_ptr<workerapi::Infer> action) :
-		runtime(runtime), action(action), rm(nullptr), workspace(nullptr) {
+		runtime(runtime), action(action), rm(nullptr), io_memory(nullptr) {
 }
 
 InferAction::~InferAction() {
 	if (copy_input != nullptr) delete copy_input;
 	if (exec != nullptr) delete exec;
 	if (copy_output != nullptr) delete copy_output;
-	workspace = nullptr;
+	io_memory = nullptr;
 }
 
 void InferAction::submit() {
@@ -352,9 +352,8 @@ void InferAction::submit() {
 }
 
 void InferAction::handle_completion(char* output) {
-	runtime->manager->workspace_cache->unlock(workspace);
-	runtime->manager->workspace_cache->free(workspace);
-	workspace = nullptr;
+	runtime->manager->io_pool->free(io_memory);
+	io_memory = nullptr;
 
 	auto result = std::make_shared<workerapi::InferResult>();
 
@@ -380,10 +379,9 @@ void InferAction::handle_completion(char* output) {
 }
 
 void InferAction::handle_error(TaskError &error) {
-	if (workspace != nullptr) {
-		runtime->manager->workspace_cache->unlock(workspace);
-		runtime->manager->workspace_cache->free(workspace);
-		workspace = nullptr;
+	if (io_memory != nullptr) {
+		runtime->manager->io_pool->free(io_memory);
+		io_memory = nullptr;
 	}
 
 	auto result = std::make_shared<workerapi::ErrorResult>();

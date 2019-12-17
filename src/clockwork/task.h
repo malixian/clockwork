@@ -141,7 +141,7 @@ private:
 	char* input;
 
 	RuntimeModel* rm;
-	std::shared_ptr<Allocation> workspace;
+	char* io_memory;
 
 public:
 
@@ -157,7 +157,7 @@ public:
 	void process_completion();
 
 	// Callbacks
-	virtual void success(RuntimeModel* rm, std::shared_ptr<Allocation> workspace) = 0;
+	virtual void success(RuntimeModel* rm, char* io_memory) = 0;
 };
 
 class ExecTask : public CudaAsyncTask {
@@ -169,11 +169,12 @@ private:
 	unsigned batch_size;
 	int weights_version;
 	std::shared_ptr<Allocation> weights;
-	std::shared_ptr<Allocation> workspace;
+	char* io_memory;
+	char* workspace_memory;
 
 public:
 
-	ExecTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, unsigned batch_size, std::shared_ptr<Allocation> workspace);
+	ExecTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, unsigned batch_size, char* io_memory);
 	~ExecTask();
 
 	// Task
@@ -197,10 +198,10 @@ private:
 	unsigned batch_size;
 	char* output;
 
-	std::shared_ptr<Allocation> workspace;
+	char* io_memory;
 
 public:
-	CopyOutputTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, unsigned batch_size, std::shared_ptr<Allocation> workspace);
+	CopyOutputTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, unsigned batch_size, char* io_memory);
 	~CopyOutputTask();
 
 	// Task

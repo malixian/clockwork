@@ -46,56 +46,7 @@ public:
 
 };
 
-// Simpler than a page cache for now since paging isn't really necessary for small inputs
-// Will allocate memory itself using cudaMallocHost
-class IOCache {
-private:
-	char* baseptr;
-	tbb::concurrent_queue<char*> ptrs;
 
-public:
-	const size_t page_size;
-
-	IOCache(size_t total_size, size_t page_size);
-	~IOCache();
-
-	bool take(char* &ptr);
-	void release(char* ptr);
-
-};
-
-class MemoryManager {
-public:
-	IOCache* io_cache;
-	PageCache* weights_cache;
-	PageCache* workspace_cache;
-	ModelStore* models;
-
-	MemoryManager(PageCache* weights_cache, PageCache* workspace_cache);
-
-	// This will delete the caches and the model store, possibly triggering freeing of cache memory
-	~MemoryManager();
-};
-
-// class MemoryManager {
-// public:
-// 	// TODO: host-side weights cache
-// 	MemoryPool* host_io_pool; // Host-side memory pool for inference inputs and outputs
-
-// 	PageCache* device_weights_cache; // Device-side page cache for model weights
-// 	MemoryPool* device_workspace_pool; // Device-side memory pool for inference workspace
-// 	MemoryPool* device_io_pool; // Device-side memory pool for inference inputs and outputs
-
-// 	ModelStore* models; // Models
-
-
-// 	MemoryManager(MemoryPool* host_io_pool, 
-// 			PageCache* device_weights_cache, 
-// 			MemoryPool* device_workspace_pool, 
-// 			MemoryPool* device_io_pool);
-
-// 	virtual ~MemoryManager();
-// };
 
 class MemoryAllocation {
 public:
@@ -131,6 +82,28 @@ public:
 
 };
 
+class MemoryManager {
+public:
+	PageCache* weights_cache; // Device-side page cache for model weights
+	// TODO: host-side weights cache
+
+	MemoryPool* workspace_pool; // Device-side memory pool for inference workspace
+	MemoryPool* io_pool; // Device-side memory pool for inference inputs and outputs
+
+	MemoryPool* host_io_pool; // Host-side memory pool for inference inputs and outputs
+
+	ModelStore* models; // Models
+
+
+	MemoryManager(
+		size_t weights_cache_size, size_t weights_cache_page_size,
+		size_t workspace_pool_size,
+		size_t io_pool_size,
+		size_t host_io_pool_size
+	);
+	~MemoryManager();
+};
+
 class CUDAMemoryPool : public MemoryPool {
 public:
 	CUDAMemoryPool(char* base_ptr, size_t size);
@@ -146,8 +119,6 @@ public:
 
 	static CUDAHostMemoryPool* create(size_t size);
 };
-
-IOCache* make_IO_cache();
 
 }
 

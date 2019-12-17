@@ -37,7 +37,8 @@ void Model::instantiate_model_on_host() {
 	spec = new model::PageMappedModelDef();
 	PageMappedModelDef::ReadFrom(serialized_spec, *spec);
 	weights_pages_count = spec->weights_pages.size();
-	workspace_pages_count = spec->num_workspace_pages;
+	io_size = spec->io_memory;
+	workspace_size = spec->workspace_memory;
 
 	// 3: setup model executor
 	op_execs = new std::vector<OpExec>(spec->ops.size());
@@ -82,12 +83,14 @@ unsigned Model::num_weights_pages(unsigned page_size) {
 	return weights_pages_count;
 }
 
-unsigned Model::num_workspace_pages(unsigned page_size) {
-	CHECK(spec != nullptr) << "num_workspace_pages spec is nullptr";
-	CHECK(spec->configured_workspace_page_size == page_size)
-			<< "Clockwork model was configured with mismatched page size, found "
-			<< spec->configured_workspace_page_size << ", expected " << page_size;
-	return workspace_pages_count;
+size_t Model::workspace_memory_size() {
+	CHECK(spec != nullptr) << "workspace_memory_size spec is nullptr";
+	return workspace_size;
+}
+
+size_t Model::io_memory_size() {
+	CHECK(spec != nullptr) << "io_memory_size spec is nullptr";
+	return io_size;
 }
 
 void Model::transfer_weights_to_device(std::vector<char*> &weights_pages, cudaStream_t stream) {
@@ -109,21 +112,22 @@ void Model::transfer_weights_to_device(std::vector<char*> &weights_pages, cudaSt
 	}
 }
 
-unsigned Model::input_size() {
+size_t Model::input_size() {
 	/** TODO: for now, a model only has one input */
 	CHECK(spec != nullptr) << "input_size spec is nullptr";
 	return spec->inputs[0].size;
 }
 
 /* Preconditions: instantiate_model_on_host && set_workspace_pages */
-void Model::transfer_input_to_device(const char* input_ptr, std::vector<char*> &workspace_pages, cudaStream_t stream) {
-	transfer_input_to_device(spec->inputs[0].size, input_ptr, workspace_pages, stream);
+void Model::transfer_input_to_device(const char* input_ptr, char* &dst_io_memory, cudaStream_t stream) {
+	transfer_input_to_device(spec->inputs[0].size, input_ptr, dst_io_memory, stream);
 }
 
-void Model::transfer_input_to_device(size_t input_size, const char* input_ptr, std::vector<char*> &workspace_pages, cudaStream_t stream) {
+void Model::transfer_input_to_device(size_t input_size, const char* input_ptr, char* &dst_io_memory, cudaStream_t stream) {
 	CHECK(spec != nullptr) << "transfer_input_to_device spec is nullptr";
 	CHECK(input_size <= spec->inputs[0].size) << "transfer_input_to_device tried to transfer more bytes than allowed";
-	void* dst_ptr = workspace_pages[spec->inputs[0].page - weights_pages_count] + spec->inputs[0].page_offset;
+	CHECK(spec->inputs[0].page == weights_pages_count) << "transfer_input_to_device expected input on page " << weights_pages_count;
+	void* dst_ptr = dst_io_memory + spec->inputs[0].page_offset;
 	CUDA_CALL(
 		cudaMemcpyAsync(
 			dst_ptr,
@@ -136,21 +140,22 @@ void Model::transfer_input_to_device(size_t input_size, const char* input_ptr, s
 }
 
 /* Preconditions: instantiate_model_on_host */
-unsigned Model::output_size() {
+size_t Model::output_size() {
 	/** TODO: for now, a model only has one output */
 	CHECK(spec != nullptr) << "output_size spec is nullptr";
 	return spec->outputs[0].size;
 }
 
 /* Preconditions: instantiate_model_on_host */
-void Model::transfer_output_from_device(char* output_ptr, std::vector<char*> &workspace_pages, cudaStream_t stream) {
-	transfer_output_from_device(spec->outputs[0].size, output_ptr, workspace_pages, stream);
+void Model::transfer_output_from_device(char* output_ptr, char* &src_io_memory, cudaStream_t stream) {
+	transfer_output_from_device(spec->outputs[0].size, output_ptr, src_io_memory, stream);
 }
 
-void Model::transfer_output_from_device(size_t output_size, char* output_ptr, std::vector<char*> &workspace_pages, cudaStream_t stream) {
+void Model::transfer_output_from_device(size_t output_size, char* output_ptr, char* &src_io_memory, cudaStream_t stream) {
 	CHECK(spec != nullptr) << "transfer_output_from_device spec is nullptr";
 	CHECK(output_size <= spec->outputs[0].size) << "transfer_output_from_device tried to transfer more bytes than allowed";
-	void* src_ptr = workspace_pages[spec->outputs[0].page - weights_pages_count] + spec->outputs[0].page_offset;
+	CHECK(spec->inputs[0].page == weights_pages_count) << "transfer_output_from_device expected output on page " << weights_pages_count;
+	void* src_ptr = src_io_memory + spec->outputs[0].page_offset;
 	CUDA_CALL(
 		cudaMemcpyAsync(
 			output_ptr, 
@@ -163,12 +168,13 @@ void Model::transfer_output_from_device(size_t output_size, char* output_ptr, st
 }
 
 /* Preconditions: instantiate_model_on_device && set_workspace_pages && set_weights_pages */
-void Model::call(std::vector<char*> &weights_pages, std::vector<char*> &workspace_pages, cudaStream_t stream) {
+void Model::call(std::vector<char*> &weights_pages, char* &io_memory, char* &workspace_memory, cudaStream_t stream) {
 	CHECK(hot_so != nullptr) << "call hot_so is nullptr";
 	
 	std::vector<char*> pages;
 	pages.insert(pages.end(), weights_pages.begin(), weights_pages.end());
-	pages.insert(pages.end(), workspace_pages.begin(), workspace_pages.end());
+	pages.push_back(io_memory);
+	pages.push_back(workspace_memory);
 
 	clockwork::util::SetStream(stream);
 

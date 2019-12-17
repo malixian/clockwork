@@ -121,9 +121,10 @@ struct PageDef {
 };
 
 struct PageMappedModelDef {
-    uint64_t paged_required_memory;
-    uint64_t minimum_required_memory;
-    uint64_t weights_memory;
+    uint64_t weights_memory;       // Memory required for model weights
+    uint64_t weights_memory_paged; // Memory required for model weights, when paged
+    uint64_t workspace_memory;     // Memory required for intermediate calculations when executing model
+    uint64_t io_memory;            // Memory required for model inputs and outputs
 
     std::vector<std::string> so_functions;
     std::vector<PageMappedOpDef> ops;
@@ -133,22 +134,17 @@ struct PageMappedModelDef {
     uint64_t configured_weights_page_size;
     std::vector<PageDef> weights_pages;
 
-    uint64_t configured_workspace_page_size;
-    unsigned num_workspace_pages;
-
-
     PODS_SERIALIZABLE(1,         
-        PODS_MDR(paged_required_memory),
-        PODS_MDR(minimum_required_memory),
         PODS_MDR(weights_memory),
+        PODS_MDR(weights_memory_paged),
+        PODS_MDR(workspace_memory),
+        PODS_MDR(io_memory),
         PODS_MDR(so_functions),
         PODS_MDR(ops),
         PODS_MDR(inputs),
         PODS_MDR(outputs),
         PODS_MDR(configured_weights_page_size),
-        PODS_MDR(weights_pages),
-        PODS_MDR(configured_workspace_page_size),
-        PODS_MDR(num_workspace_pages)
+        PODS_MDR(weights_pages)
     )
 
     static void ReadFrom(const std::string &data, PageMappedModelDef &def);

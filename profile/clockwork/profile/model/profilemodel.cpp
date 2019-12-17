@@ -122,7 +122,8 @@ public:
     std::thread thread;
     std::atomic_bool started, ready, alive;
     PageCache* weights_cache;
-    PageCache* workspace_cache;
+    MemoryPool* workspace_pool;
+    MemoryPool* io_pool;
     Experiment* experiment;
     std::vector<model::Model*> models;
     std::string input;
@@ -179,14 +180,14 @@ public:
             REQUIRE(status == cudaSuccess);
             timestamps.push_back(util::hrt());
 
-            std::shared_ptr<Allocation> workspace = workspace_cache->alloc(model->num_workspace_pages(workspace_cache->page_size), []{});
+            char* io_memory = io_pool->alloc(model->io_memory_size());
 
             experiment->copy_inputs_mutex.lock();
             experiment->shared.lock_shared();
             timestamps.push_back(util::hrt());
             status = cudaEventRecord(events[2], experiment->copy_inputs_stream);
             REQUIRE(status == cudaSuccess);
-            model->transfer_input_to_device(input.data(), workspace->page_pointers, experiment->copy_inputs_stream);
+            model->transfer_input_to_device(input.data(), io_memory, experiment->copy_inputs_stream);
             status = cudaEventRecord(events[3], experiment->copy_inputs_stream);
             REQUIRE(status == cudaSuccess);
             experiment->copy_inputs_mutex.unlock();
@@ -196,12 +197,14 @@ public:
             REQUIRE(status == cudaSuccess);
             timestamps.push_back(util::hrt());
 
+            char* workspace_memory = workspace_pool->alloc(model->workspace_memory_size());
+
             experiment->exec_mutex.lock();
             experiment->shared.lock_shared();
             timestamps.push_back(util::hrt());
             status = cudaEventRecord(events[4], experiment->exec_stream);
             REQUIRE(status == cudaSuccess);
-            model->call(weights->page_pointers, workspace->page_pointers, experiment->exec_stream);
+            model->call(weights->page_pointers, io_memory, workspace_memory, experiment->exec_stream);
             status = cudaEventRecord(events[5], experiment->exec_stream);
             REQUIRE(status == cudaSuccess);
             experiment->exec_mutex.unlock();
@@ -220,7 +223,7 @@ public:
             timestamps.push_back(util::hrt());
             status = cudaEventRecord(events[6], experiment->copy_output_stream);
             REQUIRE(status == cudaSuccess);
-            model->transfer_output_from_device(output, workspace->page_pointers, experiment->copy_output_stream);
+            model->transfer_output_from_device(output, io_memory, experiment->copy_output_stream);
             status = cudaEventRecord(events[7], experiment->copy_output_stream);
             REQUIRE(status == cudaSuccess);
             experiment->copy_output_mutex.unlock();
@@ -232,9 +235,9 @@ public:
             REQUIRE(status == cudaSuccess);
             timestamps.push_back(util::hrt());
 
-            workspace_cache->unlock(workspace);
+            workspace_pool->free(workspace_memory);
+            io_pool->free(io_memory);
             weights_cache->unlock(weights);
-            workspace_cache->free(workspace);
             weights_cache->free(weights);
 
 
@@ -300,13 +303,13 @@ public:
             REQUIRE(status == cudaSuccess);
             timestamps.push_back(util::hrt());
 
-            std::shared_ptr<Allocation> workspace = workspace_cache->alloc(model->num_workspace_pages(workspace_cache->page_size), []{});
+            char* io_memory = io_pool->alloc(model->io_memory_size());
 
             experiment->copy_inputs_mutex.lock();
             timestamps.push_back(util::hrt());
             status = cudaEventRecord(events[2], experiment->copy_inputs_stream);
             REQUIRE(status == cudaSuccess);
-            model->transfer_input_to_device(input.data(), workspace->page_pointers, experiment->copy_inputs_stream);
+            model->transfer_input_to_device(input.data(), io_memory, experiment->copy_inputs_stream);
             status = cudaEventRecord(events[3], experiment->copy_inputs_stream);
             REQUIRE(status == cudaSuccess);
             experiment->copy_inputs_mutex.unlock();
@@ -315,11 +318,13 @@ public:
             REQUIRE(status == cudaSuccess);
             timestamps.push_back(util::hrt());
 
+            char* workspace_memory = workspace_pool->alloc(model->workspace_memory_size());
+
             experiment->exec_mutex.lock();
             timestamps.push_back(util::hrt());
             status = cudaEventRecord(events[4], experiment->exec_stream);
             REQUIRE(status == cudaSuccess);
-            model->call(weights->page_pointers, workspace->page_pointers, experiment->exec_stream);
+            model->call(weights->page_pointers, io_memory, workspace_memory, experiment->exec_stream);
             status = cudaEventRecord(events[5], experiment->exec_stream);
             REQUIRE(status == cudaSuccess);
             experiment->exec_mutex.unlock();
@@ -336,7 +341,7 @@ public:
             timestamps.push_back(util::hrt());
             status = cudaEventRecord(events[6], experiment->copy_output_stream);
             REQUIRE(status == cudaSuccess);
-            model->transfer_output_from_device(output, workspace->page_pointers, experiment->copy_output_stream);
+            model->transfer_output_from_device(output, io_memory, experiment->copy_output_stream);
             status = cudaEventRecord(events[7], experiment->copy_output_stream);
             REQUIRE(status == cudaSuccess);
             experiment->copy_output_mutex.unlock();
@@ -347,9 +352,9 @@ public:
             REQUIRE(status == cudaSuccess);
             timestamps.push_back(util::hrt());
 
-            workspace_cache->unlock(workspace);
+            workspace_pool->free(workspace_memory);
+            io_pool->free(io_memory);
             weights_cache->unlock(weights);
-            workspace_cache->free(workspace);
             weights_cache->free(weights);
 
             iterations++;
@@ -366,8 +371,8 @@ public:
 
     }
 
-    ModelExecWithModuleLoad(int i, Experiment* experiment, PageCache* weights_cache, PageCache* workspace_cache, std::vector<model::Model*> models, std::string input) :
-            experiment(experiment), weights_cache(weights_cache), workspace_cache(workspace_cache), models(models), alive(true), input(input), iterations(0),
+    ModelExecWithModuleLoad(int i, Experiment* experiment, PageCache* weights_cache, MemoryPool* io_pool, MemoryPool* workspace_pool, std::vector<model::Model*> models, std::string input) :
+            experiment(experiment), weights_cache(weights_cache), io_pool(io_pool), workspace_pool(workspace_pool), models(models), alive(true), input(input), iterations(0),
             ready(false), started(false) {
         util::set_core((i+7) % util::get_num_cores());
         util::setCurrentThreadMaxPriority();
@@ -422,9 +427,11 @@ void warmup() {
     size_t weights_cache_size = 512L * weights_page_size;
     PageCache* weights_cache = make_GPU_cache(weights_cache_size, weights_page_size);
 
-    size_t workspace_page_size = 64 * 1024L * 1024L;
-    size_t workspace_cache_size = 16 * workspace_page_size;
-    PageCache* workspace_cache = make_GPU_cache(workspace_cache_size, workspace_page_size);
+    size_t io_pool_size = 128 * 1024L * 1024L;
+    size_t workspace_pool_size = 512 * 1024L * 1024L;
+
+    MemoryPool* io_pool = CUDAMemoryPool::create(io_pool_size);
+    MemoryPool* workspace_pool = CUDAMemoryPool::create(workspace_pool_size);
 
     model::Model* model = load_model_from_disk(model_path);
 
@@ -439,20 +446,21 @@ void warmup() {
     std::shared_ptr<Allocation> weights = weights_cache->alloc(model->num_weights_pages(weights_page_size), []{});
     model->transfer_weights_to_device(weights->page_pointers, util::Stream());
 
-    std::shared_ptr<Allocation> workspace = workspace_cache->alloc(model->num_workspace_pages(workspace_page_size), []{});
-    model->transfer_input_to_device(input.data(), workspace->page_pointers, util::Stream());
+    char* io_memory = io_pool->alloc(model->io_memory_size());
+    model->transfer_input_to_device(input.data(), io_memory, util::Stream());
     
-    model->call(weights->page_pointers, workspace->page_pointers, util::Stream());
+    char* workspace_memory = workspace_pool->alloc(model->workspace_memory_size());
+    model->call(weights->page_pointers, io_memory, workspace_memory, util::Stream());
 
     char output[model->output_size()];
-    model->transfer_output_from_device(output, workspace->page_pointers, util::Stream());
+    model->transfer_output_from_device(output, io_memory, util::Stream());
 
     status = cudaStreamSynchronize(util::Stream());
     REQUIRE(status == cudaSuccess);
 
-    workspace_cache->unlock(workspace);
-    workspace_cache->free(workspace);
 
+    io_pool->free(io_memory);
+    workspace_pool->free(workspace_memory);
     weights_cache->unlock(weights);
     weights_cache->free(weights);
 
@@ -460,8 +468,8 @@ void warmup() {
     model->uninstantiate_model_on_host();
 
     delete model;
-    delete workspace_cache;
-    delete weights_cache;
+    delete io_pool;
+    delete workspace_pool;
 }
 
 TEST_CASE("Warmup works", "[profile] [warmup]") {
@@ -485,9 +493,11 @@ void runMultiClientExperiment(int num_execs, int models_per_exec, bool duplicate
     size_t weights_cache_size = 512L * weights_page_size;
     PageCache* weights_cache = make_GPU_cache(weights_cache_size, weights_page_size);
 
-    size_t workspace_page_size = 64 * 1024L * 1024L;
-    size_t workspace_cache_size = 16 * workspace_page_size;
-    PageCache* workspace_cache = make_GPU_cache(workspace_cache_size, workspace_page_size);
+    size_t io_pool_size = 128 * 1024L * 1024L;
+    size_t workspace_pool_size = 512 * 1024L * 1024L;
+
+    MemoryPool* io_pool = CUDAMemoryPool::create(io_pool_size);
+    MemoryPool* workspace_pool = CUDAMemoryPool::create(workspace_pool_size);
 
     Experiment* experiment = new Experiment();
 
@@ -520,7 +530,7 @@ void runMultiClientExperiment(int num_execs, int models_per_exec, bool duplicate
         }
 
         ModelExecWithModuleLoad* exec = new ModelExecWithModuleLoad(i,
-            experiment, weights_cache, workspace_cache, models, input);
+            experiment, weights_cache, io_pool, workspace_pool, models, input);
 
         execs.push_back(exec);
     }
@@ -603,8 +613,9 @@ void runMultiClientExperiment(int num_execs, int models_per_exec, bool duplicate
     }
 
     delete experiment;
-    delete workspace_cache;
     delete weights_cache;
+    delete io_pool;
+    delete workspace_pool;
 }
 
 

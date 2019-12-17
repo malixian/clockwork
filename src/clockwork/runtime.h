@@ -76,13 +76,18 @@ public:
 	// TODO: currently we've hard-coded a whole bunch of defaults -- 10GB cache, 16MB pages
 
 	ClockworkRuntime() {
-		size_t weights_page_size = 16L * 1024L * 1024L; // 16MB hard-coded weights cache page size
 		size_t weights_cache_size = 10L * 1024L * 1024L * 1024L; // 10 GB hard-coded weights cache for now
-		size_t workspace_page_size = 64L * 1024L * 1024L; // 64MB hard-coded workspace cache page size
-		size_t workspace_cache_size = 512L * 1024L * 1024L; // Shouldn't need too much workspace cache
-		PageCache* weights_cache = make_GPU_cache(weights_cache_size, weights_page_size);
-		PageCache* workspace_cache = make_GPU_cache(workspace_cache_size, workspace_page_size);
-		manager = new MemoryManager(weights_cache, workspace_cache);
+		size_t weights_cache_page_size = 16L * 1024L * 1024L; // 16MB hard-coded weights cache page size
+		size_t workspace_pool_size = 512L * 1024L * 1024L;
+		size_t io_pool_size = 128L * 1024L * 1024L;
+		size_t host_io_pool_size = 256L * 1024L * 1024L; 
+
+		manager = new MemoryManager(
+			weights_cache_size, weights_cache_page_size,
+			workspace_pool_size,
+			io_pool_size,
+			host_io_pool_size
+		);
 
 		unsigned gpu_device_id = 0; // Initially we're only using GPU 0
 		auto cores = util::get_gpu_core_affinity(gpu_device_id);

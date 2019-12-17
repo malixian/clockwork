@@ -7,16 +7,16 @@ namespace worker {
 using asio::ip::tcp;
 
 
-class infer_action_rx_using_io_cache : public infer_action_rx {
+class infer_action_rx_using_io_pool : public infer_action_rx {
 private:
-  clockwork::IOCache* io_cache;
+  clockwork::MemoryPool* host_io_pool;
 
 
 public:
-  infer_action_rx_using_io_cache(clockwork::IOCache* io_cache) : infer_action_rx(), io_cache(io_cache) {
+  infer_action_rx_using_io_pool(clockwork::MemoryPool* host_io_pool) : infer_action_rx(), host_io_pool(host_io_pool) {
   }
 
-  virtual ~infer_action_rx_using_io_cache() {
+  virtual ~infer_action_rx_using_io_pool() {
     delete static_cast<uint8_t*>(body_);
   }
 
@@ -24,21 +24,21 @@ public:
   	infer_action_rx::get(action);
 
   	// Copy the input body into a cached page
-    CHECK(body_len_ <= io_cache->page_size) << "Infer action input " << body_len_ << " too large for page size " << io_cache->page_size;
-    CHECK(io_cache->take(action.input)) << "Unable to alloc from io_cache for infer action input";
+    action.input = host_io_pool->alloc(body_len_);
+    CHECK(action.input != nullptr) << "Unable to alloc from host_io_pool for infer action input";
     std::memcpy(action.input, body_, body_len_);
   }
 };
 
-class infer_result_tx_using_io_cache : public infer_result_tx {
+class infer_result_tx_using_io_pool : public infer_result_tx {
 private:
-  clockwork::IOCache* io_cache;
+  clockwork::MemoryPool* host_io_pool;
 
 public:
-  infer_result_tx_using_io_cache(clockwork::IOCache* io_cache) : infer_result_tx(), io_cache(io_cache) {
+  infer_result_tx_using_io_pool(clockwork::MemoryPool* host_io_pool) : infer_result_tx(), host_io_pool(host_io_pool) {
   }
 
-  virtual ~infer_result_tx_using_io_cache() {
+  virtual ~infer_result_tx_using_io_pool() {
   	delete static_cast<uint8_t*>(body_);
   }
 
@@ -48,17 +48,17 @@ public:
   	infer_result_tx::set(result);
     body_ = new uint8_t[result.output_size];
     std::memcpy(body_, result.output, result.output_size);
-    io_cache->release(result.output);
+    host_io_pool->free(result.output);
   }
 
 };
 
-class InferUsingIOCache : public workerapi::Infer {
+class InferUsingIOPool : public workerapi::Infer {
 public:
-	clockwork::IOCache* io_cache;
-	InferUsingIOCache(clockwork::IOCache* io_cache) : io_cache(io_cache) {}
-	~InferUsingIOCache() {
-		io_cache->release(input);
+	clockwork::MemoryPool* host_io_pool;
+	InferUsingIOPool(clockwork::MemoryPool* host_io_pool) : host_io_pool(host_io_pool) {}
+	~InferUsingIOPool() {
+		host_io_pool->free(input);
 	}
 };
 
@@ -83,7 +83,7 @@ message_rx* Connection::new_rx_message(message_connection *tcp_conn, uint64_t he
 		msg->set_msg_id(msg_id);
 		return msg;
 	} else if (msg_type == ACT_INFER) {
-		auto msg = new infer_action_rx_using_io_cache(worker->runtime->manager->io_cache);
+		auto msg = new infer_action_rx_using_io_pool(worker->runtime->manager->host_io_pool);
 		msg->set_body_len(body_len);
 		msg->set_msg_id(msg_id);
 		return msg;
@@ -112,8 +112,8 @@ void Connection::completed_receive(message_connection *tcp_conn, message_rx *req
 		auto action = std::make_shared<workerapi::LoadWeights>();
 		load_weights->get(*action);
 		actions.push_back(action);
-	} else if (auto infer = dynamic_cast<infer_action_rx_using_io_cache*>(req)) {
-		auto action = std::make_shared<InferUsingIOCache>(worker->runtime->manager->io_cache);
+	} else if (auto infer = dynamic_cast<infer_action_rx_using_io_pool*>(req)) {
+		auto action = std::make_shared<InferUsingIOPool>(worker->runtime->manager->host_io_pool);
 		infer->get(*action);
 		actions.push_back(action);
 	} else if (auto evict = dynamic_cast<evict_weights_action_rx*>(req)) {
@@ -151,7 +151,7 @@ void Connection::sendResult(std::shared_ptr<workerapi::Result> result) {
 		tx->set(*load_weights);
 		msg_tx_.send_message(*tx);
 	} else if (auto infer = std::dynamic_pointer_cast<InferResult>(result)) {
-		auto tx = new infer_result_tx_using_io_cache(worker->runtime->manager->io_cache);
+		auto tx = new infer_result_tx_using_io_pool(worker->runtime->manager->host_io_pool);
 		tx->set(*infer);
 		msg_tx_.send_message(*tx);
 	} else if (auto evict_weights = std::dynamic_pointer_cast<EvictWeightsResult>(result)) {

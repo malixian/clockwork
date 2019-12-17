@@ -125,7 +125,7 @@ private:
 
 		void run(cudaStream_t stream);
 		void process_completion();
-		void success(RuntimeModel* rm, std::shared_ptr<Allocation> workspace);
+		void success(RuntimeModel* rm, char* io_memory);
 		void cancel();
 	};
 
@@ -158,7 +158,7 @@ private:
 	std::shared_ptr<workerapi::Infer> action;
 
 	RuntimeModel* rm;
-	std::shared_ptr<Allocation> workspace;
+	char* io_memory;
 
 	CopyInputTaskImpl* copy_input = nullptr;
 	ExecTaskImpl* exec = nullptr;

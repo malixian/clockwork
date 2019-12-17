@@ -242,11 +242,11 @@ void EvictWeightsTask::run(cudaStream_t stream) {
 
 CopyInputTask::CopyInputTask(MemoryManager* manager, int model_id, uint64_t earliest, uint64_t latest, unsigned batch_size, size_t input_size, char* input) : 
 		manager(manager), model_id(model_id), earliest(earliest), latest(latest), batch_size(batch_size), input_size(input_size), input(input),
-		rm(nullptr), workspace(nullptr) {
+		rm(nullptr), io_memory(nullptr) {
 }
 
 CopyInputTask::~CopyInputTask() {
-	workspace = nullptr;
+	io_memory = nullptr;
 }
 
 uint64_t CopyInputTask::eligible() {
@@ -283,33 +283,34 @@ void CopyInputTask::run(cudaStream_t stream) {
 		throw TaskError(actionErrorInvalidInput, err.str());		
 	}
 
-	unsigned num_pages = rm->model->num_workspace_pages(batch_size, manager->workspace_cache->page_size);
-	this->workspace = manager->workspace_cache->alloc(num_pages, []{});
+	size_t io_memory_size = rm->model->io_memory_size(batch_size);
+	this->io_memory = manager->workspace_pool->alloc(io_memory_size);
 
-	if (this->workspace == nullptr) {
-		throw TaskError(actionErrorRuntimeError, "CopyInputTask failed to allocate workspace pages from cache");
+	if (this->io_memory == nullptr) {
+		throw TaskError(actionErrorRuntimeError, "CopyInputTask failed to allocate memory from io_pool");
 	}
 
 	this->record_async_begin(stream);
-	rm->model->transfer_input_to_device(batch_size, input, workspace->page_pointers, stream);
+	rm->model->transfer_input_to_device(batch_size, input, io_memory, stream);
 	this->record_async_end(stream);
 }
 
 void CopyInputTask::process_completion() {
 	telemetry->async_duration = this->async_duration();
-	this->success(rm, workspace);
+	this->success(rm, io_memory);
 }
 
 
 
-ExecTask::ExecTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, unsigned batch_size, std::shared_ptr<Allocation> workspace) : 
-		rm(rm), manager(manager), earliest(earliest), latest(latest), batch_size(batch_size), workspace(workspace),
+ExecTask::ExecTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, unsigned batch_size, char* io_memory) : 
+		rm(rm), manager(manager), earliest(earliest), latest(latest), batch_size(batch_size), io_memory(io_memory),
 		weights(nullptr) {
 }
 
 ExecTask::~ExecTask() {
 	weights = nullptr;
-	workspace = nullptr;
+	io_memory = nullptr;
+	workspace_memory = nullptr;
 }
 
 uint64_t ExecTask::eligible() {
@@ -337,8 +338,15 @@ void ExecTask::run(cudaStream_t stream) {
 		throw TaskError(actionErrorModelWeightsNotPresent, "ExecTask failed due to missing model weights");
 	}
 
+	size_t workspace_size = rm->model->workspace_memory_size(batch_size);
+	this->workspace_memory = manager->workspace_pool->alloc(workspace_size);
+
+	if (this->workspace_memory == nullptr) {
+		throw TaskError(actionErrorRuntimeError, "ExecTask failed to allocate memory from workspace_pool");
+	}
+
 	this->record_async_begin(stream);
-	rm->model->call(batch_size, weights->page_pointers, workspace->page_pointers, stream);
+	rm->model->call(batch_size, weights->page_pointers, io_memory, workspace_memory, stream);
 	this->record_async_end(stream);
 }
 
@@ -355,17 +363,20 @@ void ExecTask::process_completion() {
 		throw TaskError(actionErrorWeightsChanged, "ExecTask failed due to weights version mismatch");
 	}
 
+	manager->workspace_pool->free(this->workspace_memory);
+	this->workspace_memory = nullptr;
+
 	this->success();
 }
 
 
 
-CopyOutputTask::CopyOutputTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, unsigned batch_size, std::shared_ptr<Allocation> workspace) : 
-		rm(rm), manager(manager), earliest(earliest), latest(latest), batch_size(batch_size), workspace(workspace), output(nullptr) {
+CopyOutputTask::CopyOutputTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, unsigned batch_size, char* io_memory) : 
+		rm(rm), manager(manager), earliest(earliest), latest(latest), batch_size(batch_size), io_memory(io_memory), output(nullptr) {
 }
 
 CopyOutputTask::~CopyOutputTask() {
-	workspace = nullptr;
+	io_memory = nullptr;
 }
 
 uint64_t CopyOutputTask::eligible() {
@@ -382,13 +393,15 @@ void CopyOutputTask::run(cudaStream_t stream) {
 		throw TaskError(actionErrorCouldNotStartInTime, "CopyOutputTask could not start in time");
 	}
 
-	// TODO: use cudaHostMalloc managed host memory w/ paging
-	if (!manager->io_cache->take(output)) {
-		throw TaskError(actionErrorRuntimeError, "CopyOutputTask failed to allocate host pages for output");
+	// TODO: this should probably be preallocated; seems silly to fail here
+	size_t output_size = rm->model->output_size(batch_size);
+	this->output = manager->host_io_pool->alloc(output_size);
+	if (this->output == nullptr) {
+		throw TaskError(actionErrorRuntimeError, "CopyOutputTask failed to allocate memory from host_io_pool");
 	}
 
 	this->record_async_begin(stream);
-	rm->model->transfer_output_from_device(batch_size, output, workspace->page_pointers, stream);
+	rm->model->transfer_output_from_device(batch_size, output, io_memory, stream);
 	this->record_async_end(stream);
 }
 

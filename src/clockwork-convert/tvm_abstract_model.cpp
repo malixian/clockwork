@@ -244,75 +244,89 @@ std::vector<Page*> replicate_weights_mapping(Model &model, PageMappedStorage* ex
 	return pages;
 }
 
-PageMappedStorage* PageMappedStorage::calculate(Model &model, size_t weights_page_size, size_t workspace_page_size, PageMappedStorage* existing_weights_mapping) {
+PageMappedStorage* PageMappedStorage::calculate(Model &model, size_t weights_page_size, PageMappedStorage* existing_weights_mapping) {
+	std::vector<StorageLocation*> seen;
+
 	std::vector<StorageLocation*> weights_storage;
+	std::vector<StorageLocation*> io_storage;
 	std::vector<StorageLocation*> workspace_storage;
 
+	// Pull out storage locations that are model weights
 	for (auto &p : model.weights) {
-		if (p.second == nullptr) {
-			throw "p.second is nullptr";
-		}
-		if (p.second->tensor == nullptr) {
-			throw "tensor is nullptr";
-		}
-		if (p.second->tensor->storage == nullptr) {
-			throw "storage is nullptr";
-		}
+		CHECK(p.second != nullptr);
+		CHECK(p.second->tensor != nullptr);
+		CHECK(p.second->tensor->storage != nullptr);
+
 		weights_storage.push_back(p.second->tensor->storage);
+		seen.push_back(p.second->tensor->storage);
 	}
 
+	// Pull out storage locations that are model inputs
+	for (auto &p : model.inputs) {
+		CHECK(p.second != nullptr);
+		CHECK(p.second->tensor != nullptr);
+		CHECK(p.second->tensor->storage != nullptr);
+
+		StorageLocation* l = p.second->tensor->storage;
+
+		CHECK(std::find(seen.begin(), seen.end(), l) == seen.end()) << "Found storage location used for weights and input";
+
+		io_storage.push_back(l);
+		seen.push_back(l);
+	}
+
+	// Pull out storage locations that are model outputs
+	for (auto &output : model.outputs) {
+		CHECK(output != nullptr);
+		CHECK(output->tensor != nullptr);
+		CHECK(output->tensor->storage != nullptr);
+
+		StorageLocation* l = output->tensor->storage;
+
+		CHECK(std::find(seen.begin(), seen.end(), l) == seen.end()) << "Found storage location used for weights and output";
+
+		io_storage.push_back(l);
+		seen.push_back(l);
+	}
+
+	// The remaining storage locations are intermediate workspace
 	for (auto &l : model.storage_locations) {
-		if (std::find(weights_storage.begin(), weights_storage.end(), l) == weights_storage.end()) {
+		if (std::find(seen.begin(), seen.end(), l) == seen.end()) {
 			workspace_storage.push_back(l);
+			seen.push_back(l);
 		}
 	}
 
-	// Check sizes
+	// Weights storage locations must fit within the page size
 	for (StorageLocation* l : weights_storage) {
-		if (l->Size() > weights_page_size) {
-			std::stringstream e;
-			e << "Weights storage location " << l->id << " has size " << l->Size() << " > weights_page_size=" << weights_page_size;
-			throw e.str();
-		}
-	}
-	for (StorageLocation* l : workspace_storage) {
-		if (l->Size() > workspace_page_size) {
-			std::stringstream e;
-			e << "Workspace storage location " << l->id << " has size " << l->Size() << " > workspace_page_size=" << workspace_page_size;
-			throw e.str();
-		}
+		CHECK(l->Size() <= weights_page_size) 
+			<< "Weights storage location " << l->id << " has size " << l->Size() << " > weights_page_size=" << weights_page_size;
 	}
 
+	// Start constructing return value
 	auto mapped = new PageMappedStorage();
 
+	// Pack the weights onto pages, or use existing mapping if provided
 	if (existing_weights_mapping == nullptr) {
 		mapped->weights = pack(weights_storage, weights_page_size);
 		make_weights_lookup_table(model, mapped);
 	} else {
 		mapped->weights = replicate_weights_mapping(model, existing_weights_mapping);
 	}
-	mapped->workspace = pack(workspace_storage, workspace_page_size);
 
-	int maxWorkspacePages = 0;
+	// Calculate the maximum memory needed for transient workspace allocations
+	size_t max_transient_memory = 0;
 	for (Operation* &op : model.operations) {
-		int total_pages = 0;
-		int offset_in_page = 0;
-		for (size_t &alloc : op->allocs) {
-			if (offset_in_page + alloc > workspace_page_size) {
-				total_pages++;
-				offset_in_page = 0;
-			}
-			offset_in_page += alloc;
-		}
-		if (offset_in_page > 0) {
-			total_pages++;
-		}
-		if (total_pages > maxWorkspacePages) {
-			maxWorkspacePages = total_pages;
+		size_t op_transient_memory = 0;
+		for (size_t &alloc : op->allocs) op_transient_memory += alloc;
+		if (op_transient_memory > max_transient_memory) {
+			max_transient_memory = op_transient_memory;
 		}
 	}
 
-	mapped->allocs = maxWorkspacePages;
+	mapped->io_storage = io_storage;
+	mapped->workspace_storage = workspace_storage;
+	mapped->transient_memory = max_transient_memory;
 
 	return mapped;
 }
@@ -350,11 +364,6 @@ void printPageDef(clockwork::model::PageDef def, std::string prefix) {
 
 void printNewModel(clockwork::model::PageMappedModelDef model) {
 	std::cout << std::endl << "------------------ NEW MODEL ------------------" << std::endl;
-	std::cout << model.paged_required_memory << " required memory in paged-mode" << std::endl;
-	std::cout << model.minimum_required_memory << " required memory in non-paged mode (min necessary)" << std::endl;
-	std::cout << model.weights_memory << " total weights memory" << std::endl;
-	std::cout << (model.configured_weights_page_size * model.weights_pages.size()) << " total weights paged on " << model.weights_pages.size() << " pages of size " << model.configured_weights_page_size << std::endl;
-	std::cout << model.configured_workspace_page_size << " workspace pages of size " << model.configured_workspace_page_size << " needed" << std::endl;
 	std::cout << model.so_functions.size() << " SO functions" << std::endl;
 	std::cout << model.ops.size() << " ops:" << std::endl;
 	for (unsigned i = 0; i < model.ops.size(); i++) {
@@ -373,32 +382,28 @@ void printNewModel(clockwork::model::PageMappedModelDef model) {
 		printPageDef(model.weights_pages[i], "   ");
 	}
 
+	std::cout << model.weights_memory_paged << " required in paged-mode" << std::endl;
+	std::cout << model.weights_memory << " required memory in non-paged mode" << std::endl;
+	std::cout << model.io_memory << " io_memory" << std::endl;
+	std::cout << model.workspace_memory << " workspace_memory" << std::endl;
+	std::cout << model.weights_pages.size() << " weights pages of size " << model.configured_weights_page_size << std::endl;
 }
 
-void makeModelDef(Model &model, size_t weights_page_size, size_t workspace_page_size, clockwork::model::PageMappedModelDef &output, char* &weights, int &weightsSize, PageMappedStorage* &mapped, PageMappedStorage* existing_weights_mapping) {
-	mapped = PageMappedStorage::calculate(model, weights_page_size, workspace_page_size, existing_weights_mapping);
+void makeModelDef(Model &model, size_t weights_page_size, clockwork::model::PageMappedModelDef &output, char* &weights, int &weightsSize, PageMappedStorage* &mapped, PageMappedStorage* existing_weights_mapping) {
+	mapped = PageMappedStorage::calculate(model, weights_page_size, existing_weights_mapping);
 
-	output.minimum_required_memory = 0;
-	for (StorageLocation* &location : model.storage_locations) {
-		output.minimum_required_memory += location->Size();
-	}
 
+	// Populate the 'weights_memory' field of the ModelDef
 	output.weights_memory = 0;
 	for (auto &p : model.weights) {
 		output.weights_memory += p.second->tensor->Size();
 	}
 
-	unsigned num_weights_pages = mapped->weights.size();
-	unsigned num_workspace_pages = mapped->workspace.size() + mapped->allocs;
-	unsigned total_pages = num_weights_pages + num_workspace_pages;
-
 	output.configured_weights_page_size = weights_page_size;
-	output.configured_workspace_page_size = workspace_page_size;
-
-	output.num_workspace_pages = num_workspace_pages;
-	output.paged_required_memory = num_workspace_pages * workspace_page_size + num_weights_pages * weights_page_size;
+	output.weights_memory_paged = mapped->weights.size() * weights_page_size;
 
 
+	// Populate the 'weights_pages' field of the ModelDef
 	uint64_t current_offset = 0;
 	for (Page* &page : mapped->weights) {
 		clockwork::model::PageDef pagedef{current_offset, page->Size()};
@@ -406,6 +411,7 @@ void makeModelDef(Model &model, size_t weights_page_size, size_t workspace_page_
 		current_offset += pagedef.size;
 	}
 
+	// Populate the 'so_functions' field of the ModelDef
 	std::unordered_map<std::string, int> so_functions;
 	for (Operation* &operation : model.operations) {
 		if (so_functions.find(operation->func_name) == so_functions.end()) {
@@ -422,20 +428,54 @@ void makeModelDef(Model &model, size_t weights_page_size, size_t workspace_page_
 	};
 	std::unordered_map<int, PagePointer> storage_location_pointers;
 
+	// Map the weights to pages
+	size_t current_page_offset = 0;
+	unsigned current_page = 0;
 	current_offset = 0;
-	for (unsigned i = 0; i < mapped->weights.size() + mapped->workspace.size(); i++) {
-		// Construct mapping for storage locations
-		Page* page = i < mapped->weights.size() ? mapped->weights[i] : mapped->workspace[i-mapped->weights.size()];
-		uint64_t current_page_offset = 0;
+	for (Page* page : mapped->weights) {
+		current_page_offset = 0;
 		for (StorageLocation* &location : page->used_by) {
 			CHECK(storage_location_pointers.find(location->id) == storage_location_pointers.end())
 				<< "Storage location " << location->id << " assigned to multiple pages";
-			storage_location_pointers[location->id] = PagePointer{i, current_page_offset, current_offset};
+			storage_location_pointers[location->id] = PagePointer{current_page, current_page_offset, current_offset};
 			current_page_offset += location->Size();
 			current_offset += location->Size();
 		}
+		current_page++;
 	}
 
+	// The next "page" is all inputs and outputs
+	unsigned io_page = current_page;
+	current_page_offset = 0;
+	for (StorageLocation* location : mapped->io_storage) {
+		CHECK(storage_location_pointers.find(location->id) == storage_location_pointers.end())
+			<< "IO Storage location " << location->id << " assigned to multiple pages";
+		storage_location_pointers[location->id] = PagePointer{current_page, current_page_offset, current_offset};
+		current_page_offset += location->Size();
+		current_offset += location->Size();
+	}
+	current_page++;
+
+	// Also save how much io memory is needed
+	output.io_memory = current_page_offset;
+
+
+	// The next "page" is all workspace
+	unsigned workspace_page = current_page;
+	current_page_offset = 0;
+	for (StorageLocation* location : mapped->workspace_storage) {
+		CHECK(storage_location_pointers.find(location->id) == storage_location_pointers.end())
+			<< "Workspace Storage location " << location->id << " assigned to multiple pages";
+		storage_location_pointers[location->id] = PagePointer{current_page, current_page_offset, current_offset};
+		current_page_offset += location->Size();
+		current_offset += location->Size();
+	}
+
+	// Also save how much workspace memory is needed
+	size_t transient_memory_begin_offset = current_page_offset;
+	output.workspace_memory = current_page_offset + mapped->transient_memory;
+
+	// Now create the op defs
 	for (Operation* &operation : model.operations) {
 		clockwork::model::PageMappedOpDef opdef;
 		opdef.so_function = so_functions[operation->func_name];
@@ -455,17 +495,12 @@ void makeModelDef(Model &model, size_t weights_page_size, size_t workspace_page_
 			opdef.inputs.push_back(tensordef);
 		}
 
-		int current_workspace_page = mapped->weights.size() + mapped->workspace.size();
+		// Point the transient workspace allocs to the appropriate place
 		int current_workspace_offset = 0;
 		for (size_t alloc : operation->allocs) {
-			if (current_workspace_offset + alloc > workspace_page_size) {
-				current_workspace_page++;
-				current_workspace_offset = 0;
-			}
-
 			clockwork::model::PageMappedWorkspaceAllocDef allocdef;
-			allocdef.page = current_workspace_page;
-			allocdef.page_offset = current_workspace_offset;
+			allocdef.page = workspace_page;
+			allocdef.page_offset = transient_memory_begin_offset + current_workspace_offset;
 			allocdef.size = alloc;
 
 			current_workspace_offset += alloc;
@@ -476,6 +511,7 @@ void makeModelDef(Model &model, size_t weights_page_size, size_t workspace_page_
 		output.ops.push_back(opdef);
 	}
 
+	// Now save the input locations
 	for (auto &p : model.inputs) {
 		Tensor* tensor = p.second->tensor;
 		PagePointer pageptr = storage_location_pointers[tensor->storage->id];
@@ -490,6 +526,7 @@ void makeModelDef(Model &model, size_t weights_page_size, size_t workspace_page_
 		output.inputs.push_back(tensordef);
 	}
 
+	// Now save the output locations
 	for (Output* &o : model.outputs) {
 		Tensor* tensor = o->tensor;
 		PagePointer pageptr = storage_location_pointers[tensor->storage->id];
