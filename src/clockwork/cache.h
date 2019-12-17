@@ -154,6 +154,17 @@ public:
 
 };
 
+class CUDAPageCache : public PageCache {
+private:
+	std::vector<char*> baseptrs;
+public:
+	CUDAPageCache(std::vector<std::pair<char*, uint64_t>> baseptrs, uint64_t total_size, uint64_t page_size, const bool allowEvictions);
+	~CUDAPageCache();
+};
+
+PageCache* make_GPU_cache(size_t cache_size, size_t page_size);
+PageCache* make_GPU_cache(size_t cuda_malloc_size, unsigned num_mallocs, size_t page_size);
+
 }
 
 #endif

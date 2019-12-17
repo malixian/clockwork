@@ -116,41 +116,11 @@ void IOCache::release(char* ptr) {
 	ptrs.push(ptr);
 }
 
-CUDAPageCache::CUDAPageCache(std::vector<std::pair<char*, uint64_t>> baseptrs, uint64_t total_size, uint64_t page_size, const bool allowEvictions) :
-		PageCache(baseptrs, total_size, page_size, allowEvictions) {
-	for (auto &p : baseptrs) {
-		this->baseptrs.push_back(p.first);
-	}
-}
-
-CUDAPageCache::~CUDAPageCache() {
-	for (char* baseptr : baseptrs) {
-		CUDA_CALL(cudaFree(baseptr));
-	}
-}
-
 IOCache* make_IO_cache() {
 	 // TODO: don't hard-code
 	size_t cache_size = 512L * 1024L * 1024L;
 	size_t page_size = 64L * 1024L * 1024L;
 	return new IOCache(cache_size, page_size);
-}
-
-PageCache* make_GPU_cache(size_t cache_size, size_t page_size) {
-	return make_GPU_cache(cache_size, 1, page_size);
-}
-
-PageCache* make_GPU_cache(size_t cuda_malloc_size, unsigned num_mallocs, size_t page_size) {
-	cuda_malloc_size = page_size * (cuda_malloc_size / page_size);
-
-	std::vector<std::pair<char*, size_t>> baseptrs;
-	for (unsigned i = 0; i < num_mallocs; i++) {
-		void* baseptr;
-		CUDA_CALL(cudaMalloc(&baseptr, cuda_malloc_size));
-		baseptrs.push_back(std::pair<char*, size_t>(static_cast<char*>(baseptr), cuda_malloc_size));
-	}
-
-	return new CUDAPageCache(baseptrs, cuda_malloc_size * num_mallocs, page_size, false);
 }
 
 }
