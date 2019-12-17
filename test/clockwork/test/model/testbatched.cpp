@@ -66,13 +66,14 @@ TEST_CASE("Batched models individually", "[batched]") {
 
         char actual_output[output_size * batch_size];
 
-        auto workspace_pages = make_cuda_pages(workspace_page_size, model->num_workspace_pages(workspace_page_size));
+        auto io_alloc = make_cuda_pages(model->io_memory_size(), 1);
+        auto workspace_alloc = make_cuda_pages(model->workspace_memory_size(), 1);
 
-        model->transfer_input_to_device(input, workspace_pages->pages, NULL);
+        model->transfer_input_to_device(input, io_alloc->ptr, NULL);
         cuda_synchronize(NULL);
-        model->call(weights_pages->pages, workspace_pages->pages, NULL);
+        model->call(weights_pages->pages, io_alloc->ptr, workspace_alloc->ptr, NULL);
         cuda_synchronize(NULL);
-        model->transfer_output_from_device(actual_output, workspace_pages->pages, NULL);
+        model->transfer_output_from_device(actual_output, io_alloc->ptr, NULL);
         cuda_synchronize(NULL);
 
         float* actualOutputF = static_cast<float*>(static_cast<void*>(actual_output));
@@ -146,13 +147,14 @@ TEST_CASE("Batched models with partial batches", "[batched]") {
         char* expected_output = batch(single_output, batch_size, model->padded_batch_size(batch_size));
         char actual_output[output_size * model->padded_batch_size(batch_size)];
 
-        auto workspace_pages = make_cuda_pages(workspace_page_size, model->num_workspace_pages(batch_size, workspace_page_size));
+        auto io_alloc = make_cuda_pages(model->io_memory_size(batch_size), 1);
+        auto workspace_alloc = make_cuda_pages(model->workspace_memory_size(batch_size), 1);
 
-        model->transfer_input_to_device(batch_size, input, workspace_pages->pages, NULL);
+        model->transfer_input_to_device(batch_size, input, io_alloc->ptr, NULL);
         cuda_synchronize(NULL);
-        model->call(batch_size, weights_pages->pages, workspace_pages->pages, NULL);
+        model->call(batch_size, weights_pages->pages, io_alloc->ptr, workspace_alloc->ptr, NULL);
         cuda_synchronize(NULL);
-        model->transfer_output_from_device(batch_size, actual_output, workspace_pages->pages, NULL);
+        model->transfer_output_from_device(batch_size, actual_output, io_alloc->ptr, NULL);
         cuda_synchronize(NULL);
 
         float* actualOutputF = static_cast<float*>(static_cast<void*>(actual_output));

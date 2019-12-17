@@ -10,63 +10,79 @@
 using namespace clockwork::model;
 
 void assert_is_cool(Model* model) {
-    int weights_page_size = 16 * 1024 * 1024;
-    int workspace_page_size = 64 * 1024 * 1024;
-    char input[224*224*3*4];
-    char output[1000*1*4];
+    size_t weights_page_size = 16 * 1024 * 1024;
+    size_t workspace_page_size = 64 * 1024 * 1024;
+    size_t input_size = 224*224*3*4;
+    size_t output_size = 1000 * 1 * 4;
+    char input[input_size];
+    char output[output_size];
+
     std::vector<char*> weights_pages;
-    std::vector<char*> workspace_pages;
+    char* io_memory = nullptr;
+    char* workspace_memory = nullptr;
+
 
     REQUIRE_THROWS(model->uninstantiate_model_on_host());
     REQUIRE_THROWS(model->num_weights_pages(weights_page_size));
-    REQUIRE_THROWS(model->num_workspace_pages(workspace_page_size));
+    REQUIRE_THROWS(model->workspace_memory_size());
+    REQUIRE_THROWS(model->io_memory_size());
     REQUIRE_THROWS(model->input_size());
     REQUIRE_THROWS(model->output_size());
-    REQUIRE_THROWS(model->call(weights_pages, workspace_pages, NULL));
+    REQUIRE_THROWS(model->call(weights_pages, io_memory, workspace_memory, NULL));
 }
 
 void assert_is_warm(Model* model) {
-    int weights_page_size = 16 * 1024 * 1024;
-    int workspace_page_size = 64 * 1024 * 1024;
-    int input_size = 224*224*3*4;
-    int output_size = 1000 * 1 * 4;
+    size_t weights_page_size = 16 * 1024 * 1024;
+    size_t workspace_page_size = 64 * 1024 * 1024;
+    size_t input_size = 224*224*3*4;
+    size_t output_size = 1000 * 1 * 4;
     char input[input_size];
     char output[output_size];
+
     int num_weights_pages = 5;
-    int num_workspace_pages = 2;
+    size_t io_memory_size = 606112;
+    size_t workspace_memory_size = 8531968;
+
     std::vector<char*> weights_pages;
-    std::vector<char*> workspace_pages;
+    char* io_memory = nullptr;
+    char* workspace_memory = nullptr;
 
     REQUIRE_THROWS(model->instantiate_model_on_host());
-    REQUIRE_THROWS(model->call(weights_pages, workspace_pages, NULL));
+    REQUIRE_THROWS(model->call(weights_pages, io_memory, workspace_memory, NULL));
 
     REQUIRE(num_weights_pages == model->num_weights_pages(weights_page_size));
-    REQUIRE(num_workspace_pages == model->num_workspace_pages(workspace_page_size));
+    REQUIRE(io_memory_size == model->io_memory_size());
+    REQUIRE(workspace_memory_size == model->workspace_memory_size());
     REQUIRE(input_size == model->input_size());
     REQUIRE(output_size == model->output_size());
 }
 
 void assert_is_hot(Model* model) {
-    int weights_page_size = 16 * 1024 * 1024;
-    int workspace_page_size = 64 * 1024 * 1024;
-    int input_size = 224*224*3*4;
-    int output_size = 1000 * 1 * 4;
+    size_t weights_page_size = 16 * 1024 * 1024;
+    size_t workspace_page_size = 64 * 1024 * 1024;
+    size_t input_size = 224*224*3*4;
+    size_t output_size = 1000 * 1 * 4;
     char input[input_size];
     char output[output_size];
+
     int num_weights_pages = 5;
-    int num_workspace_pages = 2;
+    size_t io_memory_size = 606112;
+    size_t workspace_memory_size = 8531968;
+
     auto weights_pages = make_cuda_pages(weights_page_size, num_weights_pages);
-    auto workspace_pages = make_cuda_pages(workspace_page_size, num_workspace_pages);
+    auto io_alloc = make_cuda_pages(io_memory_size, 1);
+    auto workspace_alloc = make_cuda_pages(workspace_memory_size, 1);
  
     REQUIRE(num_weights_pages == model->num_weights_pages(weights_page_size));
-    REQUIRE(num_workspace_pages == model->num_workspace_pages(workspace_page_size));
+    REQUIRE(io_memory_size == model->io_memory_size());
+    REQUIRE(workspace_memory_size == model->workspace_memory_size());
     REQUIRE(input_size == model->input_size());
     REQUIRE(output_size == model->output_size());
 
     REQUIRE_NOTHROW(model->transfer_weights_to_device(weights_pages->pages, NULL));
-    REQUIRE_NOTHROW(model->transfer_input_to_device(input, workspace_pages->pages, NULL));
-    REQUIRE_NOTHROW(model->transfer_output_from_device(output, workspace_pages->pages, NULL));
-    REQUIRE_NOTHROW(model->call(weights_pages->pages, workspace_pages->pages, NULL));
+    REQUIRE_NOTHROW(model->transfer_input_to_device(input, io_alloc->ptr, NULL));
+    REQUIRE_NOTHROW(model->call(weights_pages->pages, io_alloc->ptr, workspace_alloc->ptr, NULL));
+    REQUIRE_NOTHROW(model->transfer_output_from_device(output, io_alloc->ptr, NULL));
 
     cuda_synchronize(NULL);
 }
@@ -95,7 +111,8 @@ TEST_CASE("Model lifecycle 1", "[model]") {
     REQUIRE_THROWS(model->uninstantiate_model_on_host());
 
     REQUIRE_THROWS(model->num_weights_pages(page_size));
-    REQUIRE_THROWS(model->num_workspace_pages(page_size));
+    REQUIRE_THROWS(model->io_memory_size());
+    REQUIRE_THROWS(model->workspace_memory_size());
 
     REQUIRE_NOTHROW(model->instantiate_model_on_host());
     REQUIRE_NOTHROW(model->uninstantiate_model_on_host());
@@ -160,10 +177,14 @@ TEST_CASE("Model produces correct output", "[e2e] [model]") {
     int workspace_page_size = 64 * 1024 * 1024;
     int input_size = 224*224*3*4;
     int output_size = 1000 * 1 * 4;
+
     int num_weights_pages = 5;
-    int num_workspace_pages = 2;
+    size_t io_memory_size = 606112;
+    size_t workspace_memory_size = 8531968;
+
     auto weights_pages = make_cuda_pages(weights_page_size, num_weights_pages);
-    auto workspace_pages = make_cuda_pages(workspace_page_size, num_workspace_pages);
+    auto io_alloc = make_cuda_pages(io_memory_size, 1);
+    auto workspace_alloc = make_cuda_pages(workspace_memory_size, 1);
 
     std::string f = clockwork::util::get_example_model();
 
@@ -182,9 +203,9 @@ TEST_CASE("Model produces correct output", "[e2e] [model]") {
     clockwork::util::readFileAsString(output_filename, expectedOutput);
 
     REQUIRE(input.size() == input_size);
-    model->transfer_input_to_device(input.data(), workspace_pages->pages, NULL);
-    model->call(weights_pages->pages, workspace_pages->pages, NULL);
-    model->transfer_output_from_device(actualOutput, workspace_pages->pages, NULL);
+    model->transfer_input_to_device(input.data(), io_alloc->ptr, NULL);
+    model->call(weights_pages->pages, io_alloc->ptr, workspace_alloc->ptr, NULL);
+    model->transfer_output_from_device(actualOutput, io_alloc->ptr, NULL);
 
     REQUIRE(output_size == expectedOutput.size());
 
@@ -236,13 +257,14 @@ TEST_CASE("Batched model produces correct output", "[e2e2] [model]") {
     std::memcpy(batched_expected_output, expectedOutput.data(), expectedOutput.size());
     std::memcpy(batched_expected_output + expectedOutput.size(), expectedOutput.data(), expectedOutput.size());
 
+    auto io_alloc = make_cuda_pages(model->io_memory_size(), 1);
+    auto workspace_alloc = make_cuda_pages(model->workspace_memory_size(), 1);
 
-    auto workspace_pages = make_cuda_pages(workspace_page_size, model->num_workspace_pages(workspace_page_size));
-    model->transfer_input_to_device(batched_input, workspace_pages->pages, NULL);
-    model->call(weights_pages->pages, workspace_pages->pages, NULL);
+    model->transfer_input_to_device(batched_input, io_alloc->ptr, NULL);
+    model->call(weights_pages->pages, io_alloc->ptr, workspace_alloc->ptr, NULL);
 
     char actualOutput[output_size];
-    model->transfer_output_from_device(actualOutput, workspace_pages->pages, NULL);
+    model->transfer_output_from_device(actualOutput, io_alloc->ptr, NULL);
 
     cuda_synchronize(NULL);
 

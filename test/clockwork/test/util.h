@@ -28,9 +28,9 @@ namespace model {
 
 class cuda_page_alloc {
 private:
-	void* base_ptr;
-
+	void* baseptr;
 public:
+	char* ptr;
 	std::vector<char*> pages;
 
 	cuda_page_alloc(int page_size, int num_pages);

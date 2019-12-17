@@ -64,7 +64,7 @@ std::shared_ptr<workerapi::Infer> infer_action2(ClockworkWorker* worker) {
     action->gpu_id = 0;
     action->batch_size = 1;
     action->input_size = 602112; // Hard coded for the example model
-    worker->runtime->manager->io_cache->take(action->input);
+    action->input = worker->runtime->manager->host_io_pool->alloc(action->input_size);
     return action;
 }
 

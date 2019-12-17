@@ -476,41 +476,6 @@ TEST_CASE("Linked List RemoveMiddle", "[linkedlist]") {
 
 }
 
-TEST_CASE("Test IOCache", "[iocache]") {
-
-    using namespace clockwork;
-
-     // TODO: don't hard-code
-    size_t cache_size = 512L * 1024L * 1024L;
-    size_t page_size = 16L * 1024L * 1024L;
-    int num_pages = cache_size / page_size;
-    IOCache cache(cache_size, page_size);
-
-    char* ptr = nullptr;
-    for (unsigned i = 0; i < num_pages; i++) {
-        REQUIRE(cache.take(ptr));
-    }
-    REQUIRE(!cache.take(ptr));
-
-}
-
-TEST_CASE("Test IOCache Release", "[iocache]") {
-
-    using namespace clockwork;
-
-     // TODO: don't hard-code
-    size_t cache_size = 512L * 1024L * 1024L;
-    size_t page_size = 16L * 1024L * 1024L;
-    int num_pages = cache_size / page_size;
-    IOCache cache(cache_size, page_size);
-
-    char* ptr = nullptr;
-    for (unsigned i = 0; i < num_pages * 3; i++) {
-        REQUIRE(cache.take(ptr));
-        cache.release(ptr);
-    }
-}
-
 
 TEST_CASE("Multiple Baseptrs", "[cache]") {
 

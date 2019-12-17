@@ -119,16 +119,17 @@ namespace model {
 
 
 cuda_page_alloc::cuda_page_alloc(int page_size, int num_pages) {
-    cudaError_t status = cudaMalloc(&base_ptr, page_size * num_pages);
+    cudaError_t status = cudaMalloc(&baseptr, page_size * num_pages);
     REQUIRE(status == cudaSuccess);
+    ptr = static_cast<char*>(baseptr);
 
     for (unsigned i = 0; i < num_pages; i++) {
-        pages.push_back(static_cast<char*>(base_ptr) + (i * page_size));
+        pages.push_back(static_cast<char*>(ptr) + (i * page_size));
     }
 }
 
 cuda_page_alloc::~cuda_page_alloc() {
-    cudaError_t status = cudaFree(base_ptr);
+    cudaError_t status = cudaFree(baseptr);
     REQUIRE(status == cudaSuccess);
 }
 
