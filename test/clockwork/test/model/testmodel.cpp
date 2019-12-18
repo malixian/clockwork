@@ -230,7 +230,7 @@ TEST_CASE("Batched model produces correct output", "[e2e2] [model]") {
     int input_size = 2*224*224*3*4;
     int output_size = 1000 * 2 * 4;
 
-    std::string f = clockwork::util::get_example_model("resnet18_tesla-m40_batchsize2");
+    std::string f = clockwork::util::get_example_batched_model();
 
     Model* model = Model::loadFromDisk(f+".2.so", f+".2.clockwork", f+".clockwork_params");
     

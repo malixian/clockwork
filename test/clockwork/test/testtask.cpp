@@ -297,7 +297,11 @@ std::shared_ptr<MemoryManager> make_manager(
         size_t io_pool_size,
         size_t workspace_pool_size,
         size_t host_io_pool_size) {
-    return std::make_shared<MemoryManager>(weights_cache_size, weights_page_size, io_pool_size, workspace_pool_size, host_io_pool_size);
+    return std::make_shared<MemoryManager>(
+        weights_cache_size, weights_page_size, 
+        io_pool_size, 
+        workspace_pool_size, 
+        host_io_pool_size);
 }
 
 std::shared_ptr<MemoryManager> make_manager() {
@@ -792,7 +796,7 @@ TEST_CASE("Input Infer and Output Batched", "[task]") {
     auto stream = std::make_shared<Autostream>();
     auto manager = make_manager();
 
-    std::string model_path = clockwork::util::get_example_model("resnet18_tesla-m40");
+    std::string model_path = clockwork::util::get_example_batched_model();
 
     TestLoadModelFromDiskTask loadmodel(manager.get(),0, model_path, util::now(), util::now()+1000000000);
 
@@ -820,43 +824,43 @@ TEST_CASE("Input Infer and Output Batched", "[task]") {
 
         TestCopyInputTask copyinput(manager.get(),0, 0, util::now() + 1000000000, batch_size, model->input_size(batch_size), input);
         copyinput.run(stream->stream);
-        INFO("Error " << copyinput.status_code << ": " << copyinput.error_message);
+        INFO("B-" << batch_size << " Error " << copyinput.status_code << ": " << copyinput.error_message);
         REQUIRE(!copyinput.is_error);
         
         while (!copyinput.is_complete());
         copyinput.process_completion();
 
-        INFO("Error " << copyinput.status_code << ": " << copyinput.error_message);
+        INFO("B-" << batch_size << " Error " << copyinput.status_code << ": " << copyinput.error_message);
         REQUIRE(!copyinput.is_error);
         REQUIRE(copyinput.is_success);
         REQUIRE(copyinput.io_memory != nullptr);
 
         TestInferTask infer(rm, manager.get(),0, util::now() + 1000000000, batch_size, copyinput.io_memory);
         infer.run(stream->stream);
-        INFO("Error " << infer.status_code << ": " << infer.error_message);
+        INFO("B-" << batch_size << " Error " << infer.status_code << ": " << infer.error_message);
         REQUIRE(!infer.is_error);
 
         while (!infer.is_complete());
         infer.process_completion();
 
-        INFO("Error " << infer.status_code << ": " << infer.error_message);
+        INFO("B-" << batch_size << " Error " << infer.status_code << ": " << infer.error_message);
         REQUIRE(!infer.is_error);
         REQUIRE(infer.is_success);
 
         TestCopyOutputTask copyoutput(rm, manager.get(),0, util::now() + 1000000000, batch_size, copyinput.io_memory);
         copyoutput.run(stream->stream);
-        INFO("Error " << copyoutput.status_code << ": " << copyoutput.error_message);
+        INFO("B-" << batch_size << " Error " << copyoutput.status_code << ": " << copyoutput.error_message);
         REQUIRE(!copyoutput.is_error);
 
         while (!copyoutput.is_complete());
         copyoutput.process_completion();
 
-        INFO("Error " << copyoutput.status_code << ": " << copyoutput.error_message);
+        INFO("B-" << batch_size << " Error " << copyoutput.status_code << ": " << copyoutput.error_message);
         REQUIRE(!copyoutput.is_error);
         REQUIRE(copyoutput.is_success);
 
         manager->host_io_pool->free(copyoutput.output);
-        manager->workspace_pool->free(copyinput.io_memory);
+        manager->io_pool->free(copyinput.io_memory);
         manager->host_io_pool->free(input);
     }
 }

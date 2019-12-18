@@ -78,14 +78,14 @@ public:
 	ClockworkRuntime() {
 		size_t weights_cache_size = 10L * 1024L * 1024L * 1024L; // 10 GB hard-coded weights cache for now
 		size_t weights_cache_page_size = 16L * 1024L * 1024L; // 16MB hard-coded weights cache page size
-		size_t workspace_pool_size = 512L * 1024L * 1024L;
 		size_t io_pool_size = 128L * 1024L * 1024L;
+		size_t workspace_pool_size = 512L * 1024L * 1024L;
 		size_t host_io_pool_size = 256L * 1024L * 1024L; 
 
 		manager = new MemoryManager(
 			weights_cache_size, weights_cache_page_size,
-			workspace_pool_size,
 			io_pool_size,
+			workspace_pool_size,
 			host_io_pool_size
 		);
 

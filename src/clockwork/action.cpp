@@ -343,7 +343,11 @@ InferAction::~InferAction() {
 	if (copy_input != nullptr) delete copy_input;
 	if (exec != nullptr) delete exec;
 	if (copy_output != nullptr) delete copy_output;
-	io_memory = nullptr;
+	
+	if (io_memory != nullptr) {
+		runtime->manager->io_pool->free(io_memory);
+		io_memory = nullptr;
+	}
 }
 
 void InferAction::submit() {
@@ -352,8 +356,10 @@ void InferAction::submit() {
 }
 
 void InferAction::handle_completion(char* output) {
-	runtime->manager->io_pool->free(io_memory);
-	io_memory = nullptr;
+	if (io_memory != nullptr) {
+		runtime->manager->io_pool->free(io_memory);
+		io_memory = nullptr;
+	}
 
 	auto result = std::make_shared<workerapi::InferResult>();
 

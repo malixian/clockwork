@@ -87,8 +87,8 @@ public:
 	PageCache* weights_cache; // Device-side page cache for model weights
 	// TODO: host-side weights cache
 
-	MemoryPool* workspace_pool; // Device-side memory pool for inference workspace
 	MemoryPool* io_pool; // Device-side memory pool for inference inputs and outputs
+	MemoryPool* workspace_pool; // Device-side memory pool for inference workspace
 
 	MemoryPool* host_io_pool; // Host-side memory pool for inference inputs and outputs
 
@@ -97,8 +97,8 @@ public:
 
 	MemoryManager(
 		size_t weights_cache_size, size_t weights_cache_page_size,
-		size_t workspace_pool_size,
 		size_t io_pool_size,
+		size_t workspace_pool_size,
 		size_t host_io_pool_size
 	);
 	~MemoryManager();

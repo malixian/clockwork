@@ -284,7 +284,7 @@ void CopyInputTask::run(cudaStream_t stream) {
 	}
 
 	size_t io_memory_size = rm->model->io_memory_size(batch_size);
-	this->io_memory = manager->workspace_pool->alloc(io_memory_size);
+	this->io_memory = manager->io_pool->alloc(io_memory_size);
 
 	if (this->io_memory == nullptr) {
 		throw TaskError(actionErrorRuntimeError, "CopyInputTask failed to allocate memory from io_pool");
@@ -309,8 +309,11 @@ ExecTask::ExecTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, 
 
 ExecTask::~ExecTask() {
 	weights = nullptr;
-	io_memory = nullptr;
-	workspace_memory = nullptr;
+
+	if (workspace_memory != nullptr) {
+		manager->workspace_pool->free(workspace_memory);
+		workspace_memory = nullptr;
+	}
 }
 
 uint64_t ExecTask::eligible() {
@@ -342,6 +345,7 @@ void ExecTask::run(cudaStream_t stream) {
 	this->workspace_memory = manager->workspace_pool->alloc(workspace_size);
 
 	if (this->workspace_memory == nullptr) {
+		std::cout << "Trying to alloc " << workspace_size << " from " << manager->workspace_pool->size << std::endl;
 		throw TaskError(actionErrorRuntimeError, "ExecTask failed to allocate memory from workspace_pool");
 	}
 
@@ -353,6 +357,11 @@ void ExecTask::run(cudaStream_t stream) {
 void ExecTask::process_completion() {
 	telemetry->async_duration = this->async_duration();
 
+	if (workspace_memory != nullptr) {
+		manager->workspace_pool->free(workspace_memory);
+		workspace_memory = nullptr;
+	}
+
 	rm->lock();
 
 	int current_weights_version = rm->version;
@@ -362,9 +371,6 @@ void ExecTask::process_completion() {
 	if (this->weights_version != current_weights_version || weights->evicted) {
 		throw TaskError(actionErrorWeightsChanged, "ExecTask failed due to weights version mismatch");
 	}
-
-	manager->workspace_pool->free(this->workspace_memory);
-	this->workspace_memory = nullptr;
 
 	this->success();
 }
@@ -376,7 +382,6 @@ CopyOutputTask::CopyOutputTask(RuntimeModel* rm, MemoryManager* manager, uint64_
 }
 
 CopyOutputTask::~CopyOutputTask() {
-	io_memory = nullptr;
 }
 
 uint64_t CopyOutputTask::eligible() {

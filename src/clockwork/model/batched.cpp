@@ -40,8 +40,8 @@ void BatchedModel::instantiate_models_on_host() {
 			expected_input_size = single_input_size;
 		} else {
 			CHECK(expected_input_size == single_input_size) 
-				<< "Inconsistent input sizes between batch variants " 
-				<< expected_input_size << " and " << single_input_size;
+				<< "Inconsistent input sizes between batch variants "
+				<< "b=" << batch_size << " has  " << single_input_size << " per input, expected " << expected_input_size;
 		}
 
 		unsigned single_output_size = model->output_size() / batch_size;

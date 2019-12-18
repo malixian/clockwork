@@ -81,22 +81,22 @@ bool ModelStore::put_if_absent(int model_id, RuntimeModel* model) {
 
 MemoryManager::MemoryManager(
 		size_t weights_cache_size, size_t weights_cache_page_size,
-		size_t workspace_pool_size,
 		size_t io_pool_size,
+		size_t workspace_pool_size,
 		size_t host_io_pool_size) :
 			weights_cache(make_GPU_cache(weights_cache_size, weights_cache_page_size)),
-			workspace_pool(CUDAMemoryPool::create(workspace_pool_size)),
 			io_pool(CUDAMemoryPool::create(io_pool_size)),
+			workspace_pool(CUDAMemoryPool::create(workspace_pool_size)),
 			host_io_pool(CUDAHostMemoryPool::create(host_io_pool_size)),
 			models(new ModelStore()) {
 }
 
 MemoryManager::~MemoryManager() {
 	delete models;
-	delete host_io_pool;
 	delete weights_cache;
 	delete io_pool;
 	delete workspace_pool;
+	delete host_io_pool;
 }
 
 
