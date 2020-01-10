@@ -91,6 +91,10 @@ message_rx* Connection::new_rx_message(message_connection *tcp_conn, uint64_t he
 		auto msg = new evict_weights_action_rx();
 		msg->set_msg_id(msg_id);
 		return msg;
+	} else if (msg_type == ACT_CLEAR_CACHE) {
+		auto msg = new clear_cache_action_rx();
+		msg->set_msg_id(msg_id);
+		return msg;
 	}
 	
 	CHECK(false) << "Unsupported msg_type " << msg_type;
@@ -119,6 +123,14 @@ void Connection::completed_receive(message_connection *tcp_conn, message_rx *req
 	} else if (auto evict = dynamic_cast<evict_weights_action_rx*>(req)) {
 		auto action = std::make_shared<workerapi::EvictWeights>();
 		evict->get(*action);
+		actions.push_back(action);
+	} else if (auto clear_cache = dynamic_cast<clear_cache_action_rx*>(req)) {
+		auto action = std::make_shared<workerapi::ClearCache>();
+		clear_cache->get(*action);
+		actions.push_back(action);
+	} else if (auto get_worker_state = dynamic_cast<get_worker_state_action_rx*>(req)) {
+		auto action = std::make_shared<workerapi::GetWorkerState>();
+		get_worker_state->get(*action);
 		actions.push_back(action);
 	} else {
 		CHECK(false) << "Received an unsupported message_rx type";
@@ -157,6 +169,14 @@ void Connection::sendResult(std::shared_ptr<workerapi::Result> result) {
 	} else if (auto evict_weights = std::dynamic_pointer_cast<EvictWeightsResult>(result)) {
 		auto tx = new evict_weights_result_tx();
 		tx->set(*evict_weights);
+		msg_tx_.send_message(*tx);
+	} else if (auto clear_cache = std::dynamic_pointer_cast<ClearCacheResult>(result)) {
+		auto tx = new clear_cache_result_tx();
+		tx->set(*clear_cache);
+		msg_tx_.send_message(*tx);
+	} else if (auto get_worker_state = std::dynamic_pointer_cast<GetWorkerStateResult>(result)) {
+		auto tx = new get_worker_state_result_tx();
+		tx->set(*get_worker_state);
 		msg_tx_.send_message(*tx);
 	} else if (auto error = std::dynamic_pointer_cast<ErrorResult>(result)) {
 		auto tx = new error_result_tx();
