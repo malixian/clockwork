@@ -152,6 +152,9 @@ public:
 	std::shared_ptr<Allocation> alloc(unsigned n_pages, std::function<void(void)> eviction_callback);
 	void free(std::shared_ptr<Allocation> allocation);
 
+    // Reclaim back all pages
+    void clear();
+
 };
 
 class CUDAPageCache : public PageCache {

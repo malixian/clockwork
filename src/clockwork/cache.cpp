@@ -180,6 +180,31 @@ void PageCache::free(std::shared_ptr<Allocation> allocation) {
 	}
 }
 
+// Reclaim back all pages
+void PageCache::clear() {
+	std::lock_guard<std::recursive_mutex> lock(mutex);
+
+	// Free all pages in all unlockedAllocations
+	while (!unlockedAllocations.isEmpty()) {
+		std::shared_ptr<Allocation> allocation = unlockedAllocations.popHead();
+		for (unsigned i = 0; i < allocation->pages.size(); i++) {
+			Page* p = allocation->pages[i];
+			p->current_allocation = nullptr;
+			freePages.pushBack(p);
+	    }
+	}
+
+	// Free all pages in all lockedAllocations
+	while (!lockedAllocations.isEmpty()) {
+		 std::shared_ptr<Allocation> allocation = lockedAllocations.popHead();
+		for (unsigned i = 0; i < allocation->pages.size(); i++) {
+			Page* p = allocation->pages[i];
+			p->current_allocation = nullptr;
+			freePages.pushBack(p);
+	    }
+	}
+}
+
 CUDAPageCache::CUDAPageCache(std::vector<std::pair<char*, uint64_t>> baseptrs, uint64_t total_size, uint64_t page_size, const bool allowEvictions) :
 		PageCache(baseptrs, total_size, page_size, allowEvictions) {
 	for (auto &p : baseptrs) {
