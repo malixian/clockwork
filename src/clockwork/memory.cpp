@@ -99,6 +99,24 @@ MemoryManager::~MemoryManager() {
 	delete host_io_pool;
 }
 
+void MemoryManager::get_worker_memory_info(workerapi::WorkerMemoryInfo &worker_memory_info) {
+	worker_memory_info.weights_cache_total = weights_cache->size;
+	worker_memory_info.weights_cache_remaining =
+		weights_cache->page_size * weights_cache->freePages.size();
+	worker_memory_info.io_pool_total = io_pool->size;
+	worker_memory_info.io_pool_remaining = io_pool->remaining();
+	worker_memory_info.workspace_pool_total = workspace_pool->size;
+	worker_memory_info.workspace_pool_remaining = workspace_pool->remaining();
+
+	while (models->in_use.test_and_set());
+	for (auto it = models->models.begin(); it != models->models.end(); ++it) {
+		workerapi::ModelInfo model;
+		model.id = it->first;
+		model.size = 0 ; // TODO
+		worker_memory_info.models.push_back(model);
+	}
+	models->in_use.clear();
+}
 
 MemoryPool::MemoryPool(char* base_ptr, size_t size) : base_ptr(base_ptr), size(size) {
 }
@@ -182,6 +200,38 @@ void MemoryPool::free(char* ptr) {
 	while (allocations.size() > 0 && allocations.front()->freed) {
 		allocations.pop_front();
 	}
+}
+
+// Get the  size of all allocations
+size_t MemoryPool::remaining() {
+	size_t allocated = 0;
+	for (unsigned i = 0; i < allocations.size(); i++) {
+		allocated += allocations[i]->size;
+	}
+	return (size - allocated);
+}
+
+// Reclaim back all allocations
+void MemoryPool::clear() {
+	std::lock_guard<std::mutex> lock(mutex);
+
+    /* Not really needed
+    // Set all allocations pointed to by ptrs in ptr_allocations to "freed"
+    for (auto it = ptr_allocations.begin(); it != ptr_allocations.end(); it++) {
+        auto allocation = it->second;
+        allocation->freed.store(true);
+    }
+
+    // Pop all freed allocations from the queue
+    while (allocations.size() > 0 && allocations.front()->freed) {
+        allocations.pop_front();
+    } */
+
+    // Clear the ptr_allocations map
+    ptr_allocations.clear();
+
+    // Clear the allocations deque
+    allocations.clear();
 }
 
 CUDAMemoryPool::CUDAMemoryPool(char* base_ptr, size_t size) : MemoryPool(base_ptr, size) {}

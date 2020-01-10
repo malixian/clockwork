@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <deque>
 #include <memory>
+#include "clockwork/api/worker_api.h"
 #include "clockwork/cache.h"
 #include "clockwork/model/batched.h"
 #include "tbb/concurrent_queue.h"
@@ -28,11 +29,9 @@ public:
 };
 
 class ModelStore {
-private:
+public:
 	std::atomic_flag in_use;
 	std::unordered_map<int, RuntimeModel*> models;
-
-public:
 
 	ModelStore();
 
@@ -80,6 +79,11 @@ public:
 	// Return the memory back to the pool
 	void free(char* ptr);
 
+	// Get the remaining size
+	size_t remaining();
+
+	// Reclaim back all allocations
+	void clear();
 };
 
 class MemoryManager {
@@ -102,6 +106,8 @@ public:
 		size_t host_io_pool_size
 	);
 	~MemoryManager();
+
+	void get_worker_memory_info(clockwork::workerapi::WorkerMemoryInfo &worker_memory_info);
 };
 
 class CUDAMemoryPool : public MemoryPool {
