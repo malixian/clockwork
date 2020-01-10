@@ -1,3 +1,8 @@
+// Some engineers at Google have come to the conclusion that using "required"
+// does more harm than good; they prefer to use only "optional" and "repeated".
+// However, this view is not universal. TODO
+// Source: https://developers.google.com/protocol-buffers/docs/cpptutorial
+
 syntax = "proto2";
 
 package clockwork;
@@ -79,12 +84,16 @@ enum ActionType {
   ACT_LOAD_WEIGHTS = 2;
   ACT_INFER = 3;
   ACT_EVICT_WEIGHTS = 4;
+  ACT_CLEAR_CACHE = 5;
+  ACT_GET_WORKER_STATE = 6;
 
   RES_ERROR = 100;
   RES_LOAD_MODEL_FROM_DISK = 101;
   RES_LOAD_WEIGHTS = 102;
   RES_INFER = 103;
   RES_EVICT_WEIGHTS = 104;
+  RES_CLEAR_CACHE = 105;
+  RES_GET_WORKER_STATE = 106;
 }
 
 message ErrorResultProto {
@@ -159,4 +168,36 @@ message InferResultProto {
   required TimingProto copy_input_timing = 2;
   required TimingProto exec_timing = 3;
   required TimingProto copy_output_timing = 4;
+}
+
+message ClearCacheActionProto {
+  required int32 action_id = 1;
+}
+
+message ClearCacheResultProto {
+  required int32 action_id = 1;
+}
+
+message GetWorkerStateActionProto {
+  required int32 action_id = 1;
+}
+
+message ModelInfoProto {
+  required int32 id = 1;
+  required uint32 size = 2; // bytes
+}
+
+message WorkerMemoryInfoProto {
+  required uint64 weights_cache_total = 1; // bytes
+  required uint64 weights_cache_remaining = 2; // bytes
+  required uint64 io_pool_total = 3; // bytes
+  required uint64 io_pool_remaining = 4; // bytes
+  required uint64 workspace_pool_total = 5; // bytes
+  required uint64 workspace_pool_remaining = 6; // bytes
+  repeated ModelInfoProto models = 7;
+}
+
+message GetWorkerStateResultProto {
+  required int32 action_id = 1;
+  required WorkerMemoryInfoProto worker_memory_info = 2;
 }
