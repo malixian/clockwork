@@ -245,6 +245,93 @@ public:
   }
 };
 
+class clear_cache_action_tx : public msg_protobuf_tx_with_body<ACT_CLEAR_CACHE, ClearCacheActionProto, workerapi::ClearCache> {
+public:
+  virtual void set(workerapi::ClearCache &action) {
+	msg.set_action_id(action.id);
+  }
+};
+
+class clear_cache_action_rx : public msg_protobuf_rx_with_body<ACT_CLEAR_CACHE, ClearCacheActionProto, workerapi::ClearCache> {
+public:
+  virtual void get(workerapi::ClearCache &action) {
+	action.id = msg.action_id();
+	action.action_type = workerapi::clearCacheAction;
+  }
+};
+
+class clear_cache_result_tx : public msg_protobuf_tx_with_body<RES_CLEAR_CACHE, ClearCacheResultProto, workerapi::ClearCacheResult>{
+public:
+  virtual void set(workerapi::ClearCacheResult &result) {
+	msg.set_action_id(result.id);
+  }
+};
+
+class clear_cache_result_rx : public msg_protobuf_rx_with_body<RES_CLEAR_CACHE, ClearCacheResultProto, workerapi::ClearCacheResult>{
+public:
+  virtual void get(workerapi::ClearCacheResult &result) {
+	result.id = msg.action_id();
+	result.action_type = workerapi::clearCacheAction;
+  }
+};
+
+class get_worker_state_action_tx : public msg_protobuf_tx_with_body<ACT_GET_WORKER_STATE, GetWorkerStateActionProto, workerapi::GetWorkerState> {
+public:
+  virtual void set(workerapi::GetWorkerState &action) {
+	msg.set_action_id(action.id);
+  }
+};
+
+class get_worker_state_action_rx : public msg_protobuf_rx_with_body<ACT_GET_WORKER_STATE, GetWorkerStateActionProto, workerapi::GetWorkerState> {
+public:
+  virtual void get(workerapi::GetWorkerState &action) {
+	action.id = msg.action_id();
+	action.action_type = workerapi::getWorkerStateAction;
+  }
+};
+
+class get_worker_state_result_tx : public msg_protobuf_tx_with_body<RES_GET_WORKER_STATE, GetWorkerStateResultProto, workerapi::GetWorkerStateResult>{
+public:
+  virtual void set(workerapi::GetWorkerStateResult &result) {
+	msg.set_action_id(result.id);
+	auto msg_info = msg.mutable_worker_memory_info();
+	workerapi::WorkerMemoryInfo& result_info = result.worker_memory_info;
+	msg_info->set_weights_cache_total(result_info.weights_cache_total);
+	msg_info->set_weights_cache_remaining(result_info.weights_cache_remaining);
+	msg_info->set_io_pool_total(result_info.io_pool_total);
+	msg_info->set_io_pool_remaining(result_info.io_pool_remaining);
+	msg_info->set_workspace_pool_total(result_info.workspace_pool_total);
+	msg_info->set_workspace_pool_remaining(result_info.workspace_pool_remaining);
+	for (unsigned i = 0; i < result_info.models.size(); i++) {
+		ModelInfoProto* model = msg_info->add_models();
+		model->set_id(result_info.models[i].id);
+		model->set_size(result_info.models[i].size);
+	}
+  }
+};
+
+class get_worker_state_result_rx : public msg_protobuf_rx_with_body<RES_GET_WORKER_STATE, GetWorkerStateResultProto, workerapi::GetWorkerStateResult>{
+public:
+  virtual void get(workerapi::GetWorkerStateResult &result) {
+	result.id = msg.action_id();
+	result.action_type = workerapi::getWorkerStateAction;
+	workerapi::WorkerMemoryInfo& result_info = result.worker_memory_info;
+	auto msg_info = msg.worker_memory_info();
+	result_info.weights_cache_total = msg_info.weights_cache_total();
+	result_info.weights_cache_remaining = msg_info.weights_cache_remaining();
+	result_info.io_pool_total = msg_info.io_pool_total();
+	result_info.io_pool_remaining = msg_info.io_pool_remaining();
+	result_info.workspace_pool_total = msg_info.workspace_pool_total();
+	result_info.workspace_pool_remaining = msg_info.workspace_pool_remaining();
+	for (unsigned i = 0; i < msg_info.models_size(); i++) {
+		workerapi::ModelInfo model;
+		model.id = msg_info.models(i).id();
+		model.size = msg_info.models(i).size();
+		result_info.models.push_back(model);
+	}
+  }
+};
+
 }
 }
 

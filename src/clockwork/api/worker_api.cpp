@@ -64,6 +64,18 @@ std::string Infer::str() {
 	return ss.str();
 }
 
+std::string ClearCache::str() {
+	std::stringstream ss;
+	ss << "A" << id << ":ClearCache";
+	return ss.str();
+}
+
+std::string GetWorkerState::str() {
+	std::stringstream ss;
+	ss << "A" << id << ":GetWorkerState";
+	return ss.str();
+}
+
 std::string ErrorResult::str() {
 	std::stringstream ss;
 	ss << "R" << id << ":Error " << status << ": " << message;
@@ -111,6 +123,18 @@ std::string InferResult::str() {
 	   << " exec=" << millis(exec.duration)
 	   << " input=" << millis(copy_input.duration)
 	   << " output=" << millis(copy_output.duration);
+	return ss.str();
+}
+
+std::string ClearCacheResult::str() {
+	std::stringstream ss;
+	ss << "R" << id << ":ClearCache";
+	return ss.str();
+}
+
+std::string GetWorkerStateResult::str() {
+	std::stringstream ss;
+	ss << "R" << id << ":GetWorkerState";
 	return ss.str();
 }
 

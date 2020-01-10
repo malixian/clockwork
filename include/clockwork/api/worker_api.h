@@ -44,6 +44,8 @@ const int loadModelFromDiskAction = 0;
 const int loadWeightsAction = 1;
 const int inferAction = 2;
 const int evictWeightsAction = 3;
+const int clearCacheAction = 4;
+const int getWorkerStateAction = 5;
 
 class Action {
 public:
@@ -98,6 +100,16 @@ public:
 	int input_size;
 	char* input;
 	
+	virtual std::string str();
+};
+
+class ClearCache : public Action {
+public:
+	virtual std::string str();
+};
+
+class GetWorkerState : public Action {
+public:
 	virtual std::string str();
 };
 
@@ -159,6 +171,35 @@ public:
 	int output_size;
 	char* output;
 	
+	virtual std::string str();
+};
+
+class ClearCacheResult : public Result {
+public:
+	virtual std::string str();	
+};
+
+class ModelInfo {
+public:
+	int id;
+	unsigned size;
+};
+
+class WorkerMemoryInfo {
+public:
+	unsigned weights_cache_total;
+	unsigned weights_cache_remaining;
+	unsigned io_pool_total;
+	unsigned io_pool_remaining;
+	unsigned workspace_pool_total;
+	unsigned workspace_pool_remaining;
+	std::vector<ModelInfo> models;
+};
+
+class GetWorkerStateResult : public Result {
+public:
+	WorkerMemoryInfo worker_memory_info;
+
 	virtual std::string str();
 };
 
