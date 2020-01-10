@@ -102,6 +102,8 @@ std::vector<unsigned> get_gpu_core_affinity(unsigned deviceId) {
   status = nvmlDeviceGetHandleByIndex(deviceId, &device);
   CHECK(status == NVML_SUCCESS);
 
+  // Fill bitmaps with the ideal CPU affinity for the device
+  // (see https://helpmanual.io/man3/nvmlDeviceGetCpuAffinity/)
   status = nvmlDeviceGetCpuAffinity(device, bitmaps.size(), bitmaps.data());
   CHECK(status == NVML_SUCCESS);
 
