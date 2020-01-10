@@ -47,6 +47,10 @@ void initializeCudaStream(int priority = 0);
 void SetStream(cudaStream_t stream);
 cudaStream_t Stream();
 
+#define DEBUG_PRINT(msg) \
+	std::cout << __FILE__ << "::" << __LINE__ << "::" << __FUNCTION__ << " "; \
+	std::cout << msg << std::endl;
+
 }
 }
 
