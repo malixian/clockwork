@@ -31,6 +31,8 @@ private:
 	void loadWeights(std::shared_ptr<workerapi::Action> action);
 	void evictWeights(std::shared_ptr<workerapi::Action> action);
 	void infer(std::shared_ptr<workerapi::Action> action);
+	void clearCache(std::shared_ptr<workerapi::Action> action);
+	void getWorkerState(std::shared_ptr<workerapi::Action> action);
 };
 
 class LoadModelFromDisk : public LoadModelFromDiskAction {

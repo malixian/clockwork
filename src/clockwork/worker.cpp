@@ -29,6 +29,8 @@ void ClockworkWorker::sendActions(std::vector<std::shared_ptr<workerapi::Action>
 			case workerapi::loadWeightsAction: loadWeights(action); break;
 			case workerapi::inferAction: infer(action); break;
 			case workerapi::evictWeightsAction: evictWeights(action); break;
+			case workerapi::clearCacheAction: clearCache(action); break;
+			case workerapi::getWorkerStateAction: getWorkerState(action); break;
 			default: invalidAction(action); break;
 		}
 	}
@@ -80,6 +82,34 @@ void ClockworkWorker::infer(std::shared_ptr<workerapi::Action> action) {
 	if (infer != nullptr) {
 		Infer* action = new Infer(this, infer);
 		action->submit();
+	} else {
+		invalidAction(action);
+	}
+}
+
+void ClockworkWorker::clearCache(std::shared_ptr<workerapi::Action> action) {
+	auto clear_cache = std::static_pointer_cast<workerapi::ClearCache>(action);
+	if (clear_cache != nullptr) {
+		runtime->manager->weights_cache->clear();
+		auto result = std::make_shared<workerapi::ClearCacheResult>();
+		result->id = action->id;
+		result->action_type = workerapi::clearCacheAction;
+		result->status = actionSuccess; // TODO What about error handling?
+		controller->sendResult(result);
+	} else {
+		invalidAction(action);
+	}
+}
+
+void ClockworkWorker::getWorkerState(std::shared_ptr<workerapi::Action> action) {
+	auto get_worker_state = std::static_pointer_cast<workerapi::GetWorkerState>(action);
+	if (get_worker_state != nullptr) {
+		auto result = std::make_shared<workerapi::GetWorkerStateResult>();
+		result->id = action->id;
+		result->action_type = workerapi::getWorkerStateAction;
+		runtime->manager->get_worker_memory_info(result->worker_memory_info);
+		result->status = actionSuccess; // TODO What about error handling?
+		controller->sendResult(result);
 	} else {
 		invalidAction(action);
 	}
