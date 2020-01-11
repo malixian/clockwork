@@ -24,6 +24,8 @@ std::shared_ptr<workerapi::Infer> infer_action(int batch_size, BatchedModel* mod
 
 std::shared_ptr<workerapi::Infer> infer_action2(ClockworkWorker* worker);
 
+std::shared_ptr<workerapi::GetWorkerState> get_worker_state_action();
+
 }
 
 #endif

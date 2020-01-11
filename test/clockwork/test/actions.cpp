@@ -76,4 +76,11 @@ std::shared_ptr<workerapi::Infer> infer_action(int batch_size, BatchedModel* mod
     return action;
 }
 
+std::shared_ptr<workerapi::GetWorkerState> get_worker_state_action() {
+    auto action = std::make_shared<workerapi::GetWorkerState>();
+	action->id = id_seed++;
+	action->action_type = workerapi::getWorkerStateAction;
+	return action;
+}
+
 }

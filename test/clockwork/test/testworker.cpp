@@ -201,3 +201,49 @@ TEST_CASE("Test Worker E2E Timed Success", "[worker]") {
     worker.shutdown(true);
     
 }
+
+TEST_CASE("Test GetWorkerState", "[worker] [e2esimple]") {
+	ClockworkWorker worker;
+	TestController controller;
+	worker.controller = &controller;
+
+	std::vector<std::shared_ptr<workerapi::Action>> actions;
+
+	auto load_model = load_model_from_disk_action();
+	actions = {load_model};
+	worker.sendActions(actions);
+	controller.expect(actionSuccess);
+
+	auto get_worker_state_1 = get_worker_state_action();
+	actions = {get_worker_state_1};
+	worker.sendActions(actions);
+	controller.expect(actionSuccess);
+
+	auto load_weights = load_weights_action();
+	actions = {load_weights};
+	worker.sendActions(actions);
+	controller.expect(actionSuccess);
+
+	auto infer = infer_action2(&worker);
+	actions = {infer};
+	worker.sendActions(actions);
+	controller.expect(actionSuccess);
+
+	auto get_worker_state_2 = get_worker_state_action();
+	actions = {get_worker_state_2};
+	worker.sendActions(actions);
+	controller.expect(actionSuccess);
+
+	auto evict_weights = evict_weights_action();
+	actions = {evict_weights};
+	worker.sendActions(actions);
+	controller.expect(actionSuccess);
+
+	auto get_worker_state_3 = get_worker_state_action();
+	actions = {get_worker_state_3};
+	worker.sendActions(actions);
+	controller.expect(actionSuccess);
+
+	worker.shutdown(true);
+
+}
