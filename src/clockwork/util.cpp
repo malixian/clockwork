@@ -199,6 +199,12 @@ bool exists(std::string filename) {
   return (stat (filename.c_str(), &buffer) == 0); 
 }
 
+long filesize(std::string filename) {
+    struct stat buffer;
+    int rc = stat(filename.c_str(), &buffer);
+    return rc == 0 ? buffer.st_size : -1;
+}
+
 void initializeCudaStream(int priority) {
   CUDA_CALL(cudaSetDevice(0));
   cudaStream_t stream;  

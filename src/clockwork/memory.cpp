@@ -112,7 +112,9 @@ void MemoryManager::get_worker_memory_info(workerapi::WorkerMemoryInfo &worker_m
 	for (auto it = models->models.begin(); it != models->models.end(); ++it) {
 		workerapi::ModelInfo model;
 		model.id = it->first;
-		model.size = 0 ; // TODO
+		RuntimeModel *runtime_model = it->second;
+		model::BatchedModel* batched_model = runtime_model->model;
+		model.size = batched_model->weights_size;
 		worker_memory_info.models.push_back(model);
 	}
 	models->in_use.clear();
