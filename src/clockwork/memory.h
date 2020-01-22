@@ -15,12 +15,13 @@ namespace clockwork {
 
 class RuntimeModel {
 public:
+	unsigned gpu_id;
 	model::BatchedModel* model;
 	std::atomic_flag in_use;
 	int version;
 	std::shared_ptr<Allocation> weights;
 
-	RuntimeModel(model::BatchedModel* model);
+	RuntimeModel(model::BatchedModel* model, unsigned gpu_id);
 
 	bool try_lock();
 	void lock();
@@ -31,17 +32,17 @@ public:
 class ModelStore {
 public:
 	std::atomic_flag in_use;
-	std::unordered_map<int, RuntimeModel*> models;
+	std::unordered_map<std::pair<int, unsigned>, RuntimeModel*, util::hash_pair> models;
 
 	ModelStore();
 
 	// This will delete all models that are in the modelstore
 	~ModelStore();
 
-	RuntimeModel* get(int model_id);
-	bool contains(int model_id);
-	void put(int model_id, RuntimeModel* model);
-	bool put_if_absent(int model_id, RuntimeModel* model);
+	RuntimeModel* get(int model_id, unsigned gpu_id);
+	bool contains(int model_id, unsigned gpu_id);
+	void put(int model_id, unsigned gpu_id, RuntimeModel* model);
+	bool put_if_absent(int model_id, unsigned gpu_id, RuntimeModel* model);
 
 };
 
@@ -88,22 +89,30 @@ public:
 
 class MemoryManager {
 public:
-	PageCache* weights_cache; // Device-side page cache for model weights
+	// Device-side GPU-specific page cache for model weights
+	std::vector<PageCache*> weights_caches;
+
 	// TODO: host-side weights cache
 
-	MemoryPool* io_pool; // Device-side memory pool for inference inputs and outputs
-	MemoryPool* workspace_pool; // Device-side memory pool for inference workspace
+	// Device-side GPU-specific memory pools for inference inputs and outputs
+	std::vector<MemoryPool*> io_pools;
 
-	MemoryPool* host_io_pool; // Host-side memory pool for inference inputs and outputs
+	// Device-side GPU-specific memory pools for inference workspace
+	std::vector<MemoryPool*> workspace_pools;
+
+	// Host-side memory pool for inference inputs and outputs
+	MemoryPool* host_io_pool;
 
 	ModelStore* models; // Models
 
+	unsigned num_gpus;
 
 	MemoryManager(
 		size_t weights_cache_size, size_t weights_cache_page_size,
 		size_t io_pool_size,
 		size_t workspace_pool_size,
-		size_t host_io_pool_size
+		size_t host_io_pool_size,
+		unsigned num_gpus
 	);
 	~MemoryManager();
 
@@ -112,10 +121,11 @@ public:
 
 class CUDAMemoryPool : public MemoryPool {
 public:
-	CUDAMemoryPool(char* base_ptr, size_t size);
+	unsigned gpu_id;
+	CUDAMemoryPool(char* base_ptr, size_t size, unsigned gpu_id);
 	virtual ~CUDAMemoryPool();
 
-	static CUDAMemoryPool* create(size_t size);
+	static CUDAMemoryPool* create(size_t size, unsigned gpu_id);
 };
 
 class CUDAHostMemoryPool : public MemoryPool {

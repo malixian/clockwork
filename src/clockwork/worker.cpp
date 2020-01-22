@@ -90,7 +90,9 @@ void ClockworkWorker::infer(std::shared_ptr<workerapi::Action> action) {
 void ClockworkWorker::clearCache(std::shared_ptr<workerapi::Action> action) {
 	auto clear_cache = std::static_pointer_cast<workerapi::ClearCache>(action);
 	if (clear_cache != nullptr) {
-		runtime->manager->weights_cache->clear();
+		for (unsigned i = 0; i < runtime->num_gpus; i++) {
+			runtime->manager->weights_caches[i]->clear();
+		}
 		auto result = std::make_shared<workerapi::ClearCacheResult>();
 		result->id = action->id;
 		result->action_type = workerapi::clearCacheAction;

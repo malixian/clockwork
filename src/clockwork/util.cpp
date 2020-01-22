@@ -205,8 +205,8 @@ long filesize(std::string filename) {
     return rc == 0 ? buffer.st_size : -1;
 }
 
-void initializeCudaStream(int priority) {
-  CUDA_CALL(cudaSetDevice(0));
+void initializeCudaStream(unsigned gpu_id, int priority) {
+  CUDA_CALL(cudaSetDevice(gpu_id));
   cudaStream_t stream;  
   CUDA_CALL(cudaStreamCreateWithPriority(&stream, cudaStreamNonBlocking, priority));
   SetStream(stream);

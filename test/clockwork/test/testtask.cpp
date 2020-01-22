@@ -10,6 +10,7 @@
 #include "clockwork/model/model.h"
 #include "clockwork/task.h"
 #include <catch2/catch.hpp>
+#include <stdio.h>
 
 using namespace clockwork;
 using namespace clockwork::model;
@@ -27,9 +28,9 @@ public:
             LoadModelFromDiskTask(cache, model_id, model_path, earliest, latest) {
     }
 
-    void run(cudaStream_t stream) {
+    void run() {
         try {
-            LoadModelFromDiskTask::run(stream);
+            LoadModelFromDiskTask::run();
         } catch (TaskError &error) {
             this->error(error.status_code, error.message);
         }
@@ -61,7 +62,9 @@ public:
     int status_code;
     std::string error_message;
 
-    TestLoadWeightsTask(MemoryManager* cache, int model_id, uint64_t earliest, uint64_t latest) : LoadWeightsTask(cache, model_id, earliest, latest) {}
+    TestLoadWeightsTask(MemoryManager* cache, int model_id, uint64_t earliest,
+		uint64_t latest, unsigned gpu_id, CudaEventPool* event_pool):
+			LoadWeightsTask(cache, model_id, earliest, latest, gpu_id, event_pool) {}
 
     void run(cudaStream_t stream) {
         try {
@@ -105,7 +108,9 @@ public:
     int status_code;
     std::string error_message;
 
-    TestEvictWeightsTask(MemoryManager* cache, int model_id, uint64_t earliest, uint64_t latest) : EvictWeightsTask(cache, model_id, earliest, latest) {}
+    TestEvictWeightsTask(MemoryManager* cache, int model_id, uint64_t earliest,
+		uint64_t latest, unsigned gpu_id):
+			EvictWeightsTask(cache, model_id, earliest, latest, gpu_id) {}
 
     void run(cudaStream_t stream) {
         try {
@@ -143,7 +148,12 @@ public:
     RuntimeModel* rm;
     char* io_memory;
 
-    TestCopyInputTask(MemoryManager* cache, int model_id, uint64_t earliest, uint64_t latest, unsigned batch_size, size_t input_size, char* input) : CopyInputTask(cache, model_id, earliest, latest, batch_size, input_size, input), io_memory(nullptr) {}
+    TestCopyInputTask(MemoryManager* cache, int model_id, uint64_t earliest,
+		uint64_t latest, unsigned batch_size, size_t input_size, char* input,
+		unsigned gpu_id, CudaEventPool* event_pool):
+			CopyInputTask(cache, model_id, earliest, latest, batch_size,
+				input_size, input, gpu_id, event_pool),
+			io_memory(nullptr) {}
 
     void run(cudaStream_t stream) {
         try {
@@ -187,7 +197,11 @@ public:
     int status_code;
     std::string error_message;
 
-    TestInferTask(RuntimeModel* rm, MemoryManager* cache, uint64_t earliest, uint64_t latest, unsigned batch_size, char* io_memory) : ExecTask(rm, cache, earliest, latest, batch_size, io_memory) {}
+    TestInferTask(RuntimeModel* rm, MemoryManager* cache, uint64_t earliest,
+		uint64_t latest, unsigned batch_size, char* io_memory, unsigned gpu_id,
+		CudaEventPool* event_pool):
+			ExecTask(rm, cache, earliest, latest, batch_size, io_memory,
+				gpu_id, event_pool) {}
 
     void run(cudaStream_t stream) {
         try {
@@ -230,7 +244,11 @@ public:
     std::string error_message;
     char* output;
 
-    TestCopyOutputTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, unsigned batch_size, char* io_memory) : CopyOutputTask(rm, manager, earliest, latest, batch_size, io_memory) {}
+    TestCopyOutputTask(RuntimeModel* rm, MemoryManager* manager,
+		uint64_t earliest, uint64_t latest, unsigned batch_size,
+		char* io_memory, unsigned gpu_id, CudaEventPool *event_pool):
+			CopyOutputTask(rm, manager, earliest, latest, batch_size, io_memory,
+			gpu_id, event_pool) {}
 
     void run(cudaStream_t stream) {
         try {
@@ -268,14 +286,14 @@ public:
 // Models get deleted by the MemoryManager
 Model* make_model() {
     std::string f = clockwork::util::get_example_model();
-    Model* model = Model::loadFromDisk(f+".1.so", f+".1.clockwork", f+".clockwork_params");
+    Model* model = Model::loadFromDisk(f+".1.so", f+".1.clockwork", f+".clockwork_params", GPU_ID_0);
     return model;
 }
 
 // Models get deleted by the MemoryManager
 BatchedModel* make_batched_model(int batch_size, Model* model) {
     std::vector<std::pair<unsigned, Model*>> models = {{batch_size, model}};
-    BatchedModel* batched = new BatchedModel(model->weights_size, model->weights_pinned_host_memory, models);
+    BatchedModel* batched = new BatchedModel(model->weights_size, model->weights_pinned_host_memory, models, GPU_ID_0);
     batched->instantiate_models_on_host();
     batched->instantiate_models_on_device();
     return batched;    
@@ -284,10 +302,17 @@ BatchedModel* make_batched_model(int batch_size, Model* model) {
 class Autostream {
 public:
     cudaStream_t stream;
-    Autostream() {
-        REQUIRE(cudaStreamCreate(&stream) == cudaSuccess);        
-    }
+	unsigned gpu_id = 0;
+    Autostream(unsigned gpu_id = 0): gpu_id(gpu_id) {
+		util::set_core(0);
+		util::setCurrentThreadMaxPriority();
+		REQUIRE(cudaSetDevice(gpu_id) == cudaSuccess);
+		REQUIRE(cudaStreamCreateWithPriority(&stream, cudaStreamNonBlocking, 0)
+			== cudaSuccess);
+        //REQUIRE(cudaStreamCreate(&stream) == cudaSuccess);
+	}
     ~Autostream() {
+		REQUIRE(cudaSetDevice(gpu_id) == cudaSuccess);
         REQUIRE(cudaStreamDestroy(stream) == cudaSuccess);
     }
 };
@@ -296,20 +321,24 @@ std::shared_ptr<MemoryManager> make_manager(
         size_t weights_cache_size, size_t weights_page_size, 
         size_t io_pool_size,
         size_t workspace_pool_size,
-        size_t host_io_pool_size) {
+        size_t host_io_pool_size,
+		unsigned num_gpus) {
     return std::make_shared<MemoryManager>(
         weights_cache_size, weights_page_size, 
         io_pool_size, 
         workspace_pool_size, 
-        host_io_pool_size);
+        host_io_pool_size,
+        num_gpus);
 }
 
 std::shared_ptr<MemoryManager> make_manager() {
     return make_manager(
-        1024L * 1024L * 1024L,  16L * 1024L * 1024L,
+        10 * 1024L * 1024L * 1024L,
+		16L * 1024L * 1024L,
         128L * 1024L * 1024L,
         256L * 1024L * 1024L,
-        128L * 1024L * 1024L);
+        128L * 1024L * 1024L,
+		NUM_GPUS_2); // since Volta machines have 2 GPUs
 }
 
 TEST_CASE("Load Model From Disk", "[task] [loadmodel]") {
@@ -321,7 +350,7 @@ TEST_CASE("Load Model From Disk", "[task] [loadmodel]") {
 
     TestLoadModelFromDiskTask task(manager.get(), model_id, model_path, util::now(), util::now()+1000000000);
 
-    task.run(stream->stream);
+    task.run();
 
     INFO(task.status_code << ": " << task.error_message);
     REQUIRE(!task.is_error);
@@ -337,7 +366,7 @@ TEST_CASE("Load Non-Existent Model From Disk", "[task] [loadmodel]") {
 
     TestLoadModelFromDiskTask task(manager.get(),model_id, model_path, util::now(), util::now()+1000000000);
 
-    task.run(stream->stream);
+    task.run();
 
     INFO(task.status_code << ": " << task.error_message);
     REQUIRE(task.is_error);
@@ -345,14 +374,15 @@ TEST_CASE("Load Non-Existent Model From Disk", "[task] [loadmodel]") {
 }
 
 TEST_CASE("Load Weights", "[task]") {
+	CudaEventPool* event_pool = new CudaEventPool(GPU_ID_0);
     Model* model = make_model();
-    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model));
+    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model), GPU_ID_0);
     auto stream = std::make_shared<Autostream>();
     auto manager = make_manager();
-    manager->models->put(0, rm);
+    manager->models->put(0, GPU_ID_0, rm);
 
     uint64_t now = util::now();
-    TestLoadWeightsTask task(manager.get(),0, now, now+1000000000);
+    TestLoadWeightsTask task(manager.get(), 0, now, now+1000000000, GPU_ID_0, event_pool);
 
     REQUIRE(task.eligible() == now);
 
@@ -370,12 +400,13 @@ TEST_CASE("Load Weights", "[task]") {
 }
 
 TEST_CASE("Load Weights Nonexistent Model", "[task]") {
+	CudaEventPool* event_pool = new CudaEventPool(GPU_ID_0);
     Model* model = make_model();
     auto stream = std::make_shared<Autostream>();
     auto manager = make_manager();
 
     uint64_t now = util::now();
-    TestLoadWeightsTask task(manager.get(),0, now, now+1000000000);
+    TestLoadWeightsTask task(manager.get(), 0, now, now+1000000000, GPU_ID_0, event_pool);
 
     REQUIRE(task.eligible() == now);
 
@@ -387,15 +418,16 @@ TEST_CASE("Load Weights Nonexistent Model", "[task]") {
 }
 
 TEST_CASE("Load Weights Earliest", "[task]") {
+	CudaEventPool* event_pool = new CudaEventPool(GPU_ID_0);
     Model* model = make_model();
-    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model));
+    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model), GPU_ID_0);
     auto stream = std::make_shared<Autostream>();
     auto manager = make_manager();
-    manager->models->put(0, rm);
+    manager->models->put(0, GPU_ID_0, rm);
 
     uint64_t now = util::now();
 
-    TestLoadWeightsTask task(manager.get(),0, now+1000000000, now+1000000000);
+    TestLoadWeightsTask task(manager.get(), 0, now+1000000000, now+1000000000, GPU_ID_0, event_pool);
 
     task.run(stream->stream);
 
@@ -406,15 +438,16 @@ TEST_CASE("Load Weights Earliest", "[task]") {
 }
 
 TEST_CASE("Load Weights Latest", "[task]") {
+	CudaEventPool* event_pool = new CudaEventPool(GPU_ID_0);
     Model* model = make_model();
-    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model));
+    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model), GPU_ID_0);
     auto stream = std::make_shared<Autostream>();
     auto manager = make_manager();
-    manager->models->put(0, rm);
+    manager->models->put(0, GPU_ID_0, rm);
 
     uint64_t now = util::now();
 
-    TestLoadWeightsTask task(manager.get(),0, 0, now - 1000000);
+    TestLoadWeightsTask task(manager.get(), 0, 0, now - 1000000, GPU_ID_0, event_pool);
 
     task.run(stream->stream);
 
@@ -425,15 +458,16 @@ TEST_CASE("Load Weights Latest", "[task]") {
 }
 
 TEST_CASE("Load Weights Insufficient Cache", "[task]") {
+	CudaEventPool* event_pool = new CudaEventPool(GPU_ID_0);
     Model* model = make_model();
-    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model));
+    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model), GPU_ID_0);
     auto stream = std::make_shared<Autostream>();
-    auto manager = make_manager(16 * 1024 * 1024, 16 * 1024 * 1024, 64 * 1024 * 1024, 64 * 1024 * 1024,64 * 1024 * 1024);
-    manager->models->put(0, rm);
+    auto manager = make_manager(16 * 1024 * 1024, 16 * 1024 * 1024, 64 * 1024 * 1024, 64 * 1024 * 1024,64 * 1024 * 1024, NUM_GPUS_2);
+    manager->models->put(0, GPU_ID_0, rm);
 
     uint64_t now = util::now();
 
-    TestLoadWeightsTask task(manager.get(),0, 0, now + 1000000000L);
+    TestLoadWeightsTask task(manager.get(), 0, 0, now + 1000000000L, GPU_ID_0, event_pool);
 
     task.run(stream->stream);
 
@@ -444,15 +478,16 @@ TEST_CASE("Load Weights Insufficient Cache", "[task]") {
 }
 
 TEST_CASE("Load Weights Version Update", "[task]") {
+	CudaEventPool* event_pool = new CudaEventPool(GPU_ID_0);
     Model* model = make_model();
-    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model));
+    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model), GPU_ID_0);
     auto stream = std::make_shared<Autostream>();
     auto manager = make_manager();
-    manager->models->put(0, rm);
+    manager->models->put(0, GPU_ID_0, rm);
 
     uint64_t now = util::now();
 
-    TestLoadWeightsTask task(manager.get(),0, 0, now + 1000000000L);
+    TestLoadWeightsTask task(manager.get(), 0, 0, now + 1000000000L, GPU_ID_0, event_pool);
 
     task.run(stream->stream);
     rm->lock();
@@ -471,14 +506,15 @@ TEST_CASE("Load Weights Version Update", "[task]") {
 }
 
 TEST_CASE("Double Load Weights", "[task]") {
+	CudaEventPool* event_pool = new CudaEventPool(GPU_ID_0);
     Model* model = make_model();
-    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model));
+    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model), GPU_ID_0);
     auto stream = std::make_shared<Autostream>();
     auto manager = make_manager();
-    manager->models->put(0, rm);
+    manager->models->put(0, GPU_ID_0, rm);
 
     // Load weights 1
-    TestLoadWeightsTask load1(manager.get(),0, 0, util::now() + 1000000000L);
+    TestLoadWeightsTask load1(manager.get(), 0, 0, util::now() + 1000000000L, GPU_ID_0, event_pool);
     load1.run(stream->stream);
 
     rm->lock();
@@ -489,7 +525,7 @@ TEST_CASE("Double Load Weights", "[task]") {
     rm->unlock();
 
     // Load weights 2
-    TestLoadWeightsTask load2(manager.get(),0, 0, util::now() + 1000000000L);
+    TestLoadWeightsTask load2(manager.get(), 0, 0, util::now() + 1000000000L, GPU_ID_0, event_pool);
     load2.run(stream->stream);
 
     while (!load1.is_complete());
@@ -506,15 +542,16 @@ TEST_CASE("Double Load Weights", "[task]") {
 
 
 TEST_CASE("Evict Weights", "[task]") {
+	CudaEventPool* event_pool = new CudaEventPool(GPU_ID_0);
     Model* model = make_model();
-    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model));
+    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model), GPU_ID_0);
     auto stream = std::make_shared<Autostream>();
     auto manager = make_manager();
-    manager->models->put(0, rm);
+    manager->models->put(0, GPU_ID_0, rm);
 
     // Load weights
     uint64_t now = util::now();
-    TestLoadWeightsTask load(manager.get(),0, 0, util::now() + 1000000000L);
+    TestLoadWeightsTask load(manager.get(), 0, 0, util::now() + 1000000000L, GPU_ID_0, event_pool);
     load.run(stream->stream);
     while (!load.is_complete());
     load.process_completion();
@@ -523,7 +560,7 @@ TEST_CASE("Evict Weights", "[task]") {
     REQUIRE(!load.is_error);
 
     // Now evict them
-    TestEvictWeightsTask evict(manager.get(),0, 0, util::now() + 1000000000);
+    TestEvictWeightsTask evict(manager.get(), 0, 0, util::now() + 1000000000, GPU_ID_0);
     evict.run(stream->stream);
 
     REQUIRE(evict.is_success);
@@ -531,14 +568,15 @@ TEST_CASE("Evict Weights", "[task]") {
 }
 
 TEST_CASE("Evict Non-Existent Weights", "[task]") {
+	CudaEventPool* event_pool = new CudaEventPool(GPU_ID_0);
     Model* model = make_model();
-    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model));
+    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model), GPU_ID_0);
     auto stream = std::make_shared<Autostream>();
     auto manager = make_manager();
-    manager->models->put(0, rm);
+    manager->models->put(0, GPU_ID_0, rm);
 
     // Evict weights
-    TestEvictWeightsTask evict(manager.get(),0, 0, util::now() + 1000000000);
+    TestEvictWeightsTask evict(manager.get(), 0, 0, util::now() + 1000000000, GPU_ID_0);
     evict.run(stream->stream);
 
     REQUIRE(!evict.is_success);
@@ -547,15 +585,16 @@ TEST_CASE("Evict Non-Existent Weights", "[task]") {
 }
 
 TEST_CASE("Double Evict", "[task]") {
+	CudaEventPool* event_pool = new CudaEventPool(GPU_ID_0);
     Model* model = make_model();
-    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model));
+    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model), GPU_ID_0);
     auto stream = std::make_shared<Autostream>();
     auto manager = make_manager();
-    manager->models->put(0, rm);
+    manager->models->put(0, GPU_ID_0, rm);
 
     // Load weights
     uint64_t now = util::now();
-    TestLoadWeightsTask load(manager.get(),0, 0, util::now() + 1000000000L);
+    TestLoadWeightsTask load(manager.get(), 0, 0, util::now() + 1000000000L, GPU_ID_0, event_pool);
     load.run(stream->stream);
     while (!load.is_complete());
     load.process_completion();
@@ -564,14 +603,14 @@ TEST_CASE("Double Evict", "[task]") {
     REQUIRE(!load.is_error);
 
     // Now evict them
-    TestEvictWeightsTask evict(manager.get(),0, 0, util::now() + 1000000000);
+    TestEvictWeightsTask evict(manager.get(), 0, 0, util::now() + 1000000000, GPU_ID_0);
     evict.run(stream->stream);
 
     REQUIRE(evict.is_success);
     REQUIRE(!evict.is_error);
 
     // Now evict them
-    TestEvictWeightsTask evict2(manager.get(),0, 0, util::now() + 1000000000);
+    TestEvictWeightsTask evict2(manager.get(), 0, 0, util::now() + 1000000000, GPU_ID_0);
     evict2.run(stream->stream);
 
     REQUIRE(!evict2.is_success);
@@ -580,12 +619,13 @@ TEST_CASE("Double Evict", "[task]") {
 }
 
 TEST_CASE("Evict Weights Nonexistent Model", "[task]") {
+	CudaEventPool* event_pool = new CudaEventPool(GPU_ID_0);
     Model* model = make_model();
     auto stream = std::make_shared<Autostream>();
     auto manager = make_manager();
 
     uint64_t now = util::now();
-    TestEvictWeightsTask task(manager.get(),0, now, now+1000000000);
+    TestEvictWeightsTask task(manager.get(), 0, now, now+1000000000, GPU_ID_0);
 
     REQUIRE(task.eligible() == now);
 
@@ -596,15 +636,16 @@ TEST_CASE("Evict Weights Nonexistent Model", "[task]") {
 }
 
 TEST_CASE("Copy Input", "[task]") {
+	CudaEventPool* event_pool = new CudaEventPool(GPU_ID_0);
     Model* model = make_model();
-    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model));
+    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model), GPU_ID_0);
     auto stream = std::make_shared<Autostream>();
     auto manager = make_manager();
-    manager->models->put(0, rm);
+    manager->models->put(0, GPU_ID_0, rm);
 
     char* input = static_cast<char*>(malloc(model->input_size()));
 
-    TestCopyInputTask copyinput(manager.get(),0, 0, util::now() + 1000000000, 1, model->input_size(), input);
+    TestCopyInputTask copyinput(manager.get(), 0, 0, util::now() + 1000000000, 1, model->input_size(), input, GPU_ID_0, event_pool);
     copyinput.run(stream->stream);
     while (!copyinput.is_complete());
     copyinput.process_completion();
@@ -617,15 +658,16 @@ TEST_CASE("Copy Input", "[task]") {
 }
 
 TEST_CASE("Copy Input Wrong Size", "[task] [wrongsize]") {
+	CudaEventPool* event_pool = new CudaEventPool(GPU_ID_0);
     Model* model = make_model();
-    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model));
+    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model), GPU_ID_0);
     auto stream = std::make_shared<Autostream>();
     auto manager = make_manager();
-    manager->models->put(0, rm);
+    manager->models->put(0, GPU_ID_0, rm);
 
     char* input = static_cast<char*>(malloc(10));
 
-    TestCopyInputTask copyinput(manager.get(),0, 0, util::now() + 1000000000, 1, 10, input);
+    TestCopyInputTask copyinput(manager.get(), 0, 0, util::now() + 1000000000, 1, 10, input, GPU_ID_0, event_pool);
     copyinput.run(stream->stream);
     while (!copyinput.is_complete());
 
@@ -637,15 +679,16 @@ TEST_CASE("Copy Input Wrong Size", "[task] [wrongsize]") {
 }
 
 TEST_CASE("Copy Input Nonexistent Model", "[task]") {
+	CudaEventPool* event_pool = new CudaEventPool(GPU_ID_0);
     Model* model = make_model();
-    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model));
+    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model), GPU_ID_0);
     auto stream = std::make_shared<Autostream>();
     auto manager = make_manager();
 
     char* input = static_cast<char*>(malloc(model->input_size()));
 
     uint64_t now = util::now();
-    TestCopyInputTask copyinput(manager.get(),0, now, util::now() + 1000000000, 1, model->input_size(), input);
+    TestCopyInputTask copyinput(manager.get(), 0, now, util::now() + 1000000000, 1, model->input_size(), input, GPU_ID_0, event_pool);
 
     REQUIRE(copyinput.eligible() == now);
 
@@ -658,14 +701,15 @@ TEST_CASE("Copy Input Nonexistent Model", "[task]") {
 
 
 TEST_CASE("Input and Infer", "[task]") {
+	CudaEventPool* event_pool = new CudaEventPool(GPU_ID_0);
     Model* model = make_model();
-    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model));
+    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model), GPU_ID_0);
     auto stream = std::make_shared<Autostream>();
     auto manager = make_manager();
-    manager->models->put(0, rm);
+    manager->models->put(0, GPU_ID_0, rm);
 
 
-    TestLoadWeightsTask loadweights(manager.get(),0, 0, util::now()+1000000000);
+    TestLoadWeightsTask loadweights(manager.get(), 0, 0, util::now()+1000000000, GPU_ID_0, event_pool);
     loadweights.run(stream->stream);
     REQUIRE(!loadweights.is_error);
     
@@ -677,7 +721,7 @@ TEST_CASE("Input and Infer", "[task]") {
 
     char* input = static_cast<char*>(malloc(model->input_size()));
 
-    TestCopyInputTask copyinput(manager.get(),0, 0, util::now() + 1000000000, 1, model->input_size(), input);
+    TestCopyInputTask copyinput(manager.get(), 0, 0, util::now() + 1000000000, 1, model->input_size(), input, GPU_ID_0, event_pool);
     copyinput.run(stream->stream);
     REQUIRE(!copyinput.is_error);
     
@@ -687,7 +731,7 @@ TEST_CASE("Input and Infer", "[task]") {
     REQUIRE(copyinput.is_success);
     REQUIRE(!copyinput.is_error);
 
-    TestInferTask infer(rm, manager.get(),0, util::now() + 1000000000, 1, copyinput.io_memory);
+    TestInferTask infer(rm, manager.get(), 0, util::now() + 1000000000, 1, copyinput.io_memory, GPU_ID_0, event_pool);
     infer.run(stream->stream);
     REQUIRE(!infer.is_error);
 
@@ -701,15 +745,16 @@ TEST_CASE("Input and Infer", "[task]") {
 }
 
 TEST_CASE("Infer Without Weights", "[task]") {
+	CudaEventPool* event_pool = new CudaEventPool(GPU_ID_0);
     Model* model = make_model();
-    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model));
+    RuntimeModel* rm = new RuntimeModel(make_batched_model(1, model), GPU_ID_0);
     auto stream = std::make_shared<Autostream>();
     auto manager = make_manager();
-    manager->models->put(0, rm);
+    manager->models->put(0, GPU_ID_0, rm);
 
     char* input = static_cast<char*>(malloc(model->input_size()));
 
-    TestCopyInputTask copyinput(manager.get(),0, 0, util::now() + 1000000000, 1, model->input_size(), input);
+    TestCopyInputTask copyinput(manager.get(), 0, 0, util::now() + 1000000000, 1, model->input_size(), input, GPU_ID_0, event_pool);
     copyinput.run(stream->stream);
     REQUIRE(!copyinput.is_error);
     
@@ -719,7 +764,7 @@ TEST_CASE("Infer Without Weights", "[task]") {
     REQUIRE(copyinput.is_success);
     REQUIRE(!copyinput.is_error);
 
-    TestInferTask infer(rm, manager.get(),0, util::now() + 1000000000, 1, copyinput.io_memory);
+    TestInferTask infer(rm, manager.get(), 0, util::now() + 1000000000, 1, copyinput.io_memory, GPU_ID_0, event_pool);
     infer.run(stream->stream);
     REQUIRE(!infer.is_success);
     REQUIRE(infer.is_error);
@@ -731,22 +776,23 @@ TEST_CASE("Infer Without Weights", "[task]") {
 
 
 TEST_CASE("Input Infer and Output", "[task]") {
+	CudaEventPool* event_pool = new CudaEventPool(GPU_ID_0);
     auto stream = std::make_shared<Autostream>();
     auto manager = make_manager();
 
     std::string model_path = clockwork::util::get_example_model();
 
-    TestLoadModelFromDiskTask loadmodel(manager.get(),0, model_path, util::now(), util::now()+1000000000);
+    TestLoadModelFromDiskTask loadmodel(manager.get(), 0, model_path, util::now(), util::now()+1000000000);
 
-    loadmodel.run(stream->stream);
+    loadmodel.run();
     REQUIRE(loadmodel.is_success);
     REQUIRE(!loadmodel.is_error);
 
-    RuntimeModel* rm = manager->models->get(0);
+    RuntimeModel* rm = manager->models->get(0, GPU_ID_0);
     REQUIRE(rm != nullptr);
     model::BatchedModel* model = rm->model;
 
-    TestLoadWeightsTask loadweights(manager.get(),0, 0, util::now()+1000000000);
+    TestLoadWeightsTask loadweights(manager.get(), 0, 0, util::now()+1000000000, GPU_ID_0, event_pool);
     loadweights.run(stream->stream);
     REQUIRE(!loadweights.is_error);
     
@@ -758,7 +804,7 @@ TEST_CASE("Input Infer and Output", "[task]") {
 
     char* input = static_cast<char*>(malloc(model->input_size(1)));
 
-    TestCopyInputTask copyinput(manager.get(),0, 0, util::now() + 1000000000, 1, model->input_size(1), input);
+    TestCopyInputTask copyinput(manager.get(), 0, 0, util::now() + 1000000000, 1, model->input_size(1), input, GPU_ID_0, event_pool);
     copyinput.run(stream->stream);
     REQUIRE(!copyinput.is_error);
     
@@ -769,7 +815,7 @@ TEST_CASE("Input Infer and Output", "[task]") {
     REQUIRE(!copyinput.is_error);
     REQUIRE(copyinput.io_memory != nullptr);
 
-    TestInferTask infer(rm, manager.get(),0, util::now() + 1000000000, 1, copyinput.io_memory);
+    TestInferTask infer(rm, manager.get(), 0, util::now() + 1000000000, 1, copyinput.io_memory, GPU_ID_0, event_pool);
     infer.run(stream->stream);
     REQUIRE(!infer.is_error);
 
@@ -779,7 +825,7 @@ TEST_CASE("Input Infer and Output", "[task]") {
     REQUIRE(infer.is_success);
     REQUIRE(!infer.is_error);
 
-    TestCopyOutputTask copyoutput(rm, manager.get(),0, util::now() + 1000000000, 1, copyinput.io_memory);
+    TestCopyOutputTask copyoutput(rm, manager.get(), 0, util::now() + 1000000000, 1, copyinput.io_memory, GPU_ID_0, event_pool);
     copyoutput.run(stream->stream);
     REQUIRE(!copyoutput.is_error);
 
@@ -793,22 +839,23 @@ TEST_CASE("Input Infer and Output", "[task]") {
 }
 
 TEST_CASE("Input Infer and Output Batched", "[task]") {
+	CudaEventPool* event_pool = new CudaEventPool(GPU_ID_0);
     auto stream = std::make_shared<Autostream>();
     auto manager = make_manager();
 
     std::string model_path = clockwork::util::get_example_batched_model();
 
-    TestLoadModelFromDiskTask loadmodel(manager.get(),0, model_path, util::now(), util::now()+1000000000);
+    TestLoadModelFromDiskTask loadmodel(manager.get(), 0, model_path, util::now(), util::now()+1000000000);
 
-    loadmodel.run(stream->stream);
+    loadmodel.run();
     REQUIRE(loadmodel.is_success);
     REQUIRE(!loadmodel.is_error);
 
-    RuntimeModel* rm = manager->models->get(0);
+    RuntimeModel* rm = manager->models->get(0, GPU_ID_0);
     REQUIRE(rm != nullptr);
     model::BatchedModel* model = rm->model;
 
-    TestLoadWeightsTask loadweights(manager.get(),0, 0, util::now()+1000000000);
+    TestLoadWeightsTask loadweights(manager.get(), 0, 0, util::now()+1000000000, GPU_ID_0, event_pool);
     loadweights.run(stream->stream);
     REQUIRE(!loadweights.is_error);
     
@@ -822,7 +869,7 @@ TEST_CASE("Input Infer and Output Batched", "[task]") {
 
         char* input = manager->host_io_pool->alloc(model->input_size(batch_size));
 
-        TestCopyInputTask copyinput(manager.get(),0, 0, util::now() + 1000000000, batch_size, model->input_size(batch_size), input);
+        TestCopyInputTask copyinput(manager.get(), 0, 0, util::now() + 1000000000, batch_size, model->input_size(batch_size), input, GPU_ID_0, event_pool);
         copyinput.run(stream->stream);
         INFO("B-" << batch_size << " Error " << copyinput.status_code << ": " << copyinput.error_message);
         REQUIRE(!copyinput.is_error);
@@ -835,7 +882,7 @@ TEST_CASE("Input Infer and Output Batched", "[task]") {
         REQUIRE(copyinput.is_success);
         REQUIRE(copyinput.io_memory != nullptr);
 
-        TestInferTask infer(rm, manager.get(),0, util::now() + 1000000000, batch_size, copyinput.io_memory);
+        TestInferTask infer(rm, manager.get(), 0, util::now() + 1000000000, batch_size, copyinput.io_memory, GPU_ID_0, event_pool);
         infer.run(stream->stream);
         INFO("B-" << batch_size << " Error " << infer.status_code << ": " << infer.error_message);
         REQUIRE(!infer.is_error);
@@ -847,7 +894,7 @@ TEST_CASE("Input Infer and Output Batched", "[task]") {
         REQUIRE(!infer.is_error);
         REQUIRE(infer.is_success);
 
-        TestCopyOutputTask copyoutput(rm, manager.get(),0, util::now() + 1000000000, batch_size, copyinput.io_memory);
+        TestCopyOutputTask copyoutput(rm, manager.get(), 0, util::now() + 1000000000, batch_size, copyinput.io_memory, GPU_ID_0, event_pool);
         copyoutput.run(stream->stream);
         INFO("B-" << batch_size << " Error " << copyoutput.status_code << ": " << copyoutput.error_message);
         REQUIRE(!copyoutput.is_error);
@@ -860,7 +907,136 @@ TEST_CASE("Input Infer and Output Batched", "[task]") {
         REQUIRE(copyoutput.is_success);
 
         manager->host_io_pool->free(copyoutput.output);
-        manager->io_pool->free(copyinput.io_memory);
-        manager->host_io_pool->free(input);
+		for (unsigned i = 0; i < manager->num_gpus; i++) {
+			manager->io_pools[i]->free(copyinput.io_memory);
+		}
     }
+}
+
+TEST_CASE("Input Infer and Output Multiple GPUs", "[task]") {
+	unsigned num_gpus = clockwork::util::get_num_gpus();
+
+	std::vector<CudaEventPool *> event_pools;
+	for (unsigned gpu_id = 0; gpu_id < num_gpus; gpu_id++) {
+		event_pools.push_back(new CudaEventPool(gpu_id));
+	}
+
+	std::vector<std::shared_ptr<Autostream> > streams;
+	for (unsigned i = 0; i < num_gpus; i++) {
+		streams.push_back(std::make_shared<Autostream>(i));
+	}
+
+	auto manager = make_manager();
+	std::string model_path = clockwork::util::get_example_model();
+
+	// Test LoadModelFromDiskTask
+	// The task creates necessary data structures RuntimeModel and BatchedModel
+	// for each GPU separately, and therefore does not need to be invoked
+	// separately for each GPU
+	TestLoadModelFromDiskTask loadmodel(manager.get(), 0, model_path,
+		util::now(), util::now()+1000000000);
+	loadmodel.run();
+	REQUIRE(loadmodel.is_success);
+	REQUIRE(!loadmodel.is_error);
+
+	// Obtain GPU-specific RuntimeModel and BatchedModel objects from the
+	// ModelStore (which is obtained from the MemoryManager)
+	std::vector<RuntimeModel*> rms;
+	std::vector<BatchedModel*> models;
+	for (unsigned i = 0; i < num_gpus; i++) {
+		RuntimeModel* rm = manager->models->get(0, i);
+		model::BatchedModel* model = rm->model;
+		REQUIRE(rm != nullptr);
+		REQUIRE(model != nullptr);
+		rms.push_back(rm);
+		models.push_back(model);
+	}
+
+	// Test LoadWeightTask
+	std::vector<TestLoadWeightsTask *> load_weights_tasks;
+	for (unsigned i = 0; i < num_gpus; i++) {
+		TestLoadWeightsTask* load_weights_task = new TestLoadWeightsTask(
+			manager.get(), 0, 0, util::now()+1000000000, i, event_pools[i]);
+		load_weights_task->run(streams[i]->stream);
+		REQUIRE(!load_weights_task->is_error);
+		load_weights_tasks.push_back(load_weights_task);
+	}
+
+	// Test LoadWeightTask completion
+	for (unsigned i = 0; i < num_gpus; i++) {
+		while (!load_weights_tasks[i]->is_complete());
+		load_weights_tasks[i]->process_completion();
+		REQUIRE(load_weights_tasks[i]->is_success);
+		REQUIRE(!load_weights_tasks[i]->is_error);
+	}
+
+	// Test CopyInputTask
+	std::vector<TestCopyInputTask *> copy_input_tasks;
+	std::vector<char*> inputs;
+	for (unsigned i = 0; i < num_gpus; i++) {
+		char* input = static_cast<char*>(malloc(models[i]->input_size(1)));
+		TestCopyInputTask* copy_input_task = new TestCopyInputTask(
+			manager.get(), 0, 0, util::now() + 1000000000, 1,
+			models[i]->input_size(1), input, i, event_pools[i]);
+		copy_input_task->run(streams[i]->stream);
+		REQUIRE(!copy_input_task->is_error);
+		copy_input_tasks.push_back(copy_input_task);
+		inputs.push_back(input);
+	}
+
+	// Test CopyInputTask completion
+	for (unsigned i = 0; i < num_gpus; i++) {
+		while (!copy_input_tasks[i]->is_complete());
+		copy_input_tasks[i]->process_completion();
+	    REQUIRE(copy_input_tasks[i]->is_success);
+	    REQUIRE(!copy_input_tasks[i]->is_error);
+	    REQUIRE(copy_input_tasks[i]->io_memory != nullptr);
+	}
+
+	// Test InferTask
+	std::vector<TestInferTask *> infer_tasks;
+	for (unsigned i = 0; i < num_gpus; i++) {
+		TestInferTask* infer_task = new TestInferTask(rms[i], manager.get(), 0,
+			util::now() + 1000000000, 1, copy_input_tasks[i]->io_memory, i,
+			event_pools[i]);
+		infer_task->run(streams[i]->stream);
+		REQUIRE(!infer_task->is_error);
+		infer_tasks.push_back(infer_task);
+	}
+
+	// Test InferTask completion
+	for (unsigned i = 0; i < num_gpus; i++) {
+		while (!infer_tasks[i]->is_complete());
+		infer_tasks[i]->process_completion();
+		REQUIRE(infer_tasks[i]->is_success);
+		REQUIRE(!infer_tasks[i]->is_error);
+	}
+
+	// Test CopyOutputTask
+	std::vector<TestCopyOutputTask *> copy_output_tasks;
+	for (unsigned i = 0; i < num_gpus; i++) {
+		TestCopyOutputTask* copy_output_task = new TestCopyOutputTask(
+			rms[i], manager.get(), 0, util::now() + 1000000000, 1,
+			copy_input_tasks[i]->io_memory, i, event_pools[i]);
+		copy_output_task->run(streams[i]->stream);
+		REQUIRE(!copy_output_task->is_error);
+		copy_output_tasks.push_back(copy_output_task);
+	}
+
+	// Test InferTask completion
+	for (unsigned i = 0; i < num_gpus; i++) {
+		while (!copy_output_tasks[i]->is_complete());
+		copy_output_tasks[i]->process_completion();
+		REQUIRE(copy_output_tasks[i]->is_success);
+		REQUIRE(!copy_output_tasks[i]->is_error);
+	}
+
+	// Free up all task objects
+	for (unsigned i = 0; i < num_gpus; i++) {
+		free(inputs[i]);
+		free(load_weights_tasks[i]);
+		free(copy_input_tasks[i]);
+		free(infer_tasks[i]);
+		free(copy_output_tasks[i]);
+	}
 }

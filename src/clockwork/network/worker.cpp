@@ -13,7 +13,8 @@ private:
 
 
 public:
-  infer_action_rx_using_io_pool(clockwork::MemoryPool* host_io_pool) : infer_action_rx(), host_io_pool(host_io_pool) {
+  infer_action_rx_using_io_pool(clockwork::MemoryPool* host_io_pool):
+    infer_action_rx(), host_io_pool(host_io_pool) {
   }
 
   virtual ~infer_action_rx_using_io_pool() {
@@ -35,7 +36,8 @@ private:
   clockwork::MemoryPool* host_io_pool;
 
 public:
-  infer_result_tx_using_io_pool(clockwork::MemoryPool* host_io_pool) : infer_result_tx(), host_io_pool(host_io_pool) {
+  infer_result_tx_using_io_pool(clockwork::MemoryPool* host_io_pool):
+    infer_result_tx(), host_io_pool(host_io_pool) {
   }
 
   virtual ~infer_result_tx_using_io_pool() {
@@ -56,7 +58,8 @@ public:
 class InferUsingIOPool : public workerapi::Infer {
 public:
 	clockwork::MemoryPool* host_io_pool;
-	InferUsingIOPool(clockwork::MemoryPool* host_io_pool) : host_io_pool(host_io_pool) {}
+	InferUsingIOPool(clockwork::MemoryPool* host_io_pool):
+		host_io_pool(host_io_pool) {}
 	~InferUsingIOPool() {
 		host_io_pool->free(input);
 	}

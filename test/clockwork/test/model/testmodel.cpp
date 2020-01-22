@@ -92,7 +92,7 @@ TEST_CASE("Load model from disk", "[model]") {
     std::string f = clockwork::util::get_example_model();
 
     Model* model = nullptr;
-    REQUIRE_NOTHROW(model = Model::loadFromDisk(f+".1.so", f+".1.clockwork", f+".clockwork_params"));
+    REQUIRE_NOTHROW(model = Model::loadFromDisk(f+".1.so", f+".1.clockwork", f+".clockwork_params", GPU_ID_0));
     REQUIRE(model != nullptr);
     delete model;
 
@@ -103,7 +103,7 @@ TEST_CASE("Model lifecycle 1", "[model]") {
     std::string f = clockwork::util::get_example_model();
 
     Model* model = nullptr;
-    REQUIRE_NOTHROW(model = Model::loadFromDisk(f+".1.so", f+".1.clockwork", f+".clockwork_params"));
+    REQUIRE_NOTHROW(model = Model::loadFromDisk(f+".1.so", f+".1.clockwork", f+".clockwork_params", GPU_ID_0));
     REQUIRE(model != nullptr);
 
     int page_size;
@@ -129,7 +129,7 @@ TEST_CASE("Model Lifecycle 2", "[model]") {
     std::string f = clockwork::util::get_example_model();
 
     Model* model = nullptr;
-    REQUIRE_NOTHROW(model = Model::loadFromDisk(f+".1.so", f+".1.clockwork", f+".clockwork_params"));
+    REQUIRE_NOTHROW(model = Model::loadFromDisk(f+".1.so", f+".1.clockwork", f+".clockwork_params", GPU_ID_0));
     REQUIRE(model != nullptr);
     
     assert_is_cool(model);
@@ -188,7 +188,7 @@ TEST_CASE("Model produces correct output", "[e2e] [model]") {
 
     std::string f = clockwork::util::get_example_model();
 
-    Model* model = Model::loadFromDisk(f+".1.so", f+".1.clockwork", f+".clockwork_params");
+    Model* model = Model::loadFromDisk(f+".1.so", f+".1.clockwork", f+".clockwork_params", GPU_ID_0);
     
     model->instantiate_model_on_host();
     model->instantiate_model_on_device();
@@ -232,7 +232,7 @@ TEST_CASE("Batched model produces correct output", "[e2e2] [model]") {
 
     std::string f = clockwork::util::get_example_batched_model();
 
-    Model* model = Model::loadFromDisk(f+".2.so", f+".2.clockwork", f+".clockwork_params");
+    Model* model = Model::loadFromDisk(f+".2.so", f+".2.clockwork", f+".clockwork_params", GPU_ID_0);
     
     model->instantiate_model_on_host();
     model->instantiate_model_on_device();

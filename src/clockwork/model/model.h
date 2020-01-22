@@ -35,6 +35,7 @@ struct OpExec {
 
 class Model {
 public:
+	unsigned gpu_id;
 
 	// Cool
 	const Memfile so_memfile;
@@ -42,7 +43,8 @@ public:
 	int weights_size;
 	char* weights_pinned_host_memory; // alloced with cudaMallocHost
 
-	Model(Memfile so_memfile, std::string &serialized_spec, int weights_size, char* weights_pinned_host_memory);
+	Model(Memfile so_memfile, std::string &serialized_spec, int weights_size,
+		char* weights_pinned_host_memory, unsigned gpu_id);
 
 
 private:
@@ -117,7 +119,8 @@ public:
 	static Model* loadFromDisk(
 			std::string so_filename, 
 			std::string clockwork_filename,
-			std::string clockwork_weights_filename );
+			std::string clockwork_weights_filename,
+			unsigned gpu_id);
 
 
 
@@ -126,7 +129,8 @@ public:
 
 class DiskModel : public Model {
 public:
-	DiskModel(Memfile so_memfile, std::string &serialized_spec, int weights_size, char* weights_pinned_host_memory);
+	DiskModel(Memfile so_memfile, std::string &serialized_spec, int weights_size,
+		char* weights_pinned_host_memory, unsigned gpu_id);
 	~DiskModel();
 };
 

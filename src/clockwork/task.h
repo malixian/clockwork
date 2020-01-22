@@ -8,6 +8,7 @@
 #include "clockwork/cache.h"
 #include "clockwork/model/model.h"
 #include "clockwork/memory.h"
+#include <tvm/runtime/cuda_common.h>
 
 /*
 This file contains logic for executing models directly
@@ -15,11 +16,36 @@ This file contains logic for executing models directly
 
 namespace clockwork {
 
+class CudaEventPool {
+public:
+	unsigned gpu_id;
+	tbb::concurrent_queue<cudaEvent_t> events;
+
+	CudaEventPool(unsigned gpu_id) : gpu_id(gpu_id) {
+	}
+
+	cudaEvent_t get_or_create() {
+		cudaEvent_t event;
+		if (!events.try_pop(event)) {
+			CUDA_CALL(cudaSetDevice(gpu_id));
+			CUDA_CALL(cudaEventCreate(&event));
+		}
+		return event;
+	}
+
+	void release(cudaEvent_t event) {
+		events.push(event);
+	}
+
+};
+
 class Task {
 public:
 	std::shared_ptr<TaskTelemetry> telemetry;
+	unsigned gpu_id = -1;
 
 	Task() : telemetry(std::make_shared<TaskTelemetry>()) {}
+	Task(unsigned gpu_id): gpu_id(gpu_id), telemetry(std::make_shared<TaskTelemetry>()) {}
 
 	virtual uint64_t eligible() = 0;
 	virtual void run(cudaStream_t stream) = 0;
@@ -28,6 +54,8 @@ public:
 
 class AsyncTask : public Task {
 public:
+	AsyncTask(unsigned gpu_id) : Task(gpu_id) {}
+
 	virtual bool is_complete() = 0;
 	virtual void process_completion() = 0;
 };
@@ -38,7 +66,9 @@ private:
 	std::atomic_bool async_begin_submitted, async_end_submitted;
 	cudaEvent_t async_begin_event, async_end_event;
 public:
-	CudaAsyncTask();
+	CudaEventPool* event_pool;
+
+	CudaAsyncTask(unsigned gpu_id, CudaEventPool* event_pool);
 	~CudaAsyncTask();
 
 	void record_async_begin(cudaStream_t stream);
@@ -73,7 +103,7 @@ public:
 
 	// Task
 	uint64_t eligible();
-	void run(cudaStream_t stream);
+	void run(cudaStream_t stream = 0);
 	virtual void cancel() = 0;
 
 	// Callbacks
@@ -93,7 +123,8 @@ private:
 
 public:
 
-	LoadWeightsTask(MemoryManager* manager, int model_id, uint64_t earliest, uint64_t latest);
+	LoadWeightsTask(MemoryManager* manager, int model_id, uint64_t earliest,
+		uint64_t latest, unsigned gpu_id, CudaEventPool* event_pool);
 	~LoadWeightsTask();
 
 	// Task
@@ -118,7 +149,8 @@ private:
 
 public:
 
-	EvictWeightsTask(MemoryManager* manager, int model_id, uint64_t earliest, uint64_t latest);
+	EvictWeightsTask(MemoryManager* manager, int model_id, uint64_t earliest,
+		uint64_t latest, unsigned gpu_id);
 
 	// Task
 	uint64_t eligible();
@@ -145,7 +177,9 @@ private:
 
 public:
 
-	CopyInputTask(MemoryManager* manager, int model_id, uint64_t earliest, uint64_t latest, unsigned batch_size, size_t input_size, char* input);
+	CopyInputTask(MemoryManager* manager, int model_id, uint64_t earliest,
+		uint64_t latest, unsigned batch_size, size_t input_size, char* input,
+		unsigned gpu_id, CudaEventPool* event_pool);
 	~CopyInputTask();
 
 	// Task
@@ -174,7 +208,9 @@ private:
 
 public:
 
-	ExecTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, unsigned batch_size, char* io_memory);
+	ExecTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest,
+		uint64_t latest, unsigned batch_size, char* io_memory, unsigned gpu_id,
+		CudaEventPool* event_pool);
 	~ExecTask();
 
 	// Task
@@ -201,7 +237,9 @@ private:
 	char* io_memory;
 
 public:
-	CopyOutputTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, unsigned batch_size, char* io_memory);
+	CopyOutputTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest,
+		uint64_t latest, unsigned batch_size, char* io_memory, unsigned gpu_id,
+		CudaEventPool* event_pool);
 	~CopyOutputTask();
 
 	// Task

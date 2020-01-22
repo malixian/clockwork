@@ -7,8 +7,12 @@
 namespace clockwork {
 namespace model {
 
-BatchedModel::BatchedModel(int weights_size, char* weights_pinned_host_memory, std::vector<std::pair<unsigned, Model*>> models):
-		weights_size(weights_size), weights_pinned_host_memory(weights_pinned_host_memory), models(models) {
+BatchedModel::BatchedModel(int weights_size, char* weights_pinned_host_memory,
+	std::vector<std::pair<unsigned, Model*>> models, unsigned gpu_id):
+		weights_size(weights_size),
+		weights_pinned_host_memory(weights_pinned_host_memory),
+		models(models),
+		gpu_id(gpu_id) {
 	std::sort(models.begin(), models.end());
 
 	unsigned batch_size = 0;
@@ -160,7 +164,7 @@ void BatchedModel::call(unsigned batch_size, std::vector<char*> &weights_pages, 
 	model_lookup[batch_size]->call(weights_pages, io_memory, workspace_memory, stream);
 }
 
-BatchedModel* BatchedModel::loadFromDisk(std::string base_filename) {
+BatchedModel* BatchedModel::loadFromDisk(std::string base_filename, unsigned gpu_id) {
 	std::string clockwork_weights_filename = base_filename + ".clockwork_params";
 
 	// Load shared weights
@@ -168,6 +172,7 @@ BatchedModel* BatchedModel::loadFromDisk(std::string base_filename) {
 	util::readFileAsString(clockwork_weights_filename, weights);
 	int weights_size = weights.size();
 	char* weights_pinned_host_memory;
+	CUDA_CALL(cudaSetDevice(gpu_id)); // TODO Is this really needed?
 	CUDA_CALL(cudaMallocHost(&weights_pinned_host_memory, weights_size));
 	std::memcpy(weights_pinned_host_memory, weights.data(), weights_size);
 
@@ -190,7 +195,7 @@ BatchedModel* BatchedModel::loadFromDisk(std::string base_filename) {
 		std::string clockwork_serialized_spec;
 		util::readFileAsString(clockwork_filename, clockwork_serialized_spec);
 
-		Model* model = new Model(so_memfile, clockwork_serialized_spec, weights_size, weights_pinned_host_memory);
+		Model* model = new Model(so_memfile, clockwork_serialized_spec, weights_size, weights_pinned_host_memory, gpu_id);
 		models.push_back(std::make_pair(batchsize, model));
 
 		batchsize *= 2;
@@ -198,7 +203,7 @@ BatchedModel* BatchedModel::loadFromDisk(std::string base_filename) {
 
 	CHECK(batchsize != 1) << "No valid batch sizes found for " << base_filename;
 
-	return new BatchedModel(weights_size, weights_pinned_host_memory, models);
+	return new BatchedModel(weights_size, weights_pinned_host_memory, models, gpu_id);
 }
 
 }

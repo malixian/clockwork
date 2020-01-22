@@ -43,7 +43,8 @@ void LoadModelFromDiskAction::LoadModelFromDiskTaskImpl::success(RuntimeModel* r
 	result->output_size = rm->model->output_size(1);
 	result->supported_batch_sizes = rm->model->implemented_batch_sizes();
 
-	int page_size = load_model->runtime->manager->weights_cache->page_size;
+	// TODO Verify: I assume that GPU-specific weights_caches have identical page_size
+	int page_size = load_model->runtime->manager->weights_caches[0]->page_size;
 	result->weights_size_in_cache = rm->model->num_weights_pages(page_size) * page_size;
 
 	extract_timing_sync(result.get(), telemetry);
@@ -85,12 +86,14 @@ void LoadModelFromDiskAction::handle_error(TaskError &error) {
 
 
 
-LoadWeightsAction::LoadWeightsTaskImpl::LoadWeightsTaskImpl(LoadWeightsAction* load_weights) : LoadWeightsTask(
-			load_weights->runtime->manager, 
-			load_weights->action->model_id, 
-			load_weights->action->earliest,
-			load_weights->action->latest),
-		load_weights(load_weights) {
+LoadWeightsAction::LoadWeightsTaskImpl::LoadWeightsTaskImpl(LoadWeightsAction* load_weights):
+	LoadWeightsTask(load_weights->runtime->manager,
+					load_weights->action->model_id,
+					load_weights->action->earliest,
+					load_weights->action->latest,
+					load_weights->action->gpu_id,
+					load_weights->runtime->event_pools[load_weights->action->gpu_id]),
+	load_weights(load_weights) {
 }
 
 void LoadWeightsAction::LoadWeightsTaskImpl::run(cudaStream_t stream) {
@@ -161,7 +164,8 @@ EvictWeightsAction::EvictWeightsTaskImpl::EvictWeightsTaskImpl(EvictWeightsActio
 			evict_weights->runtime->manager, 
 			evict_weights->action->model_id, 
 			evict_weights->action->earliest, 
-			evict_weights->action->latest), 
+			evict_weights->action->latest,
+			evict_weights->action->gpu_id),
 		evict_weights(evict_weights) {
 }
 
@@ -225,14 +229,17 @@ uint64_t InferAction::copy_input_earliest() {
 	return copy_input_lead_in > action->earliest ? 0 : action->earliest - copy_input_lead_in;
 }
 
-InferAction::CopyInputTaskImpl::CopyInputTaskImpl(InferAction* infer) : CopyInputTask(
-		infer->runtime->manager, 
-		infer->action->model_id,
-		infer->copy_input_earliest(),
-		infer->action->latest,
-		infer->action->batch_size,
-		infer->action->input_size,
-		infer->action->input), infer(infer) {
+InferAction::CopyInputTaskImpl::CopyInputTaskImpl(InferAction* infer):
+	CopyInputTask(infer->runtime->manager,
+				  infer->action->model_id,
+				  infer->copy_input_earliest(),
+				  infer->action->latest,
+				  infer->action->batch_size,
+				  infer->action->input_size,
+				  infer->action->input,
+				  infer->action->gpu_id,
+				  infer->runtime->event_pools[infer->action->gpu_id]),
+	infer(infer) {
 }
 
 void InferAction::CopyInputTaskImpl::run(cudaStream_t stream) {
@@ -256,7 +263,7 @@ void InferAction::CopyInputTaskImpl::success(RuntimeModel* rm, char* io_memory) 
 	infer->rm = rm;
 	infer->io_memory = io_memory;
 	infer->exec = new ExecTaskImpl(infer);
-	infer->runtime->gpu_executor->enqueue(infer->exec);
+	infer->runtime->gpu_executors[gpu_id]->enqueue(infer->exec);
 }
 
 void InferAction::CopyInputTaskImpl::cancel() {
@@ -264,13 +271,16 @@ void InferAction::CopyInputTaskImpl::cancel() {
 	infer->handle_error(error);
 }
 
-InferAction::ExecTaskImpl::ExecTaskImpl(InferAction* infer) : ExecTask(
-		infer->rm,
-		infer->runtime->manager, 
-		infer->action->earliest,
-		infer->action->latest, 
-		infer->action->batch_size,
-		infer->io_memory), infer(infer) {
+InferAction::ExecTaskImpl::ExecTaskImpl(InferAction* infer):
+	ExecTask(infer->rm,
+			 infer->runtime->manager,
+			 infer->action->earliest,
+			 infer->action->latest,
+			 infer->action->batch_size,
+			 infer->io_memory,
+			 infer->action->gpu_id,
+			 infer->runtime->event_pools[infer->action->gpu_id]),
+	infer(infer) {
 }
 
 void InferAction::ExecTaskImpl::run(cudaStream_t stream) {
@@ -300,13 +310,16 @@ void InferAction::ExecTaskImpl::cancel() {
 	infer->handle_error(error);
 }
 
-InferAction::CopyOutputTaskImpl::CopyOutputTaskImpl(InferAction* infer) : CopyOutputTask(
-		infer->rm,
-		infer->runtime->manager,
-		0,
-		18446744073709551615UL,
-		infer->action->batch_size,
-		infer->io_memory), infer(infer) {
+InferAction::CopyOutputTaskImpl::CopyOutputTaskImpl(InferAction* infer):
+	CopyOutputTask(infer->rm,
+				   infer->runtime->manager,
+				   0,
+				   18446744073709551615UL,
+				   infer->action->batch_size,
+				   infer->io_memory,
+				   infer->action->gpu_id,
+				   infer->runtime->event_pools[infer->action->gpu_id]),
+	infer(infer) {
 }
 
 void InferAction::CopyOutputTaskImpl::run(cudaStream_t stream) {
@@ -345,7 +358,7 @@ InferAction::~InferAction() {
 	if (copy_output != nullptr) delete copy_output;
 	
 	if (io_memory != nullptr) {
-		runtime->manager->io_pool->free(io_memory);
+		runtime->manager->io_pools[action->gpu_id]->free(io_memory);
 		io_memory = nullptr;
 	}
 }
@@ -357,7 +370,7 @@ void InferAction::submit() {
 
 void InferAction::handle_completion(char* output) {
 	if (io_memory != nullptr) {
-		runtime->manager->io_pool->free(io_memory);
+		runtime->manager->io_pools[action->gpu_id]->free(io_memory);
 		io_memory = nullptr;
 	}
 
@@ -380,13 +393,15 @@ void InferAction::handle_completion(char* output) {
 	result->output_size = rm->model->output_size(action->batch_size);
 	result->output = output;
 
+	result->gpu_id = action->gpu_id;
+
 	// TODO: who / where frees the output memory?
 	this->success(result);
 }
 
 void InferAction::handle_error(TaskError &error) {
 	if (io_memory != nullptr) {
-		runtime->manager->io_pool->free(io_memory);
+		runtime->manager->io_pools[action->gpu_id]->free(io_memory);
 		io_memory = nullptr;
 	}
 

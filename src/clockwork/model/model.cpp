@@ -5,12 +5,14 @@
 
 using namespace clockwork::model;
 
-Model::Model(Memfile so_memfile, std::string &serialized_spec, int weights_size, char* weights_pinned_host_memory):
+Model::Model(Memfile so_memfile, std::string &serialized_spec, int weights_size,
+	char* weights_pinned_host_memory, unsigned gpu_id):
 		so_memfile(so_memfile),	
 		serialized_spec(serialized_spec), 
 		weights_size(weights_size),
-		weights_pinned_host_memory(weights_pinned_host_memory) {
-
+		weights_pinned_host_memory(weights_pinned_host_memory),
+		gpu_id(gpu_id) {
+	CUDA_CALL(cudaSetDevice(gpu_id));
 	for (unsigned i = 0; i < rate_limit_events.size(); i++) {
 		CUDA_CALL(cudaEventCreateWithFlags(&rate_limit_events[i], cudaEventDisableTiming));
 	}
@@ -20,6 +22,7 @@ Model::~Model() {
 	if (hot_so != nullptr) uninstantiate_model_on_device();
 	if (warm_so != nullptr) uninstantiate_model_on_host();
 
+	CUDA_CALL(cudaSetDevice(gpu_id));
 	for (unsigned i = 0; i < rate_limit_events.size(); i++) {
 		CUDA_CALL(cudaEventDestroy(rate_limit_events[i]));
 	}
@@ -66,11 +69,13 @@ void Model::instantiate_model_on_device() {
 	cuModuleLoad requires a barrier on kernel execution, and will block until
 	current outstanding kernels have completed.  It will also block submission
 	of any new kernels. */
+	CUDA_CALL(cudaSetDevice(gpu_id));
 	hot_so = warm_so->load();
 }
 
 void Model::uninstantiate_model_on_device() {
 	CHECK(hot_so != nullptr) << "uninstantiate_model_on_device hot_so is nullptr";
+	CUDA_CALL(cudaSetDevice(gpu_id));
 	hot_so->unload();
 	hot_so = nullptr;
 }
@@ -94,6 +99,7 @@ size_t Model::io_memory_size() {
 }
 
 void Model::transfer_weights_to_device(std::vector<char*> &weights_pages, cudaStream_t stream) {
+	CUDA_CALL(cudaSetDevice(gpu_id));
 	for (unsigned i = 0; i < weights_pages_count; i++) {
 		PageDef &def = spec->weights_pages[i];
 		CUDA_CALL(
@@ -128,6 +134,7 @@ void Model::transfer_input_to_device(size_t input_size, const char* input_ptr, c
 	CHECK(input_size <= spec->inputs[0].size) << "transfer_input_to_device tried to transfer more bytes than allowed";
 	CHECK(spec->inputs[0].page == weights_pages_count) << "transfer_input_to_device expected input on page " << weights_pages_count;
 	void* dst_ptr = dst_io_memory + spec->inputs[0].page_offset;
+	CUDA_CALL(cudaSetDevice(gpu_id));
 	CUDA_CALL(
 		cudaMemcpyAsync(
 			dst_ptr,
@@ -156,6 +163,7 @@ void Model::transfer_output_from_device(size_t output_size, char* output_ptr, ch
 	CHECK(output_size <= spec->outputs[0].size) << "transfer_output_from_device tried to transfer more bytes than allowed";
 	CHECK(spec->inputs[0].page == weights_pages_count) << "transfer_output_from_device expected output on page " << weights_pages_count;
 	void* src_ptr = src_io_memory + spec->outputs[0].page_offset;
+	CUDA_CALL(cudaSetDevice(gpu_id));
 	CUDA_CALL(
 		cudaMemcpyAsync(
 			output_ptr, 
@@ -170,6 +178,7 @@ void Model::transfer_output_from_device(size_t output_size, char* output_ptr, ch
 /* Preconditions: instantiate_model_on_device && set_workspace_pages && set_weights_pages */
 void Model::call(std::vector<char*> &weights_pages, char* &io_memory, char* &workspace_memory, cudaStream_t stream) {
 	CHECK(hot_so != nullptr) << "call hot_so is nullptr";
+	CUDA_CALL(cudaSetDevice(gpu_id));
 	
 	std::vector<char*> pages;
 	pages.insert(pages.end(), weights_pages.begin(), weights_pages.end());
@@ -188,6 +197,7 @@ void Model::call(std::vector<char*> &weights_pages, char* &io_memory, char* &wor
 }
 
 void Model::make_op_exec(PageMappedOpDef &spec, OpExec &op) {
+	CUDA_CALL(cudaSetDevice(gpu_id));
 	op.spec = &spec;
 	
 	op.num_inputs = spec.inputs.size();
@@ -216,6 +226,7 @@ void Model::make_op_exec(PageMappedOpDef &spec, OpExec &op) {
 }
 
 void Model::call_op_exec(OpExec &op, std::vector<char*> &pages) {
+	CUDA_CALL(cudaSetDevice(gpu_id));
 	// Point the inputs to the right place
 	for (unsigned i = 0; i < op.num_inputs; i++) {
 		auto &tensor = op.input_tensors[i];
@@ -240,18 +251,22 @@ void Model::call_op_exec(OpExec &op, std::vector<char*> &pages) {
 
 // TODO: should use managed memory for host-side weights rather than using cudaMallocHost
 
-DiskModel::DiskModel(Memfile so_memfile, std::string &serialized_spec, int weights_size, char* weights_pinned_host_memory) :
-		Model(so_memfile, serialized_spec, weights_size, weights_pinned_host_memory) {
+DiskModel::DiskModel(Memfile so_memfile, std::string &serialized_spec,
+	int weights_size, char* weights_pinned_host_memory, unsigned gpu_id) :
+		Model(so_memfile, serialized_spec, weights_size,
+			weights_pinned_host_memory, gpu_id) {
 }
 
 DiskModel::~DiskModel() {
+	CUDA_CALL(cudaSetDevice(gpu_id)); // TODO Is this really needed?
 	CUDA_CALL(cudaFreeHost(weights_pinned_host_memory));
 }
 
 Model* Model::loadFromDisk(
 		std::string so_filename, 
 		std::string clockwork_filename,
-		std::string clockwork_weights_filename ) {
+		std::string clockwork_weights_filename,
+		unsigned gpu_id) {
 
 	Memfile so_memfile = Memfile::readFrom(so_filename);
 
@@ -262,6 +277,7 @@ Model* Model::loadFromDisk(
 	util::readFileAsString(clockwork_weights_filename, weights);
 	int weights_size = weights.size();
 	char* weights_pinned_host_memory;
+	CUDA_CALL(cudaSetDevice(gpu_id)); // TODO Is this really needed?
 	CUDA_CALL(cudaMallocHost(&weights_pinned_host_memory, weights_size));
 	std::memcpy(weights_pinned_host_memory, weights.data(), weights_size);
 
@@ -269,5 +285,6 @@ Model* Model::loadFromDisk(
 		so_memfile, 
 		clockwork_serialized_spec, 
 		weights_size, 
-		weights_pinned_host_memory );
+		weights_pinned_host_memory,
+		gpu_id);
 }

@@ -6,50 +6,35 @@
 
 namespace clockwork {
 
-class CudaEventPool {
-public:
-	tbb::concurrent_queue<cudaEvent_t> events;
-
-	cudaEvent_t get_or_create() {
-		cudaEvent_t event;
-		if (!events.try_pop(event)) {
-			CUDA_CALL(cudaEventCreate(&event));
-		}
-		return event;
-	}
-
-	void release(cudaEvent_t event) {
-		events.push(event);
-	}
-
-};
-
-CudaEventPool event_pool;
-
-CudaAsyncTask::CudaAsyncTask() :
-		AsyncTask(),
-		async_begin_submitted(false), 
-		async_end_submitted(false), 
-		async_begin_event(event_pool.get_or_create()), 
-		async_end_event(event_pool.get_or_create()) {
+CudaAsyncTask::CudaAsyncTask(unsigned gpu_id, CudaEventPool* event_pool) :
+	AsyncTask(gpu_id),
+	event_pool(event_pool),
+	async_begin_submitted(false),
+	async_end_submitted(false),
+	async_begin_event(event_pool->get_or_create()),
+	async_end_event(event_pool->get_or_create()) {
 }
 
 CudaAsyncTask::~CudaAsyncTask() {
-	event_pool.release(async_begin_event);
-	event_pool.release(async_end_event);
+	event_pool->release(async_begin_event);
+	event_pool->release(async_end_event);
 }
 
 void CudaAsyncTask::record_async_begin(cudaStream_t stream) {
-	CUDA_CALL(cudaEventRecord(async_begin_event, stream));
+	CUDA_CALL(cudaSetDevice(gpu_id));
+	cudaError_t status = cudaEventRecord(async_begin_event, stream);
 	async_begin_submitted.store(true);
 }
 
 void CudaAsyncTask::record_async_end(cudaStream_t stream) {
+	CUDA_CALL(cudaSetDevice(gpu_id));
 	CUDA_CALL(cudaEventRecord(async_end_event, stream));
 	async_end_submitted.store(true);
 }
 
 bool CudaAsyncTask::is_complete() {
+	CUDA_CALL(cudaSetDevice(gpu_id));
+
 	// Same semantics as cuda event: unused event is complete
 	if (!async_begin_submitted.load()) return true;
 	if (!async_end_submitted.load()) return false;
@@ -67,6 +52,7 @@ bool CudaAsyncTask::is_complete() {
 
 float CudaAsyncTask::async_duration() {
 	float async_duration;
+	CUDA_CALL(cudaSetDevice(gpu_id));
 	CUDA_CALL(cudaEventElapsedTime(&async_duration, async_begin_event, async_end_event));
 	return async_duration;
 }
@@ -93,40 +79,58 @@ void LoadModelFromDiskTask::run(cudaStream_t stream) {
 		throw TaskError(actionErrorCouldNotStartInTime, "LoadModelFromDiskTask could not start in time");
 	}
 
-	if (manager->models->contains(model_id)) {
-		throw TaskError(actionErrorInvalidModelID, "LoadModelFromDiskTask specified ID that already exists");
-	}
+	std::vector<model::BatchedModel*> batched_models;
+	std::vector<RuntimeModel*> runtime_models;
 
-	// TODO: loadFromDisk will call cudaMallocHost; in future don't use this, and manage host memory manually
-	// TODO: for now just wrap dmlc error for failing to load model, since the existence of this task is a
-	//       giant hack anyway
-	model::BatchedModel* model;
 	try {
-		model = model::BatchedModel::loadFromDisk(model_path);
-	} catch (dmlc::Error &error) {
-		throw TaskError(actionErrorInvalidModelPath, error.what());
+		for (unsigned gpu_id = 0; gpu_id < manager->num_gpus; gpu_id++) {
+			if (manager->models->contains(model_id, gpu_id)) {
+				throw TaskError(actionErrorInvalidModelID, "LoadModelFromDiskTask specified ID that already exists");
+			}
+
+			// TODO: loadFromDisk will call cudaMallocHost; in future don't use this, and manage host memory manually
+			// TODO: for now just wrap dmlc error for failing to load model, since the existence of this task is a
+			//       giant hack anyway
+			model::BatchedModel* batched_model;
+			try {
+				batched_model = model::BatchedModel::loadFromDisk(model_path, gpu_id);
+				batched_models.push_back(batched_model);
+				batched_model->instantiate_models_on_host();
+				batched_model->instantiate_models_on_device();
+			} catch (dmlc::Error &error) {
+				throw TaskError(actionErrorInvalidModelPath, error.what());
+			}
+
+			RuntimeModel* runtime_model = new RuntimeModel(batched_model, gpu_id);
+			runtime_models.push_back(runtime_model);
+			if (!manager->models->put_if_absent(model_id, gpu_id, runtime_model)) {
+				throw TaskError(actionErrorInvalidModelID, "LoadModelFromDiskTask specified ID that already exists");
+			}
+		}
+	} catch (TaskError e) {
+		for (unsigned i = 0; i < batched_models.size(); i++) { delete batched_models[i]; }
+		for (unsigned i = 0; i < runtime_models.size(); i++) { delete runtime_models[i]; }
+		throw e;
 	}
 
-	model->instantiate_models_on_host();
-	model->instantiate_models_on_device();
-
-	RuntimeModel* rm = new RuntimeModel(model);
-
-	bool success = manager->models->put_if_absent(model_id, rm);
-
-	if (!success) {
-		delete model;
-		delete rm;
-		throw TaskError(actionErrorInvalidModelID, "LoadModelFromDiskTask specified ID that already exists");
-	}
-
-	this->success(rm);
+	// TODO Verify the following!
+	// Vector runtime_models contains a separate runtime_model for each GPU ID.
+	// Thus, the batched_model associated with each runtime_model is also GPU-specific.
+	// For each batched_model, the parameters that are returned back to the controller,
+	// i.e., input_size(1), output_size(1), implemented_batch_sizes() are identical.
+	// Hence, it suffices to consider only one batched_model, ...
+	// i.e., runtime_models[0]->model, when filling the LoadModelFromDiskResult object.
+	// Therefore, I return only the first runtime_model to function ...
+	// LoadModelFromDiskAction::LoadModelFromDiskTaskImpl::success
+	this->success(runtime_models[0]);
 }
 
 
-LoadWeightsTask::LoadWeightsTask(MemoryManager* manager, int model_id, uint64_t earliest, uint64_t latest) : 
-		manager(manager), model_id(model_id), earliest(earliest), latest(latest), 
-		rm(nullptr), new_weights(nullptr) {
+LoadWeightsTask::LoadWeightsTask(MemoryManager* manager, int model_id,
+	uint64_t earliest, uint64_t latest, unsigned gpu_id,
+	CudaEventPool* event_pool):
+		CudaAsyncTask(gpu_id, event_pool), manager(manager), model_id(model_id),
+		earliest(earliest), latest(latest), rm(nullptr), new_weights(nullptr) {
 }
 
 LoadWeightsTask::~LoadWeightsTask() {
@@ -147,9 +151,12 @@ void LoadWeightsTask::run(cudaStream_t stream) {
 		throw TaskError(actionErrorCouldNotStartInTime, "LoadWeightsTask could not start in time");
 	}
 
-	rm = manager->models->get(model_id);
+	rm = manager->models->get(model_id, gpu_id);
 	if (rm == nullptr) {
-		throw TaskError(actionErrorUnknownModel, "LoadWeightsTask could not find model with specified id");
+		std::string error_message = "LoadWeightsTask could not find model";
+		error_message += " with model ID " + std::to_string(model_id);
+		error_message += " and GPU ID " + std::to_string(gpu_id);
+		throw TaskError(actionErrorUnknownModel, error_message);
 	}
 
 	rm->lock();
@@ -161,12 +168,12 @@ void LoadWeightsTask::run(cudaStream_t stream) {
 	rm->unlock();
 
 	if (previous_weights != nullptr && !previous_weights->evicted) {
-		manager->weights_cache->unlock(previous_weights);
-		manager->weights_cache->free(previous_weights);
+		manager->weights_caches[gpu_id]->unlock(previous_weights);
+		manager->weights_caches[gpu_id]->free(previous_weights);
 	}
 
-	unsigned num_pages = rm->model->num_weights_pages(manager->weights_cache->page_size);
-	this->new_weights = manager->weights_cache->alloc(num_pages, []{});
+	unsigned num_pages = rm->model->num_weights_pages(manager->weights_caches[gpu_id]->page_size);
+	this->new_weights = manager->weights_caches[gpu_id]->alloc(num_pages, []{});
 	if (this->new_weights == nullptr) {
 		throw TaskError(actionErrorRuntimeError, "LoadWeightsTask failed to allocate pages from cache");
 	}
@@ -198,8 +205,13 @@ void LoadWeightsTask::process_completion() {
 	}
 }
 
-EvictWeightsTask::EvictWeightsTask(MemoryManager* manager, int model_id, uint64_t earliest, uint64_t latest): 
-		manager(manager), model_id(model_id), earliest(earliest), latest(latest) {
+EvictWeightsTask::EvictWeightsTask(MemoryManager* manager, int model_id,
+	uint64_t earliest, uint64_t latest, unsigned gpu_id):
+		Task(gpu_id),
+		manager(manager),
+		model_id(model_id),
+		earliest(earliest),
+		latest(latest) {
 }
 
 uint64_t EvictWeightsTask::eligible() {
@@ -216,7 +228,7 @@ void EvictWeightsTask::run(cudaStream_t stream) {
 		throw TaskError(actionErrorCouldNotStartInTime, "EvictWeightsTask could not start in time");
 	}
 
-	rm = manager->models->get(model_id);
+	rm = manager->models->get(model_id, gpu_id);
 	if (rm == nullptr) {
 		throw TaskError(actionErrorUnknownModel, "EvictWeightsTask could not find model with specified id");
 	}
@@ -233,16 +245,19 @@ void EvictWeightsTask::run(cudaStream_t stream) {
 		throw TaskError(actionErrorModelWeightsNotPresent, "EvictWeightsTask not processed because no weights exist");
 	}
 
-	manager->weights_cache->unlock(previous_weights);
-	manager->weights_cache->free(previous_weights);
+	manager->weights_caches[gpu_id]->unlock(previous_weights);
+	manager->weights_caches[gpu_id]->free(previous_weights);
 
 	success(rm);
 }
 
 
-CopyInputTask::CopyInputTask(MemoryManager* manager, int model_id, uint64_t earliest, uint64_t latest, unsigned batch_size, size_t input_size, char* input) : 
-		manager(manager), model_id(model_id), earliest(earliest), latest(latest), batch_size(batch_size), input_size(input_size), input(input),
-		rm(nullptr), io_memory(nullptr) {
+CopyInputTask::CopyInputTask(MemoryManager* manager, int model_id,
+	uint64_t earliest, uint64_t latest, unsigned batch_size, size_t input_size,
+	char* input, unsigned gpu_id, CudaEventPool* event_pool):
+		CudaAsyncTask(gpu_id, event_pool), manager(manager), model_id(model_id),
+		earliest(earliest), latest(latest), batch_size(batch_size),
+		input_size(input_size), input(input), rm(nullptr), io_memory(nullptr) {
 }
 
 CopyInputTask::~CopyInputTask() {
@@ -263,7 +278,7 @@ void CopyInputTask::run(cudaStream_t stream) {
 		throw TaskError(actionErrorCouldNotStartInTime, "CopyInputTask could not start in time");
 	}
 
-	rm = manager->models->get(model_id);
+	rm = manager->models->get(model_id, gpu_id);
 	if (rm == nullptr) {
 		throw TaskError(actionErrorUnknownModel, "CopyInputTask could not find model with specified id");
 	}
@@ -284,7 +299,7 @@ void CopyInputTask::run(cudaStream_t stream) {
 	}
 
 	size_t io_memory_size = rm->model->io_memory_size(batch_size);
-	this->io_memory = manager->io_pool->alloc(io_memory_size);
+	this->io_memory = manager->io_pools[gpu_id]->alloc(io_memory_size);
 
 	if (this->io_memory == nullptr) {
 		throw TaskError(actionErrorRuntimeError, "CopyInputTask failed to allocate memory from io_pool");
@@ -302,16 +317,19 @@ void CopyInputTask::process_completion() {
 
 
 
-ExecTask::ExecTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, unsigned batch_size, char* io_memory) : 
-		rm(rm), manager(manager), earliest(earliest), latest(latest), batch_size(batch_size), io_memory(io_memory),
-		weights(nullptr) {
+ExecTask::ExecTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest,
+	uint64_t latest, unsigned batch_size, char* io_memory, unsigned gpu_id,
+	CudaEventPool* event_pool):
+		CudaAsyncTask(gpu_id, event_pool), rm(rm), manager(manager),
+		earliest(earliest), latest(latest), batch_size(batch_size),
+		io_memory(io_memory), weights(nullptr) {
 }
 
 ExecTask::~ExecTask() {
 	weights = nullptr;
 
 	if (workspace_memory != nullptr) {
-		manager->workspace_pool->free(workspace_memory);
+		manager->workspace_pools[gpu_id]->free(workspace_memory);
 		workspace_memory = nullptr;
 	}
 }
@@ -342,10 +360,10 @@ void ExecTask::run(cudaStream_t stream) {
 	}
 
 	size_t workspace_size = rm->model->workspace_memory_size(batch_size);
-	this->workspace_memory = manager->workspace_pool->alloc(workspace_size);
+	this->workspace_memory = manager->workspace_pools[gpu_id]->alloc(workspace_size);
 
 	if (this->workspace_memory == nullptr) {
-		std::cout << "Trying to alloc " << workspace_size << " from " << manager->workspace_pool->size << std::endl;
+		std::cout << "Trying to alloc " << workspace_size << " from " << manager->workspace_pools[0]->size << std::endl;
 		throw TaskError(actionErrorRuntimeError, "ExecTask failed to allocate memory from workspace_pool");
 	}
 
@@ -358,7 +376,7 @@ void ExecTask::process_completion() {
 	telemetry->async_duration = this->async_duration();
 
 	if (workspace_memory != nullptr) {
-		manager->workspace_pool->free(workspace_memory);
+		manager->workspace_pools[gpu_id]->free(workspace_memory);
 		workspace_memory = nullptr;
 	}
 
@@ -377,8 +395,12 @@ void ExecTask::process_completion() {
 
 
 
-CopyOutputTask::CopyOutputTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest, uint64_t latest, unsigned batch_size, char* io_memory) : 
-		rm(rm), manager(manager), earliest(earliest), latest(latest), batch_size(batch_size), io_memory(io_memory), output(nullptr) {
+CopyOutputTask::CopyOutputTask(RuntimeModel* rm, MemoryManager* manager,
+	uint64_t earliest, uint64_t latest, unsigned batch_size, char* io_memory,
+	unsigned gpu_id, CudaEventPool* event_pool):
+		CudaAsyncTask(gpu_id, event_pool), rm(rm), manager(manager),
+		earliest(earliest), latest(latest), batch_size(batch_size),
+		io_memory(io_memory), output(nullptr) {
 }
 
 CopyOutputTask::~CopyOutputTask() {

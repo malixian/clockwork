@@ -207,7 +207,7 @@ TEST_CASE("MemoryPool Staggered Free Order", "[mempool]") {
 TEST_CASE("CUDAMemoryPool", "[mempool]") {
     using namespace clockwork;
 
-    CUDAMemoryPool* pool = CUDAMemoryPool::create(1000);
+    CUDAMemoryPool* pool = CUDAMemoryPool::create(1000, GPU_ID_0);
     delete pool;
 }
 

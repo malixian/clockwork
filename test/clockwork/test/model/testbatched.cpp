@@ -43,7 +43,7 @@ TEST_CASE("Batched models individually", "[batched]") {
         std::stringstream batched_f;
         batched_f << f << "." << batch_size;
 
-        Model* model = Model::loadFromDisk(batched_f.str()+".so", batched_f.str()+".clockwork", f+".clockwork_params");
+        Model* model = Model::loadFromDisk(batched_f.str()+".so", batched_f.str()+".clockwork", f+".clockwork_params", GPU_ID_0);
 
         model->instantiate_model_on_host();
         model->instantiate_model_on_device();
@@ -111,7 +111,7 @@ TEST_CASE("Batched models with partial batches", "[batched]") {
 
     std::string f = clockwork::util::get_example_batched_model();
 
-    BatchedModel* model = BatchedModel::loadFromDisk(f);
+    BatchedModel* model = BatchedModel::loadFromDisk(f, GPU_ID_0);
     
     model->instantiate_models_on_host();
     model->instantiate_models_on_device();

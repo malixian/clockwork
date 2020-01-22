@@ -126,10 +126,10 @@ std::shared_ptr<ClockworkRuntime> make_runtime() {
 BatchedModel* make_model_for_action() {
     std::string f = clockwork::util::get_example_model();
 
-    Model* model = Model::loadFromDisk(f+".1.so", f+".1.clockwork", f+".clockwork_params");
+    Model* model = Model::loadFromDisk(f+".1.so", f+".1.clockwork", f+".clockwork_params", GPU_ID_0);
 
     std::vector<std::pair<unsigned, Model*>> models = {{1, model}};
-    BatchedModel* batched = new BatchedModel(model->weights_size, model->weights_pinned_host_memory, models);
+    BatchedModel* batched = new BatchedModel(model->weights_size, model->weights_pinned_host_memory, models, GPU_ID_0);
 
     batched->instantiate_models_on_host();
     batched->instantiate_models_on_device();
@@ -166,7 +166,7 @@ TEST_CASE("Load Model From Disk Action Multiple", "[action] [loadmodel_action]")
 TEST_CASE("Load Weights Action", "[action] [loadweights_action]") {
     BatchedModel* model = make_model_for_action();
     auto clockwork = make_runtime();
-    clockwork->manager->models->put(0, new RuntimeModel(model));
+    clockwork->manager->models->put(0, GPU_ID_0, new RuntimeModel(model, GPU_ID_0));
 
     TestLoadWeightsAction load_weights(clockwork.get(), load_weights_action());
 
@@ -178,7 +178,7 @@ TEST_CASE("Load Weights Action", "[action] [loadweights_action]") {
 TEST_CASE("Load Weights Action Multiple", "[action] [loadweights_multiple]") {
     BatchedModel* model = make_model_for_action();
     auto clockwork = make_runtime();
-    clockwork->manager->models->put(0, new RuntimeModel(model));
+    clockwork->manager->models->put(0, GPU_ID_0, new RuntimeModel(model, GPU_ID_0));
 
     for (unsigned i = 0; i < 5; i++) {
         TestLoadWeightsAction load_weights(clockwork.get(), load_weights_action());
@@ -203,7 +203,7 @@ TEST_CASE("Load Weights Action Invalid Model", "[action]") {
 TEST_CASE("Load Evict Weights Action", "[action] [evict_action]") {
     BatchedModel* model = make_model_for_action();
     auto clockwork = make_runtime();
-    clockwork->manager->models->put(0, new RuntimeModel(model));
+    clockwork->manager->models->put(0, GPU_ID_0, new RuntimeModel(model, GPU_ID_0));
 
     TestLoadWeightsAction load_weights(clockwork.get(), load_weights_action());
 
@@ -221,7 +221,7 @@ TEST_CASE("Load Evict Weights Action", "[action] [evict_action]") {
 TEST_CASE("Evict without Weights Action", "[action] [evict_action]") {
     BatchedModel* model = make_model_for_action();
     auto clockwork = make_runtime();
-    clockwork->manager->models->put(0, new RuntimeModel(model));
+    clockwork->manager->models->put(0, GPU_ID_0, new RuntimeModel(model, GPU_ID_0));
 
     TestEvictWeightsAction evict_weights(clockwork.get(), evict_weights_action());
 
@@ -233,7 +233,7 @@ TEST_CASE("Evict without Weights Action", "[action] [evict_action]") {
 TEST_CASE("Infer Action", "[action] [infer_action]") {
     BatchedModel* model = make_model_for_action();
     auto clockwork = make_runtime();
-    clockwork->manager->models->put(0, new RuntimeModel(model));
+    clockwork->manager->models->put(0, GPU_ID_0, new RuntimeModel(model, GPU_ID_0));
 
     TestLoadWeightsAction load_weights(clockwork.get(), load_weights_action());
 
@@ -292,7 +292,7 @@ TEST_CASE("Infer Action Nonexistent Weights", "[action] [noweights]") {
 TEST_CASE("Infer Action Multiple", "[action] [infer_action_multiple]") {
     BatchedModel* model = make_model_for_action();
     auto clockwork = make_runtime();
-    clockwork->manager->models->put(0, new RuntimeModel(model));
+    clockwork->manager->models->put(0, GPU_ID_0, new RuntimeModel(model, GPU_ID_0));
 
     TestLoadWeightsAction load_weights(clockwork.get(), load_weights_action());
 
@@ -322,7 +322,7 @@ TEST_CASE("Make Many Models", "[action] [models]") {
 TEST_CASE("Infer Action Multiple Concurrent", "[action] [infer_action_concurrent]") {
     BatchedModel* model = make_model_for_action();
     auto clockwork = make_runtime();
-    clockwork->manager->models->put(0, new RuntimeModel(model));
+    clockwork->manager->models->put(0, GPU_ID_0, new RuntimeModel(model, GPU_ID_0));
 
     TestLoadWeightsAction load_weights(clockwork.get(), load_weights_action());
 
@@ -349,7 +349,7 @@ TEST_CASE("Infer Action Multiple Concurrent", "[action] [infer_action_concurrent
 TEST_CASE("Infer after Evict Action", "[action] [evict_action]") {
     BatchedModel* model = make_model_for_action();
     auto clockwork = make_runtime();
-    clockwork->manager->models->put(0, new RuntimeModel(model));
+    clockwork->manager->models->put(0, GPU_ID_0, new RuntimeModel(model, GPU_ID_0));
 
     TestLoadWeightsAction load_weights(clockwork.get(), load_weights_action());
 
@@ -395,7 +395,7 @@ TEST_CASE("Actions E2E", "[action] [e2e]") {
 
     delete load_weights;
     
-    BatchedModel* model = clockwork->manager->models->get(0)->model;
+    BatchedModel* model = clockwork->manager->models->get(0, GPU_ID_0)->model;
     auto infer = new TestInferAction(clockwork.get(), infer_action(1, model));
 
     infer->submit();
@@ -426,7 +426,7 @@ TEST_CASE("Actions E2E", "[action] [e2e]") {
 TEST_CASE("Task Cancelled After Shutdown", "[action] [shutdown]") {
     BatchedModel* model = make_model_for_action();
     auto clockwork = make_runtime();
-    clockwork->manager->models->put(0, new RuntimeModel(model));
+    clockwork->manager->models->put(0, GPU_ID_0, new RuntimeModel(model, GPU_ID_0));
 
     auto action = load_weights_action();
     action->earliest = util::now() + 1000000000UL; // + 10seconds

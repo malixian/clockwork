@@ -211,6 +211,7 @@ class infer_result_tx : public msg_protobuf_tx_with_body<RES_INFER, InferResultP
 public:
   virtual void set(workerapi::InferResult &result) {
   	msg.set_action_id(result.id);
+	msg.set_gpu_id(result.gpu_id);
   	msg.mutable_copy_input_timing()->set_begin(result.copy_input.begin);
   	msg.mutable_copy_input_timing()->set_end(result.copy_input.end);
   	msg.mutable_copy_input_timing()->set_duration(result.copy_input.duration);
@@ -231,6 +232,7 @@ public:
   	result.id = msg.action_id();
   	result.action_type = workerapi::inferAction;
   	result.status = actionSuccess;
+	result.gpu_id = msg.gpu_id();
   	result.copy_input.begin = msg.copy_input_timing().begin();
   	result.copy_input.end = msg.copy_input_timing().end();
   	result.copy_input.duration = msg.copy_input_timing().duration();

@@ -33,7 +33,8 @@ model::Model* duplicate(model::Model* model, bool duplicate_weights) {
         weights_pinned_host_memory = model->weights_pinned_host_memory;
     }
 
-    return new model::Model(so_memfile, serialized_spec, model->weights_size, static_cast<char*>(weights_pinned_host_memory));
+	// TODO Does it suffice if profiling is on GPU 0?
+    return new model::Model(so_memfile, serialized_spec, model->weights_size, static_cast<char*>(weights_pinned_host_memory), GPU_ID_0);
 }
 
 class Experiment {
@@ -407,7 +408,8 @@ model::Model* load_model_from_disk(std::string model_path) {
     std::string so_filename = model_path + ".1.so";
     std::string clockwork_filename = model_path + ".1.clockwork";
     std::string params_filename = model_path + ".clockwork_params";
-    return model::Model::loadFromDisk(so_filename, clockwork_filename, params_filename);    
+	// TODO Does it suffice if profiling is from GPU 0?
+    return model::Model::loadFromDisk(so_filename, clockwork_filename, params_filename, GPU_ID_0);
 }
 
 void get_model_inputs_and_outputs(std::string model_path, std::string &input, std::string &output) {
@@ -425,13 +427,13 @@ void warmup() {
 
     size_t weights_page_size = 16 * 1024L * 1024L;
     size_t weights_cache_size = 512L * weights_page_size;
-    PageCache* weights_cache = make_GPU_cache(weights_cache_size, weights_page_size);
+    PageCache* weights_cache = make_GPU_cache(weights_cache_size, weights_page_size, GPU_ID_0);
 
     size_t io_pool_size = 128 * 1024L * 1024L;
     size_t workspace_pool_size = 512 * 1024L * 1024L;
 
-    MemoryPool* io_pool = CUDAMemoryPool::create(io_pool_size);
-    MemoryPool* workspace_pool = CUDAMemoryPool::create(workspace_pool_size);
+    MemoryPool* io_pool = CUDAMemoryPool::create(io_pool_size, GPU_ID_0);
+    MemoryPool* workspace_pool = CUDAMemoryPool::create(workspace_pool_size, GPU_ID_0);
 
     model::Model* model = load_model_from_disk(model_path);
 
@@ -491,13 +493,13 @@ void runMultiClientExperiment(int num_execs, int models_per_exec, bool duplicate
 
     size_t weights_page_size = 16 * 1024L * 1024L;
     size_t weights_cache_size = 512L * weights_page_size;
-    PageCache* weights_cache = make_GPU_cache(weights_cache_size, weights_page_size);
+    PageCache* weights_cache = make_GPU_cache(weights_cache_size, weights_page_size, GPU_ID_0);
 
     size_t io_pool_size = 128 * 1024L * 1024L;
     size_t workspace_pool_size = 512 * 1024L * 1024L;
 
-    MemoryPool* io_pool = CUDAMemoryPool::create(io_pool_size);
-    MemoryPool* workspace_pool = CUDAMemoryPool::create(workspace_pool_size);
+    MemoryPool* io_pool = CUDAMemoryPool::create(io_pool_size, GPU_ID_0);
+    MemoryPool* workspace_pool = CUDAMemoryPool::create(workspace_pool_size, GPU_ID_0);
 
     Experiment* experiment = new Experiment();
 

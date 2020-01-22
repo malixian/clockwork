@@ -8,6 +8,8 @@ namespace model {
 
 class BatchedModel {
 public:
+	unsigned gpu_id;
+
 	std::vector<Model*> model_lookup;
 	std::vector<std::pair<unsigned, Model*>> models;
 
@@ -17,7 +19,8 @@ public:
 	int weights_size;
 	char* weights_pinned_host_memory; // alloced with cudaMallocHost
 
-	BatchedModel(int weights_size, char* weights_pinned_host_memory, std::vector<std::pair<unsigned, Model*>> models);
+	BatchedModel(int weights_size, char* weights_pinned_host_memory,
+		std::vector<std::pair<unsigned, Model*>> models, unsigned gpu_id);
 
 public:
 	virtual ~BatchedModel();
@@ -70,7 +73,7 @@ public:
 
 public:
 
-	static BatchedModel* loadFromDisk(std::string base_filename);
+	static BatchedModel* loadFromDisk(std::string base_filename, unsigned gpu_id);
 
 
 };

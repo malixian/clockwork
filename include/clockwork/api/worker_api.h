@@ -170,6 +170,7 @@ public:
 	Timing copy_output;
 	int output_size;
 	char* output;
+	unsigned gpu_id;
 	
 	virtual std::string str();
 };

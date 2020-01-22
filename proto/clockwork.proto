@@ -168,6 +168,7 @@ message InferResultProto {
   required TimingProto copy_input_timing = 2;
   required TimingProto exec_timing = 3;
   required TimingProto copy_output_timing = 4;
+  required uint32 gpu_id = 5;
 }
 
 message ClearCacheActionProto {

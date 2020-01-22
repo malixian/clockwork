@@ -205,34 +205,40 @@ void PageCache::clear() {
 	}
 }
 
-CUDAPageCache::CUDAPageCache(std::vector<std::pair<char*, uint64_t>> baseptrs, uint64_t total_size, uint64_t page_size, const bool allowEvictions) :
-		PageCache(baseptrs, total_size, page_size, allowEvictions) {
+CUDAPageCache::CUDAPageCache(std::vector<std::pair<char*, uint64_t>> baseptrs,
+	uint64_t total_size, uint64_t page_size, const bool allowEvictions,
+	unsigned gpu_id):
+		PageCache(baseptrs, total_size, page_size, allowEvictions),
+		gpu_id(gpu_id) {
 	for (auto &p : baseptrs) {
 		this->baseptrs.push_back(p.first);
 	}
 }
 
 CUDAPageCache::~CUDAPageCache() {
+	CUDA_CALL(cudaSetDevice(gpu_id));
 	for (char* baseptr : baseptrs) {
 		CUDA_CALL(cudaFree(baseptr));
 	}
 }
 
-PageCache* make_GPU_cache(size_t cache_size, size_t page_size) {
-	return make_GPU_cache(cache_size, 1, page_size);
+PageCache* make_GPU_cache(size_t cache_size, size_t page_size, unsigned gpu_id) {
+	return make_GPU_cache(cache_size, 1, page_size, gpu_id);
 }
 
-PageCache* make_GPU_cache(size_t cuda_malloc_size, unsigned num_mallocs, size_t page_size) {
+PageCache* make_GPU_cache(size_t cuda_malloc_size, unsigned num_mallocs,
+	size_t page_size, unsigned gpu_id) {
 	cuda_malloc_size = page_size * (cuda_malloc_size / page_size);
 
 	std::vector<std::pair<char*, size_t>> baseptrs;
 	for (unsigned i = 0; i < num_mallocs; i++) {
 		void* baseptr;
+		CUDA_CALL(cudaSetDevice(gpu_id));
 		CUDA_CALL(cudaMalloc(&baseptr, cuda_malloc_size));
 		baseptrs.push_back(std::pair<char*, size_t>(static_cast<char*>(baseptr), cuda_malloc_size));
 	}
 
-	return new CUDAPageCache(baseptrs, cuda_malloc_size * num_mallocs, page_size, false);
+	return new CUDAPageCache(baseptrs, cuda_malloc_size * num_mallocs, page_size, false, gpu_id);
 }
 
 }

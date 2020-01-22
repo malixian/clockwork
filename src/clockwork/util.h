@@ -7,6 +7,9 @@
 #include <chrono>
 #include <vector>
 
+#define NUM_GPUS_1 1
+#define NUM_GPUS_2 2
+#define GPU_ID_0 0
 
 namespace clockwork {
 namespace util {
@@ -44,9 +47,20 @@ bool exists(std::string filename);
 long filesize(std::string filename);
 
 
-void initializeCudaStream(int priority = 0);
+void initializeCudaStream(unsigned gpu_id = 0, int priority = 0);
 void SetStream(cudaStream_t stream);
 cudaStream_t Stream();
+
+// A hash function used to hash a pair of any kind
+// Source: https://www.geeksforgeeks.org/how-to-create-an-unordered_map-of-pairs-in-c/
+struct hash_pair {
+	template <class T1, class T2>
+	size_t operator()(const std::pair<T1, T2>& p) const {
+		auto hash1 = std::hash<T1>{}(p.first);
+		auto hash2 = std::hash<T2>{}(p.second);
+		return hash1 ^ hash2;
+	}
+};
 
 #define DEBUG_PRINT(msg) \
 	std::cout << __FILE__ << "::" << __LINE__ << "::" << __FUNCTION__ << " "; \
