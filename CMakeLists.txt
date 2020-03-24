@@ -67,6 +67,8 @@ add_library( clockwork
 	src/clockwork/network/client_api.cpp
 	src/clockwork/network/worker.cpp
 	src/clockwork/network/controller.cpp
+	src/clockwork/controller/closed_loop_controller.cpp
+	src/clockwork/controller/direct_controller.cpp
 	src/clockwork/network/client.cpp
 
 ### No point maintaining the below any more
@@ -159,6 +161,7 @@ add_executable (tests
 	test/clockwork/test/testmemory.cpp
 	test/clockwork/test/testpriorityqueue.cpp
 	test/clockwork/test/testclient.cpp
+	test/clockwork/test/testtelemetry.cpp
 	test/clockwork/test/testnetwork.cpp
 	test/clockwork/test/model/testmodel.cpp
 	test/clockwork/test/model/testbatched.cpp

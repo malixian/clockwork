@@ -3,6 +3,7 @@
 #include "tbb/concurrent_queue.h"
 #include <tvm/runtime/cuda_common.h>
 #include "clockwork/api/worker_api.h"
+#include "clockwork/action.h"
 
 namespace clockwork {
 
@@ -374,7 +375,6 @@ void ExecTask::run(cudaStream_t stream) {
 
 void ExecTask::process_completion() {
 	telemetry->async_duration = this->async_duration();
-
 	if (workspace_memory != nullptr) {
 		manager->workspace_pools[gpu_id]->free(workspace_memory);
 		workspace_memory = nullptr;
@@ -434,7 +434,6 @@ void CopyOutputTask::run(cudaStream_t stream) {
 
 void CopyOutputTask::process_completion() {
 	telemetry->async_duration = this->async_duration();
-
 	this->success(output);
 }
 

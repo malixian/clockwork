@@ -20,8 +20,7 @@
 #include <nvml.h>
 #include <boost/filesystem.hpp>
 #include <sys/stat.h>
-
-
+#include <libgen.h>
 
 
 namespace clockwork {
@@ -219,6 +218,19 @@ void SetStream(cudaStream_t stream) {
 
 cudaStream_t Stream() {
   return tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream;
+}
+
+std::string get_clockwork_directory()
+{
+	int bufsize = 1024;
+	char buf[bufsize];
+	int len = readlink("/proc/self/exe", buf, bufsize);
+	return dirname(dirname(buf));
+}
+
+std::string get_example_model_path(std::string name)
+{
+	return get_clockwork_directory() + "/resources/" + name + "/model";
 }
 
 }

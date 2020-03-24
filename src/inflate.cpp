@@ -25,9 +25,14 @@ void inflate_task(std::string input_filename, std::string output_filename)
     clockwork::SerializedTaskTelemetry t;
     int count = 0;
 
-    std::vector<std::string> headers = {{"executor_id",
+    std::vector<std::string> headers = {{"action_type",
+										 "task_type",
+										 "executor_id",
+										 "gpu_id",
                                          "action_id",
+										 "status",
                                          "model_id",
+										 "batch_size",
                                          "created",
                                          "enqueued",
                                          "eligible_for_dequeue",
@@ -44,9 +49,14 @@ void inflate_task(std::string input_filename, std::string output_filename)
     {
         std::unordered_map<std::string, std::string> row;
 
+		row["action_type"] = std::to_string(t.action_type);
+		row["task_type"] = std::to_string(t.task_type);
         row["action_id"] = std::to_string(t.action_id);
+        row["status"] = std::to_string(t.status);
         row["executor_id"] = std::to_string(t.executor_id);
+        row["gpu_id"] = std::to_string(t.gpu_id);
         row["model_id"] = std::to_string(t.model_id);
+        row["batch_size"] = std::to_string(t.batch_size);
         row["created"] = std::to_string(t.created);
         row["enqueued"] = std::to_string(t.enqueued);
         row["eligible_for_dequeue"] = std::to_string(t.eligible_for_dequeue);
@@ -60,6 +70,72 @@ void inflate_task(std::string input_filename, std::string output_filename)
 
         rows.push_back(row);
     }
+    std::cout << "Processed " << rows.size() << " records" << std::endl;
+
+    std::ofstream outfile;
+    outfile.open(output_filename);
+
+    int i = 0;
+    for (auto header : headers)
+    {
+        if (i++ > 0)
+        {
+            outfile << "\t";
+        }
+        outfile << header;
+    }
+    outfile << "\n";
+
+    for (auto row : rows)
+    {
+        i = 0;
+        for (auto header : headers)
+        {
+            if (i++ > 0)
+                outfile << "\t";
+            if (row.find(header) != row.end())
+                outfile << row[header];
+        }
+        outfile << "\n";
+    }
+
+    outfile.close();
+}
+
+void inflate_action(std::string input_filename, std::string output_filename)
+{
+    std::ifstream infile;
+    infile.open(input_filename);
+
+    pods::InputStream in(infile);
+    pods::BinaryDeserializer<decltype(in)> deserializer(in);
+
+    uint64_t start_time = 0;
+
+    clockwork::SerializedActionTelemetry t;
+    int count = 0;
+
+    std::vector<std::string> headers = {{"telemetry_type",
+										"action_id",
+										 "action_type",
+										 "status",
+										 "timestamp"}};
+
+
+    std::vector<std::unordered_map<std::string, std::string>> rows;
+    while (deserializer.load(t) == pods::Error::NoError)
+    {
+        std::unordered_map<std::string, std::string> row;
+
+		row["telemetry_type"] = std::to_string(t.telemetry_type);
+		row["action_id"] = std::to_string(t.action_id);
+		row["action_type"] = std::to_string(t.action_type);
+		row["status"] = std::to_string(t.status);
+		row["timestamp"] = std::to_string(t.timestamp);
+
+		rows.push_back(row);
+    }
+
     std::cout << "Processed " << rows.size() << " records" << std::endl;
 
     std::ofstream outfile;
@@ -192,7 +268,7 @@ void inflate_request(std::string input_filename, std::string output_filename)
 void show_usage()
 {
     std::cout << "Inflates a binary format telemetry file into a TSV" << std::endl;
-    std::cout << "./inflate [input_file] [outputfile] [request/task]" << std::endl;
+    std::cout << "./inflate [input_file] [outputfile] [request/task/action]" << std::endl;
 }
 
 int main(int argc, char *argv[])
@@ -244,6 +320,10 @@ int main(int argc, char *argv[])
     {
         inflate_task(input_filename, output_filename);
     }
+	else if (non_argument_strings[2] == std::string("action"))
+	{
+		inflate_action(input_filename, output_filename);
+	}
 
     return 0;
 }

@@ -10,6 +10,7 @@
 #include "clockwork/cache.h"
 #include "clockwork/model/batched.h"
 #include "tbb/concurrent_queue.h"
+#include <boost/asio/ip/host_name.hpp>
 
 namespace clockwork {
 
@@ -47,6 +48,26 @@ public:
 };
 
 
+class ClockworkWorkerSettings{
+
+public:
+	bool task_telemetry_logging_enabled = false;
+	bool action_telemetry_logging_enabled = false;
+
+	std::string task_telemetry_log_dir = boost::asio::ip::host_name() + "_task_telemetry.raw";
+	std::string action_telemetry_log_dir = boost::asio::ip::host_name() + "_action_telemetry.raw";
+
+	unsigned num_gpus = util::get_num_gpus();
+
+	// TODO: currently we've hard-coded a whole bunch of defaults -- 10GB cache, 16MB pages
+	size_t weights_cache_size = 10L * 1024L * 1024L * 1024L; // 10 GB hard-coded weights cache for now
+	size_t weights_cache_page_size = 16L * 1024L * 1024L;	 // 16MB hard-coded weights cache page size
+	size_t io_pool_size = 128L * 1024L * 1024L;				 // 128 MB hard-coded io pool size
+	size_t workspace_pool_size = 512L * 1024L * 1024L;		 // 512 MB hard-coded workspace pool size
+	size_t host_io_pool_size = 256L * 1024L * 1024L;		 // 256 MB hard-coded host IO pool size
+
+	ClockworkWorkerSettings() {}
+};
 
 class MemoryAllocation {
 public:
@@ -107,15 +128,10 @@ public:
 
 	unsigned num_gpus;
 
-	MemoryManager(
-		size_t weights_cache_size, size_t weights_cache_page_size,
-		size_t io_pool_size,
-		size_t workspace_pool_size,
-		size_t host_io_pool_size,
-		unsigned num_gpus
-	);
+	MemoryManager(ClockworkWorkerSettings settings);
 	~MemoryManager();
 
+	void initialize(ClockworkWorkerSettings settings);
 	void get_worker_memory_info(clockwork::workerapi::WorkerMemoryInfo &worker_memory_info);
 };
 

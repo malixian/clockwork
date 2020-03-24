@@ -15,6 +15,21 @@ void extract_timing_async(workerapi::Timing* timing, std::shared_ptr<TaskTelemet
 	timing->duration = (uint64_t) (telemetry->async_duration * 1000000.0);
 }
 
+void set_taskTelemetry(
+		std::shared_ptr<TaskTelemetry> telemetry, 
+		int action_id, int model_id, int gpu_id, int status, int batch_size, uint64_t earliest,
+		int action_type, int task_type) {
+
+	telemetry->action_id = action_id;
+	telemetry->model_id = model_id;
+	telemetry->gpu_id = gpu_id;
+	telemetry->status = status;
+	telemetry->batch_size = batch_size;
+	telemetry->eligible_for_dequeue = earliest;
+	telemetry->action_type = action_type;
+	telemetry->task_type = task_type;
+}
+
 LoadModelFromDiskAction::LoadModelFromDiskTaskImpl::LoadModelFromDiskTaskImpl(LoadModelFromDiskAction* load_model) : 
 		LoadModelFromDiskTask(
 			load_model->runtime->manager,
@@ -120,7 +135,16 @@ void LoadWeightsAction::LoadWeightsTaskImpl::success(RuntimeModel* rm) {
 	result->action_type = workerapi::loadWeightsAction;
 	result->status = actionSuccess;
 
+	set_taskTelemetry(
+			telemetry, 
+			load_weights->action->id, load_weights->action->model_id,
+			load_weights->action->gpu_id, actionSuccess, 0,
+			load_weights->action->earliest,
+			workerapi::loadWeightsAction, -1);
+
 	extract_timing_async(result.get(), telemetry);
+	
+	load_weights->runtime->task_telemetry_logger->log(telemetry);
 
 	load_weights->success(result);
 }
@@ -151,6 +175,14 @@ void LoadWeightsAction::handle_error(TaskError &error) {
 	result->action_type = workerapi::loadWeightsAction;
 	result->status = error.status_code;
 	result->message = error.message;
+
+	set_taskTelemetry(
+			task->telemetry, 
+			action->id, action->model_id, action->gpu_id,
+			error.status_code, 0, action->earliest,
+			workerapi::loadWeightsAction, -1);
+
+	runtime->task_telemetry_logger->log(task->telemetry);
 
 	this->error(result);
 }
@@ -184,7 +216,16 @@ void EvictWeightsAction::EvictWeightsTaskImpl::success(RuntimeModel* rm) {
 	result->action_type = workerapi::evictWeightsAction;
 	result->status = actionSuccess;
 
-	extract_timing_sync(result.get(), telemetry);
+	set_taskTelemetry(
+			telemetry, 
+			evict_weights->action->id, evict_weights->action->model_id,
+			evict_weights->action->gpu_id, actionSuccess, 0,
+			evict_weights->action->earliest,
+			workerapi::evictWeightsAction, -1);
+
+	extract_timing_async(result.get(), telemetry);
+	
+	evict_weights->runtime->task_telemetry_logger->log(telemetry);
 
 	evict_weights->success(result);
 }
@@ -218,7 +259,13 @@ void EvictWeightsAction::handle_error(TaskError &error) {
 	result->status = error.status_code;
 	result->message = error.message;
 
-	this->error(result);
+	set_taskTelemetry(
+			task->telemetry, 
+			action->id, action->model_id, action->gpu_id,
+			error.status_code, 0, action->earliest,
+			workerapi::evictWeightsAction, -1);
+
+	runtime->task_telemetry_logger->log(task->telemetry);	this->error(result);
 }
 
 
@@ -349,8 +396,7 @@ void InferAction::CopyOutputTaskImpl::cancel() {
 }
 
 InferAction::InferAction(ClockworkRuntime* runtime, std::shared_ptr<workerapi::Infer> action) :
-		runtime(runtime), action(action), rm(nullptr), io_memory(nullptr) {
-}
+		runtime(runtime), action(action), rm(nullptr), io_memory(nullptr) {}
 
 InferAction::~InferAction() {
 	if (copy_input != nullptr) delete copy_input;
@@ -380,15 +426,31 @@ void InferAction::handle_completion(char* output) {
 	result->action_type = workerapi::inferAction;
 	result->status = actionSuccess;
 
-	exec->telemetry->action_id = action->id;
-	exec->telemetry->model_id = action->model_id;
-	exec->telemetry->task_type = workerapi::inferAction;
+	set_taskTelemetry(
+			copy_input->telemetry, 
+			action->id, action->model_id, action->gpu_id,
+			actionSuccess, action->batch_size, copy_input_earliest(),
+			workerapi::inferAction, copyInputTask);
+
+	set_taskTelemetry(
+			exec->telemetry, 
+			action->id, action->model_id, action->gpu_id,
+			actionSuccess, action->batch_size, action->earliest,
+			workerapi::inferAction, execTask);
+
+	set_taskTelemetry(
+			copy_output->telemetry, 
+			action->id, action->model_id, action->gpu_id,
+			actionSuccess, action->batch_size, action->earliest,
+			workerapi::inferAction, copyOutputTask);
 
 	extract_timing_async(&result->copy_input, copy_input->telemetry);
 	extract_timing_async(&result->exec, exec->telemetry);
 	extract_timing_async(&result->copy_output, copy_output->telemetry);
 
-	runtime->telemetry_logger->log(exec->telemetry);
+	runtime->task_telemetry_logger->log(copy_input->telemetry);
+	runtime->task_telemetry_logger->log(exec->telemetry);
+	runtime->task_telemetry_logger->log(copy_output->telemetry);
 
 	result->output_size = rm->model->output_size(action->batch_size);
 	result->output = output;
@@ -411,6 +473,28 @@ void InferAction::handle_error(TaskError &error) {
 	result->action_type = workerapi::inferAction;
 	result->status = error.status_code;
 	result->message = error.message;
+
+	set_taskTelemetry(
+			copy_input->telemetry, 
+			action->id, action->model_id, action->gpu_id,
+			error.status_code, action->batch_size, copy_input_earliest(),
+			workerapi::inferAction, copyInputTask);
+
+	set_taskTelemetry(
+			exec->telemetry, 
+			action->id, action->model_id, action->gpu_id,
+			error.status_code, action->batch_size, action->earliest,
+			workerapi::inferAction, execTask);
+
+	set_taskTelemetry(
+			copy_output->telemetry, 
+			action->id, action->model_id, action->gpu_id,
+			error.status_code, action->batch_size, action->earliest,
+			workerapi::inferAction, copyOutputTask);
+
+	runtime->task_telemetry_logger->log(copy_input->telemetry);
+	runtime->task_telemetry_logger->log(exec->telemetry);
+	runtime->task_telemetry_logger->log(copy_output->telemetry);
 
 	this->error(result);
 }

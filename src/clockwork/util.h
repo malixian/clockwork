@@ -62,6 +62,10 @@ struct hash_pair {
 	}
 };
 
+std::string get_clockwork_directory();
+
+std::string get_example_model_path(std::string name = "resnet18_tesla-m40");
+
 #define DEBUG_PRINT(msg) \
 	std::cout << __FILE__ << "::" << __LINE__ << "::" << __FUNCTION__ << " "; \
 	std::cout << msg << std::endl;

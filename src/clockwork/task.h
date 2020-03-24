@@ -44,7 +44,8 @@ public:
 	std::shared_ptr<TaskTelemetry> telemetry;
 	unsigned gpu_id = -1;
 
-	Task() : telemetry(std::make_shared<TaskTelemetry>()) {}
+	Task() : telemetry(std::make_shared<TaskTelemetry>()){}
+
 	Task(unsigned gpu_id): gpu_id(gpu_id), telemetry(std::make_shared<TaskTelemetry>()) {}
 
 	virtual uint64_t eligible() = 0;

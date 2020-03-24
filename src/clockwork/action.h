@@ -85,7 +85,7 @@ public:
 };
 
 class EvictWeightsAction {
-private:
+protected:
 
 	class EvictWeightsTaskImpl : public EvictWeightsTask {
 	public:
@@ -115,7 +115,7 @@ public:
 
 
 class InferAction {
-private:
+public:
 
 	class CopyInputTaskImpl : public CopyInputTask {
 	public:
@@ -164,6 +164,10 @@ private:
 	ExecTaskImpl* exec = nullptr;
 	CopyOutputTaskImpl* copy_output = nullptr;
 	
+	/* Task types */
+	const int copyInputTask= 0;
+	const int execTask = 1;
+	const int copyOutputTask = 2;
 
 	uint64_t copy_input_earliest();
 

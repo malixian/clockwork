@@ -5,15 +5,26 @@
 #include <pods/binary.h>
 #include <pods/buffers.h>
 #include <chrono>
+#include "clockwork/util.h"
 
 namespace clockwork {
 
 struct TaskTelemetry {
-	int task_type, executor_id, model_id, action_id;
-	std::chrono::high_resolution_clock::time_point created, enqueued, 
-		eligible_for_dequeue, dequeued, exec_complete, async_complete;
+	int action_type, task_type, executor_id, gpu_id, model_id, action_id, batch_size, status;
+	std::chrono::high_resolution_clock::time_point enqueued, 
+		 dequeued, exec_complete, async_complete;
+	uint64_t eligible_for_dequeue;
 	float async_wait, async_duration;
+	TaskTelemetry() : enqueued(util::hrt()){}
 };
+
+struct ActionTelemetry {
+	int telemetry_type;
+	int action_id, action_type;
+	int status;
+	std::chrono::high_resolution_clock::time_point timestamp;
+};
+
 
 struct ExecutorTelemetry {
 	int task_type, executor_id;
@@ -28,16 +39,19 @@ struct RequestTelemetry {
 };
 
 struct SerializedTaskTelemetry {
-	int task_type, executor_id, model_id, action_id;
+	int action_type, task_type, executor_id, gpu_id, model_id, action_id, batch_size, status;
 	uint64_t created, enqueued, eligible_for_dequeue, dequeued, exec_complete, async_complete;
 	uint64_t async_wait, async_duration;
 
 	PODS_SERIALIZABLE(1,
+		PODS_MDR(action_type),
 		PODS_MDR(task_type),
 		PODS_MDR(executor_id),
+		PODS_MDR(gpu_id),
 		PODS_MDR(model_id),
 		PODS_MDR(action_id),
-		PODS_MDR(created),
+		PODS_MDR(batch_size),
+		PODS_MDR(status),
 		PODS_MDR(enqueued),
 		PODS_MDR(eligible_for_dequeue),
 		PODS_MDR(dequeued),
@@ -45,6 +59,20 @@ struct SerializedTaskTelemetry {
 		PODS_MDR(async_complete),
 		PODS_MDR(async_wait),
 		PODS_MDR(async_duration)
+    )
+};
+
+struct SerializedActionTelemetry {
+	int telemetry_type;
+	int action_id, action_type, status;
+	uint64_t timestamp;
+
+	PODS_SERIALIZABLE(1,
+		PODS_MDR(telemetry_type),
+		PODS_MDR(action_id),
+		PODS_MDR(action_type),
+		PODS_MDR(status),
+		PODS_MDR(timestamp)
     )
 };
 

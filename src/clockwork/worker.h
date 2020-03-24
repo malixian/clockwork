@@ -2,6 +2,7 @@
 #define _CLOCKWORK_WORKER_H_
 
 #include "clockwork/action.h"
+#include "clockwork/runtime.h"
 #include "clockwork/api/worker_api.h"
 
 /*
@@ -18,6 +19,7 @@ public:
 
 	// TODO: actually instantiate the clockwork runtime properly and set the controller
 	ClockworkWorker();
+	ClockworkWorker(ClockworkWorkerSettings settings);
 	~ClockworkWorker();
 
 	void shutdown(bool await_completion);
@@ -39,6 +41,9 @@ class LoadModelFromDisk : public LoadModelFromDiskAction {
 public:
 	ClockworkWorker* worker;
 
+	std::shared_ptr<ActionTelemetry> action_telemetry;
+	std::shared_ptr<ActionTelemetry> response_telemetry;
+
 	LoadModelFromDisk(ClockworkWorker* worker, std::shared_ptr<workerapi::LoadModelFromDisk> action);
 
 	void success(std::shared_ptr<workerapi::LoadModelFromDiskResult> result);
@@ -48,6 +53,9 @@ public:
 class LoadWeights : public LoadWeightsAction {
 public:
 	ClockworkWorker* worker;
+
+	std::shared_ptr<ActionTelemetry> action_telemetry;
+	std::shared_ptr<ActionTelemetry> response_telemetry;
 
 	LoadWeights(ClockworkWorker* worker, std::shared_ptr<workerapi::LoadWeights> action);
 
@@ -59,6 +67,9 @@ class EvictWeights : public EvictWeightsAction {
 public:
 	ClockworkWorker* worker;
 
+	std::shared_ptr<ActionTelemetry> action_telemetry;
+	std::shared_ptr<ActionTelemetry> response_telemetry;
+
 	EvictWeights(ClockworkWorker* worker, std::shared_ptr<workerapi::EvictWeights> action);
 
 	void success(std::shared_ptr<workerapi::EvictWeightsResult> result);
@@ -68,6 +79,9 @@ public:
 class Infer : public InferAction {
 public:
 	ClockworkWorker* worker;
+
+	std::shared_ptr<ActionTelemetry> action_telemetry;
+	std::shared_ptr<ActionTelemetry> response_telemetry;
 
 	Infer(ClockworkWorker* worker, std::shared_ptr<workerapi::Infer> action);
 

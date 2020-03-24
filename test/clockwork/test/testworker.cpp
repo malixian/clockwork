@@ -10,37 +10,11 @@
 #include "clockwork/worker.h"
 #include <catch2/catch.hpp>
 #include "clockwork/test/actions.h"
+#include "clockwork/test/controller.h"
 #include "tbb/concurrent_queue.h"
 
 using namespace clockwork;
 using namespace clockwork::model;
-
-class TestController : public workerapi::Controller {
-public:
-    tbb::concurrent_queue<std::shared_ptr<workerapi::Result>> results;
-
-    void sendResult(std::shared_ptr<workerapi::Result> result) {
-        results.push(result);
-    }
-
-    std::shared_ptr<workerapi::Result> awaitResult() {
-        std::shared_ptr<workerapi::Result> result;
-        while (!results.try_pop(result));
-        return result;
-    }
-
-    void expect(int expected_status_code) {
-        std::shared_ptr<workerapi::Result> result = awaitResult();
-        INFO("id=" << result->id << " type=" << result->action_type << " status=" << result->status);
-        if (result->status != actionSuccess) {
-            auto error = std::static_pointer_cast<workerapi::ErrorResult>(result);
-            INFO(error->message);
-            REQUIRE(result->status == expected_status_code);
-        } else {
-            REQUIRE(result->status == expected_status_code);            
-        }
-    }
-};
 
 TEST_CASE("Test Worker", "[worker]") {
     ClockworkWorker worker;
@@ -247,3 +221,4 @@ TEST_CASE("Test GetWorkerState", "[worker] [e2esimple]") {
 	worker.shutdown(true);
 
 }
+
