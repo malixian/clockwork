@@ -9,13 +9,15 @@
 #include <cuda_runtime.h>
 #include "tvm/runtime/cuda_common.h"
 #include "clockwork/telemetry.h"
-#include "clockwork/telemetry_logger.h"
+#include "../src/clockwork/telemetry/task_telemetry_logger.h"
+#include "../src/clockwork/telemetry/action_telemetry_logger.h"
 #include "clockwork/cache.h"
 #include "clockwork/model/model.h"
 #include "clockwork/priority_queue.h"
 #include "clockwork/common.h"
 #include "tbb/concurrent_queue.h"
 #include "clockwork/task.h"
+#include "clockwork/memory.h"
 
 /*
 This file contains the clockwork scheduling and thread pool logic for executing tasks, asynchronous
@@ -102,45 +104,15 @@ public:
 
 	std::vector<CudaEventPool *> event_pools;
 
-	TelemetryFileLogger* telemetry_logger; 
-
-	// TODO: currently we've hard-coded a whole bunch of defaults -- 10GB cache, 16MB pages
+	TaskTelemetryLogger* task_telemetry_logger; 
+	ActionTelemetryLogger* action_telemetry_logger; 
 
 	ClockworkRuntime() {
-		size_t weights_cache_size = 10L * 1024L * 1024L * 1024L; // 10 GB hard-coded weights cache for now
-		size_t weights_cache_page_size = 16L * 1024L * 1024L;	 // 16MB hard-coded weights cache page size
-		size_t io_pool_size = 128L * 1024L * 1024L;				 // 128 MB hard-coded io pool size
-		size_t workspace_pool_size = 512L * 1024L * 1024L;		 // 512 MB hard-coded workspace pool size
-		size_t host_io_pool_size = 256L * 1024L * 1024L;		 // 256 MB hard-coded host IO pool size
+		initialize(ClockworkWorkerSettings());
+	}
 
-		num_gpus = util::get_num_gpus();
-
-		manager = new MemoryManager(
-			weights_cache_size, weights_cache_page_size,
-			io_pool_size,
-			workspace_pool_size,
-			host_io_pool_size,
-			num_gpus
-		);
-
-		for (unsigned gpu_id = 0; gpu_id < num_gpus; gpu_id++) {
-			event_pools.push_back(new CudaEventPool(gpu_id));
-
-			auto cores = util::get_gpu_core_affinity(gpu_id);
-			int i = cores.size()-1;
-
-			gpu_executors.push_back(new GPUExecutorExclusive(GPU, {cores[i--]}, gpu_id)); // Type 3
-
-			if (gpu_id == 0) {
-				load_model_executor = new CPUExecutor(CPU, {cores[i--]}); // Type 0
-				weights_executor = new GPUExecutorShared(PCIe_H2D_Weights, {cores[i--]}, num_gpus);	// Type 1
-				inputs_executor = new GPUExecutorShared(PCIe_H2D_Inputs, {cores[i--]}, num_gpus);	// Type 2
-				outputs_executor = new GPUExecutorShared(PCIe_D2H_Output, {cores[i--]}, num_gpus);	// Type 4
-				checker = new AsyncTaskChecker({cores[i--]});
-			}
-		}
-
-		telemetry_logger = new TelemetryFileLogger("telemetry.raw");
+	ClockworkRuntime(ClockworkWorkerSettings settings) {
+		initialize(settings);
 	}
 
 	virtual ~ClockworkRuntime() {
@@ -151,6 +123,9 @@ public:
 		delete outputs_executor;
 		delete checker;
 
+		task_telemetry_logger->shutdown(true);
+		action_telemetry_logger->shutdown(true);
+
 		for (unsigned gpu_id = 0; gpu_id < num_gpus; gpu_id++) {
 			delete gpu_executors[gpu_id];
 		}
@@ -160,6 +135,43 @@ public:
 
 	void join();
 
+protected:
+	void initialize(ClockworkWorkerSettings settings) {
+
+		num_gpus = settings.num_gpus;
+
+		manager = new MemoryManager(settings);
+
+		for (unsigned gpu_id = 0; gpu_id < num_gpus; gpu_id++) {
+			event_pools.push_back(new CudaEventPool(gpu_id));
+
+			auto cores = util::get_gpu_core_affinity(gpu_id);
+			int i = cores.size()-1;
+			
+			gpu_executors.push_back(new GPUExecutorExclusive(GPU, {cores[i--]}, gpu_id)); // Type 3
+
+			if (gpu_id == 0) {
+				load_model_executor = new CPUExecutor(CPU, {cores[i--]}); // Type 0
+				weights_executor = new GPUExecutorShared(PCIe_H2D_Weights, {cores[i--]}, num_gpus);	// Type 1
+				inputs_executor = new GPUExecutorShared(PCIe_H2D_Inputs, {cores[i--]}, num_gpus);	// Type 2
+				outputs_executor = new GPUExecutorShared(PCIe_D2H_Output, {cores[i--]}, num_gpus);	// Type 4
+				checker = new AsyncTaskChecker({cores[i--]});
+			}
+		}
+		std::string task_file_name = settings.task_telemetry_log_dir;
+		std::string action_file_name = settings.action_telemetry_log_dir;
+
+		if (settings.task_telemetry_logging_enabled)
+			task_telemetry_logger = new TaskTelemetryFileLogger(task_file_name);
+		else
+			task_telemetry_logger = new TaskTelemetryDummyLogger();
+
+		if (settings.action_telemetry_logging_enabled)
+			action_telemetry_logger = new ActionTelemetryFileLogger(action_file_name);
+		else
+			action_telemetry_logger = new ActionTelemetryDummyLogger();
+
+	}
 };
 
 

@@ -1,5 +1,6 @@
 #include "clockwork/api/worker_api.h"
 #include "clockwork/runtime.h"
+#include "clockwork/action.h"
 
 namespace clockwork {
 
@@ -39,7 +40,7 @@ void CPUExecutor::executorMain(unsigned executor_id, unsigned core) {
 
 		// Currently, CPUExecutor is only used for LoadModelTask
 		LoadModelFromDiskTask* next = dynamic_cast<LoadModelFromDiskTask*>(queue.dequeue());
-
+		
 		if (next != nullptr) {
 			auto telemetry = next->telemetry;
 			telemetry->dequeued = util::hrt();
@@ -133,6 +134,7 @@ void GPUExecutorExclusive::executorMain(unsigned executor_id, unsigned core) {
 
 		if (next != nullptr) {
 			auto telemetry = next->telemetry;
+
 			telemetry->dequeued = util::hrt();
 			next->run(stream);
 			telemetry->exec_complete = util::hrt();

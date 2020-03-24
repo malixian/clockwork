@@ -81,20 +81,20 @@ bool ModelStore::put_if_absent(int model_id, unsigned gpu_id, RuntimeModel* mode
 	return did_put;
 }
 
-MemoryManager::MemoryManager(
-		size_t weights_cache_size, size_t weights_cache_page_size,
-		size_t io_pool_size,
-		size_t workspace_pool_size,
-		size_t host_io_pool_size,
-		unsigned num_gpus) :
-			host_io_pool(CUDAHostMemoryPool::create(host_io_pool_size)),
-			models(new ModelStore()),
-			num_gpus(num_gpus) {
-	for (unsigned gpu_id = 0; gpu_id < num_gpus; gpu_id++) {
-		weights_caches.push_back(make_GPU_cache(weights_cache_size, weights_cache_page_size, gpu_id));
-		workspace_pools.push_back(CUDAMemoryPool::create(workspace_pool_size, gpu_id));
-		io_pools.push_back(CUDAMemoryPool::create(io_pool_size, gpu_id));
+void MemoryManager::initialize(ClockworkWorkerSettings settings) {
+	for (unsigned gpu_id = 0; gpu_id < settings.num_gpus; gpu_id++) {
+		weights_caches.push_back(make_GPU_cache(settings.weights_cache_size, settings.weights_cache_page_size, gpu_id));
+		workspace_pools.push_back(CUDAMemoryPool::create(settings.workspace_pool_size, gpu_id));
+		io_pools.push_back(CUDAMemoryPool::create(settings.io_pool_size, gpu_id));
 	}
+}
+
+MemoryManager::MemoryManager(ClockworkWorkerSettings settings) :
+			host_io_pool(CUDAHostMemoryPool::create(settings.host_io_pool_size)),
+			models(new ModelStore()),
+			num_gpus(settings.num_gpus) {
+
+	initialize(settings);
 }
 
 MemoryManager::~MemoryManager() {

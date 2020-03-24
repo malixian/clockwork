@@ -19,14 +19,20 @@
 
 namespace clockwork {
 
-class TelemetryLogger {
+class TaskTelemetryLogger {
 public:
 	virtual void log(std::shared_ptr<TaskTelemetry> telemetry) = 0;
 	virtual void log(RequestTelemetry* telemetry) = 0;
-	virtual void shutdown(bool awaitCompletion) = 0;	
+	virtual void shutdown(bool awaitCompletion) = 0;
 };
 
-class TelemetryFileLogger : public TelemetryLogger {
+class TaskTelemetryDummyLogger : public TaskTelemetryLogger {
+	void log(std::shared_ptr<TaskTelemetry> telemetry){}
+ 	void log(RequestTelemetry* telemetry) {}
+	void shutdown(bool awaitCompletion) {}
+};
+
+class TaskTelemetryFileLogger : public TaskTelemetryLogger {
 private:
 	const std::string output_filename;
 	std::atomic_bool alive;
@@ -35,8 +41,8 @@ private:
 	tbb::concurrent_queue<RequestTelemetry*> request_queue;
 
 public:	
-	TelemetryFileLogger(std::string output_filename) : output_filename(output_filename), alive(true) {
-		thread = std::thread(&TelemetryFileLogger::main, this);
+	TaskTelemetryFileLogger(std::string output_filename) : output_filename(output_filename), alive(true) {
+		thread = std::thread(&TaskTelemetryFileLogger::main, this);
 	}
 
 	void shutdown(bool awaitCompletion) {
@@ -56,13 +62,16 @@ public:
 
 
 	void convert(std::shared_ptr<TaskTelemetry> telemetry, SerializedTaskTelemetry *converted) {
+		converted->action_type = telemetry->action_type;
 		converted->task_type = telemetry->task_type;
 		converted->executor_id = telemetry->executor_id;
+		converted->gpu_id = telemetry->gpu_id;
 		converted->model_id = telemetry->model_id;
+		converted->batch_size = telemetry->batch_size;
+		converted->status = telemetry->status;
 		converted->action_id = telemetry->action_id;
-		converted->created = util::nanos(telemetry->created);
 		converted->enqueued = util::nanos(telemetry->enqueued);
-		converted->eligible_for_dequeue = util::nanos(telemetry->eligible_for_dequeue);
+		converted->eligible_for_dequeue = telemetry->eligible_for_dequeue;
 		converted->dequeued = util::nanos(telemetry->dequeued);
 		converted->exec_complete = util::nanos(telemetry->exec_complete);
 		converted->async_complete = util::nanos(telemetry->async_complete);
@@ -70,15 +79,15 @@ public:
 		converted->async_duration = telemetry->async_duration * 1000000;
 	}
 
-
 	void convert(TaskTelemetry* telemetry, SerializedTaskTelemetry *converted) {
 		converted->task_type = telemetry->task_type;
 		converted->executor_id = telemetry->executor_id;
 		converted->model_id = telemetry->model_id;
+		converted->batch_size = telemetry->batch_size;
+		converted->status = telemetry->status;
 		converted->action_id = telemetry->action_id;
-		converted->created = util::nanos(telemetry->created);
 		converted->enqueued = util::nanos(telemetry->enqueued);
-		converted->eligible_for_dequeue = util::nanos(telemetry->eligible_for_dequeue);
+		converted->eligible_for_dequeue = telemetry->eligible_for_dequeue;
 		converted->dequeued = util::nanos(telemetry->dequeued);
 		converted->exec_complete = util::nanos(telemetry->exec_complete);
 		converted->async_complete = util::nanos(telemetry->async_complete);
@@ -114,11 +123,10 @@ public:
 
 			SerializedTaskTelemetry telemetry;
 			convert(srcTelemetry, &telemetry);
+			
 			//TODO: delete srcTelemetry;
-
-
-		    CHECK(serializer.save(telemetry) == pods::Error::NoError) << "Unable to serialize telemetry";
-
+			CHECK(serializer.save(telemetry) == pods::Error::NoError) << "Unable to serialize task telemetry";
+		
 			// std::stringstream msg;
 			// msg << "Logging request " << telemetry.request_id 
 			//     << " model=" << telemetry.model_id
@@ -139,7 +147,7 @@ public:
 
 };
 
-class InMemoryTelemetryBuffer : public TelemetryLogger {
+class InMemoryTelemetryBuffer : public TaskTelemetryLogger {
 public:
 	tbb::concurrent_queue<std::shared_ptr<TaskTelemetry>> task_queue;
 	tbb::concurrent_queue<RequestTelemetry*> request_queue;
