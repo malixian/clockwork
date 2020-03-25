@@ -25,15 +25,14 @@ void inflate_task(std::string input_filename, std::string output_filename)
     clockwork::SerializedTaskTelemetry t;
     int count = 0;
 
-    std::vector<std::string> headers = {{"action_type",
+    std::vector<std::string> headers = {{"action_id",
+                                         "action_type",
 										 "task_type",
 										 "executor_id",
 										 "gpu_id",
-                                         "action_id",
 										 "status",
                                          "model_id",
 										 "batch_size",
-                                         "created",
                                          "enqueued",
                                          "eligible_for_dequeue",
                                          "dequeued",
@@ -57,7 +56,6 @@ void inflate_task(std::string input_filename, std::string output_filename)
         row["gpu_id"] = std::to_string(t.gpu_id);
         row["model_id"] = std::to_string(t.model_id);
         row["batch_size"] = std::to_string(t.batch_size);
-        row["created"] = std::to_string(t.created);
         row["enqueued"] = std::to_string(t.enqueued);
         row["eligible_for_dequeue"] = std::to_string(t.eligible_for_dequeue);
         row["dequeued"] = std::to_string(t.dequeued);
@@ -65,8 +63,8 @@ void inflate_task(std::string input_filename, std::string output_filename)
         row["async_complete"] = std::to_string(t.async_complete);
         row["async_wait"] = std::to_string(t.async_wait);
         row["async_duration"] = std::to_string(t.async_duration);
-        row["queue_latency"] = std::to_string(t.dequeued - t.created);
-        row["total_latency"] = std::to_string(t.async_complete - t.created);
+        row["queue_latency"] = std::to_string(t.dequeued - t.enqueued);
+        row["total_latency"] = std::to_string(t.async_complete - t.enqueued);
 
         rows.push_back(row);
     }

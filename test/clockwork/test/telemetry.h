@@ -13,6 +13,8 @@
 #include <catch2/catch.hpp>
 #include "clockwork/test/actions.h"
 #include "clockwork/test/controller.h"
+#include "tbb/concurrent_queue.h"
+
 
 using namespace clockwork;
 using namespace clockwork::model;
@@ -22,11 +24,8 @@ int actions_logged = 0;
 int action_id = -1;
 int model_id = -1;
 int batch_size = -1;
-uint64_t telemetry_enqueued;
-uint64_t telemetry_dequeued;
-uint64_t telemetry_exec_complete;
-uint64_t telemetry_async_complete;
 uint64_t action_timestamp;
+tbb::concurrent_queue<std::shared_ptr<TaskTelemetry>> task_queue;
 
 class TestActionTelemetryLogger : public ActionTelemetryLogger {
 public:
@@ -47,13 +46,9 @@ public:
 		action_id = telemetry->action_id;
 		model_id = telemetry->model_id;
 		batch_size = telemetry->batch_size;
-		telemetry_enqueued = util::nanos(telemetry->enqueued);
-		telemetry_dequeued = util::nanos(telemetry->dequeued);
-		telemetry_exec_complete = util::nanos(telemetry->exec_complete);
-		uint64_t async_complete = util::nanos(telemetry->async_complete);
-		if (telemetry_async_complete < async_complete)
-			telemetry_async_complete = async_complete;
+		task_queue.push(telemetry);
 	}
+
 	void log(RequestTelemetry* telemetry) {}
 	void shutdown(bool awaitCompletion){}
 
