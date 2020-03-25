@@ -16,14 +16,21 @@ BatchedModel* create_model_for_action() {
 	return batched;
 }
 
-bool telemetry_in_range(uint64_t start, uint64_t end, bool infer) {
+bool telemetry_in_range(
+				std::chrono::high_resolution_clock::time_point start,
+				std::chrono::high_resolution_clock::time_point end, bool evict) {
 	bool in_range = true;
+	std::shared_ptr<TaskTelemetry> srcTelemetry;
 
-	in_range &= telemetry_enqueued > start && telemetry_enqueued < end;
-	in_range &= telemetry_dequeued > start && telemetry_dequeued < end;
-	if (infer) {
-		in_range &= telemetry_exec_complete > start && telemetry_exec_complete < end;
-		in_range &= telemetry_async_complete > start && telemetry_async_complete < end;
+	if (!task_queue.try_pop(srcTelemetry))
+		usleep(10000);
+
+	in_range &= srcTelemetry->enqueued > start && srcTelemetry->enqueued < end;
+	in_range &= srcTelemetry->dequeued > start && srcTelemetry->dequeued < end;
+	in_range &= srcTelemetry->exec_complete > start && srcTelemetry->exec_complete < end;
+
+	if (!evict) {
+		in_range &= srcTelemetry->async_complete > start && srcTelemetry->async_complete < end;
 	}
 	return in_range;
 }
@@ -36,47 +43,45 @@ TEST_CASE("Task Telemetry", "[task_telemetry]"){
 
     runtime->manager->models->put(0, GPU_ID_0, new RuntimeModel(model, GPU_ID_0));
 
-	uint64_t start = util::now();
+	std::chrono::high_resolution_clock::time_point start = util::hrt();
 
     TestLoadWeightsAction load_weights(runtime.get(), load_weights_action());
     load_weights.submit();
     load_weights.await();
-
-	uint64_t end = util::now();
-
 	load_weights.check_success(true);
+
+	std::chrono::high_resolution_clock::time_point end = util::hrt();
 
 	assert(tasks_logged == 1);
 	assert(action_id == 0 && model_id == 0);
 	assert(telemetry_in_range(start, end, false));
 
-	start = util::now();
+	start = util::hrt();
 
 	TestInferAction infer(runtime.get(), infer_action(1, model));
     infer.submit();
     infer.await();
-
-	end = util::now();
-
 	infer.check_success(true);
+
+	end = util::hrt();
 
 	assert(tasks_logged == 4);
 	assert(action_id == 1 && model_id == 0 & batch_size == 1);
-	assert(telemetry_in_range(start, end, true));
+	assert(telemetry_in_range(start, end, false)); // Check the copyInputTask telemetry
+	assert(telemetry_in_range(start, end, false)); // Check the execTask telemetry
+	assert(telemetry_in_range(start, end, false)); // Check the copyOutput telemetry
 
-	start = util::now();
+	start = util::hrt();
 
 	TestEvictWeightsAction evict_weights(runtime.get(), evict_weights_action());
     evict_weights.submit();
     evict_weights.await();
-
-	end = util::now();
-
 	evict_weights.check_success(true);
+	end = util::hrt();
 
 	assert(tasks_logged == 5);
 	assert(action_id == 2 && model_id == 0);
-	assert(telemetry_in_range(start, end, false));
+	assert(telemetry_in_range(start, end, true));
 
 }
 
