@@ -18,12 +18,15 @@ private:
 		// TODO: priority should be a chrono timepoint not the uint64_t, to avoid
 		//       expensive conversions.  Or, a different clock altogether
 		uint64_t priority;
+		uint64_t version;
 
 		friend bool operator < (const container& lhs, const container &rhs) {
-			return lhs.priority < rhs.priority;
+			return lhs.priority < rhs.priority || 
+			  (lhs.priority == rhs.priority && lhs.version < rhs.version);
 		}
 		friend bool operator > (const container& lhs, const container &rhs) {
-			return lhs.priority > rhs.priority;
+			return lhs.priority > rhs.priority ||
+			  (lhs.priority == rhs.priority && lhs.version > rhs.version);
 		}
 	};
 
@@ -42,7 +45,7 @@ public:
 
 		// TODO: will have to convert priority to a chrono::timepoint
 		if (alive) {
-			queue.push(container{element, priority});
+			queue.push(container{element, priority, version});
 			version++;
 		}
 
