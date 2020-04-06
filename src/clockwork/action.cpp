@@ -474,27 +474,33 @@ void InferAction::handle_error(TaskError &error) {
 	result->status = error.status_code;
 	result->message = error.message;
 
-	set_taskTelemetry(
-			copy_input->telemetry, 
-			action->id, action->model_id, action->gpu_id,
-			error.status_code, action->batch_size, copy_input_earliest(),
-			workerapi::inferAction, copyInputTask);
+	if (copy_input != nullptr) {
+		set_taskTelemetry(
+				copy_input->telemetry, 
+				action->id, action->model_id, action->gpu_id,
+				error.status_code, action->batch_size, copy_input_earliest(),
+				workerapi::inferAction, copyInputTask);
+		runtime->task_telemetry_logger->log(copy_input->telemetry);
+	}
 
-	set_taskTelemetry(
-			exec->telemetry, 
-			action->id, action->model_id, action->gpu_id,
-			error.status_code, action->batch_size, action->earliest,
-			workerapi::inferAction, execTask);
+	if (exec != nullptr) {
+		set_taskTelemetry(
+				exec->telemetry, 
+				action->id, action->model_id, action->gpu_id,
+				error.status_code, action->batch_size, action->earliest,
+				workerapi::inferAction, execTask);
+		runtime->task_telemetry_logger->log(exec->telemetry);
+	}
 
-	set_taskTelemetry(
-			copy_output->telemetry, 
-			action->id, action->model_id, action->gpu_id,
-			error.status_code, action->batch_size, action->earliest,
-			workerapi::inferAction, copyOutputTask);
+	if (copy_output != nullptr) {
+		set_taskTelemetry(
+				copy_output->telemetry, 
+				action->id, action->model_id, action->gpu_id,
+				error.status_code, action->batch_size, action->earliest,
+				workerapi::inferAction, copyOutputTask);
+		runtime->task_telemetry_logger->log(copy_output->telemetry);
+	}
 
-	runtime->task_telemetry_logger->log(copy_input->telemetry);
-	runtime->task_telemetry_logger->log(exec->telemetry);
-	runtime->task_telemetry_logger->log(copy_output->telemetry);
 
 	this->error(result);
 }
