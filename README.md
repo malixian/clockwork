@@ -109,17 +109,17 @@ List available GPU clock frequencies
 nvidia-smi -q -d SUPPORTED_CLOCKS
 ```
 
-Pick a memory and graphics clock frequency (usually the highest), e.g.
+Pick a memory and graphics clock frequency (usually the highest), e.g. on volta machines:
 ```
     Supported Clocks
-        Memory                      : 3004 MHz
-            Graphics                : 1114 MHz
+        Memory                      : 877 MHz
+            Graphics                : 1380 MHz
 ```
 
-Set the default application clock and system clock to those highest values
+Set the default application clock and system clock to those highest values, e.g. on volta machines:
 ```
-nvidia-smi -ac 3004,1114
-nvidia-smi -lgc 1114
+nvidia-smi -ac 877,1380
+nvidia-smi -lgc 1380
 ```
 
 FYI:
