@@ -143,9 +143,9 @@ void show_usage() {
 	std::cout << "  combine the models and convert them into a clockwork model, putting the" << std::endl;
 	std::cout << "  output in ~/models/resnet50/clockwork" << std::endl;
 	std::cout << "     ./convert -o ~/models/resnet50/clockwork \\" << std::endl;
-	std::cout << "               1 ~/models/resnet50/batchsize1 \\" << std::endl;
-	std::cout << "               2 ~/models/resnet50/batchsize2 \\" << std::endl;
-	std::cout << "               4 ~/models/resnet50/batchsize4" << std::endl;
+	std::cout << "               1 ~/models/resnet50/batchsize1/tvm-model \\" << std::endl;
+	std::cout << "               2 ~/models/resnet50/batchsize2/tvm-model \\" << std::endl;
+	std::cout << "               4 ~/models/resnet50/batchsize4/tvm-model" << std::endl;
 }
 
 int main(int argc, char *argv[]) {
