@@ -49,7 +49,7 @@ void check_environment() {
     for (unsigned i = 0; i < num_gpus; i++) {
 
         if (!util::is_gpu_exclusive(i)) { // TODO: check all GPUs
-            std::cout << "  ✘ GPU " << i << " is not in exclusive mode; set with `nvidia-smi -i " << i << " -c 3` or set for all GPUs with `nvndia-smi -c 3`" << std::endl;
+            std::cout << "  ✘ GPU " << i << " is not in exclusive mode; set with `nvidia-smi -i " << i << " -c 3` or set for all GPUs with `nvidia-smi -c 3`" << std::endl;
         } else {
             std::cout << "  ✔ GPU " << i << " is in exclusive mode" << std::endl;
         }
