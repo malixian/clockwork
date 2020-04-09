@@ -114,8 +114,38 @@ void convert(ConvertConfig config) {
 }
 
 void show_usage() {
-	std::cout << "Provide the name of a model, to convert it" << std::endl;
-	std::cout << "Specify page size with -p flag" << std::endl;
+	std::cout << "USAGE" << std::endl;
+	std::cout << "  ./convert [OPTIONS] [MODELS]" << std::endl;
+	std::cout << "DESCRIPTION" << std::endl;
+	std::cout << "  This utility converts models compiled for TVM into models compatible with" << std::endl;
+	std::cout << "  Clockwork.  All models provided to this command must be variants of the SAME" << std::endl;
+	std::cout << "  model but with DIFFERENT batch sizes" << std::endl;
+	std::cout << "MODELS" << std::endl;
+	std::cout << "  Specify a model with two arguments [model_batchsize] [model_file_prefix]" << std::endl;
+	std::cout << "      model_batchsize" << std::endl;
+	std::cout << "          The specific batch size TVM compiled for this model" << std::endl;
+	std::cout << "      model_file_prefix" << std::endl;
+	std::cout << "          TVM outputs three files when it compiles a model: a .so, a .params," << std::endl;
+	std::cout << "          and a .json file.  model_file_prefix specifies the path to these files" << std::endl;
+	std::cout << "OPTIONS" << std::endl;
+    std::cout << "  -h, --help" << std::endl;
+    std::cout << "      Print this message" << std::endl;
+    std::cout << "  -o, --output" << std::endl;
+    std::cout << "      Directory to output all compiled models to.  Defaults to 'model' in the" << std::endl;
+    std::cout << "      current directory.  You should probably set this." << std::endl;
+    std::cout << "  -p, --page_size" << std::endl;
+    std::cout << "      Weights page size used by Clockwork.  Defaults to 16MB.  You shouldn't" << std::endl;
+    std::cout << "      need to set this because we are using 16MB pages." << std::endl;
+	std::cout << "EXAMPLE" << std::endl;
+	std::cout << "  Suppose you have compiled resnet50 using TVM, for batch sizes 1, 2, and 4," << std::endl;
+	std::cout << "  located in ~/models/resnet50/batchsize1, ~/models/resnet50/batchsize2, and " << std::endl;
+	std::cout << "  ~/models/resnet50/batchsize4 respectively.  The following command will" << std::endl;
+	std::cout << "  combine the models and convert them into a clockwork model, putting the" << std::endl;
+	std::cout << "  output in ~/models/resnet50/clockwork" << std::endl;
+	std::cout << "     ./convert -o ~/models/resnet50/clockwork \\" << std::endl;
+	std::cout << "               1 ~/models/resnet50/batchsize1 \\" << std::endl;
+	std::cout << "               2 ~/models/resnet50/batchsize2 \\" << std::endl;
+	std::cout << "               4 ~/models/resnet50/batchsize4" << std::endl;
 }
 
 int main(int argc, char *argv[]) {
@@ -131,8 +161,6 @@ int main(int argc, char *argv[]) {
 		if ((arg == "-h") || (arg == "--help")) {
 		    show_usage();
 		    return 0;
-		} else if ((arg == "--weights_page_size")) {
-		    config.weights_page_size = atoi(argv[++i]);
 		} else if ((arg == "-o") || (arg == "--output")) {
 		    config.output_dir = argv[++i];
 		} else if ((arg == "-p") || (arg == "--page_size")) {
@@ -142,8 +170,8 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	if (non_argument_strings.size() < 1) {
-		std::cerr << "Expected input model filename, none given." << std::endl 
+	if (non_argument_strings.size() < 2) {
+		std::cerr << "Each input model should be specified as <batch_size> <filename>, e.g. 1 ~/models/resnet50/batchsize1" << std::endl 
 		          << "Execute with --help for usage information." << std::endl;
 		return 1;
 	}
