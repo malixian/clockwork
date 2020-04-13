@@ -228,9 +228,14 @@ std::string get_clockwork_directory()
 	return dirname(dirname(buf));
 }
 
-std::string get_example_model_path(std::string name)
+std::string get_example_model_path(std::string model_name)
 {
-	return get_clockwork_directory() + "/resources/" + name + "/model";
+  return get_example_model_path(get_clockwork_directory(), model_name);
+}
+
+
+std::string get_example_model_path(std::string clockwork_directory, std::string model_name) {
+  return clockwork_directory + "/resources/" + model_name + "/model";
 }
 
 }
