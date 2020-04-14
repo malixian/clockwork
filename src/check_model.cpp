@@ -74,11 +74,15 @@ void check_model(int page_size, std::string model_path) {
 		for (int i = 0; i < warmups; i++) {    
 	    	model->call(batch_size, weights->page_pointers, io_memory, workspace_memory, util::Stream());
 	    }
-		auto before = util::now();
-		int iterations = 100;
+            status = cudaStreamSynchronize(util::Stream());
+            CHECK(status == cudaSuccess);
+	    auto before = util::now();
+            int iterations = 100;
 		for (int i = 0; i < iterations; i++) {    
 	    	model->call(batch_size, weights->page_pointers, io_memory, workspace_memory, util::Stream());
 	    }
+            status = cudaStreamSynchronize(util::Stream());
+            CHECK(status == cudaSuccess);
 	    auto after = util::now();
 	    printf("  b%d: %.2f ms per call\n", batch_size, ((float) (after-before)) / (iterations * 1000000.0));
 
