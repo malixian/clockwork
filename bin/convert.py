@@ -12,7 +12,8 @@ This script uses the `convert` binary and expects it to exist in the `build` fol
 parser = argparse.ArgumentParser(description='Convert a TVM model into a Clockwork model')
 parser.add_argument("input_dir", metavar="INDIR", type=str, help="Base directory where TVM models exist.  The utility expects multiple models, one per batch size, each in a subdirectory.")
 parser.add_argument("output_dir", metavar="OUTDIR", type=str, help="Output directory.  Directory will be created if it does not exist.")
-parser.add_argument('-p', "--subdir_prefix", type=str, default="b", help="Within input_dir, a prefix for how subdirectories are named.  Default \"b\" followed by the batch size.")
+parser.add_argument('-p', "--page_size", type=int, default=16777216, help="Page size to use for compiled models.  16MB by default.")
+parser.add_argument("--subdir_prefix", type=str, default="b", help="Within input_dir, a prefix for how subdirectories are named.  Default \"b\" followed by the batch size.")
 
 
 def find_tvm_models(path):
@@ -76,6 +77,7 @@ def convert(args):
 	pargs = [str(v) for v in [
 		"../build/convert",
 		"-o", args.output_dir,
+		"-p", args.page_size
 	] + [x for m in models for x in m]]
 	print(" ".join(pargs))
 	print("Press <return> to continue or CTRL-C to abort")
