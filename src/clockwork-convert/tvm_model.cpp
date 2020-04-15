@@ -1,5 +1,6 @@
 
 #include "clockwork-convert/tvm_model.h"
+#include <tvm/runtime/device_api.h>
 
 using namespace tvm_model;
 
@@ -198,7 +199,7 @@ Allocs Allocs::ProfileModel(std::string model_so, std::string model_json, std::s
 	const int device_type = kDLGPU;
 	const int device_id = 0;
 
-	const tvm::runtime::PackedFunc load_module(*tvm::runtime::Registry::Get("module.loadfile_so"));
+	const tvm::runtime::PackedFunc load_module(*tvm::runtime::Registry::Get("runtime.module.loadfile_so"));
 	tvm::runtime::Module mod_syslib = load_module(model_so, "so");
 
 	// Graph structure
@@ -207,8 +208,8 @@ Allocs Allocs::ProfileModel(std::string model_so, std::string model_json, std::s
 	json_in.close();
 
 	// Construct TVM runtime
-	std::shared_ptr<tvm::runtime::DecoupledGraphRuntime> rt = DecoupledGraphRuntimeCreateDirect(json_data, mod_syslib, device_type, device_id);
-	tvm::runtime::Module mod = tvm::runtime::Module(rt);
+  const tvm::runtime::PackedFunc create_graph_runtime(*tvm::runtime::Registry::Get("tvm.graph_runtime.create"));
+	tvm::runtime::Module mod = create_graph_runtime(json_data, mod_syslib, device_type, device_id);
 	// const tvm::runtime::PackedFunc create_graph_runtime(*tvm::runtime::Registry::Get("tvm.decoupled_graph_runtime.create_contiguous"));
 	// tvm::runtime::Module mod = create_graph_runtime(json_data, mod_syslib, device_type, device_id);
 	
@@ -231,12 +232,8 @@ Allocs Allocs::ProfileModel(std::string model_so, std::string model_json, std::s
 	  // tvm::runtime::PackedFunc set_const_params = mod.GetFunction("set_const_params");
 	  // tvm::runtime::NDArray const_params = get_const_params();
 
-    // load the model onto device
-    tvm::runtime::PackedFunc load_to_device = mod.GetFunction("load_to_device");
-    load_to_device();
 
-
-    tvm::runtime::PackedFunc extract_allocs = mod.GetFunction("extract_workspace_allocs");
+    tvm::runtime::PackedFunc extract_allocs = mod.GetFunction("profile_workspace_allocs");
     std::vector<std::vector<tvm::runtime::WorkspaceAlloc>>* alloc_vector = static_cast<std::vector<std::vector<tvm::runtime::WorkspaceAlloc>>*>((void*) extract_allocs());
 
     Allocs allocs;
