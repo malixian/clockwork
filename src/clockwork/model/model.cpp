@@ -216,7 +216,7 @@ void Model::make_op_exec(PageMappedOpDef &spec, OpExec &op) {
 		tensor.strides = nullptr;
 		tensor.byte_offset = 0;
 		op.func_inputs[i].v_handle = &tensor;
-		op.func_tcodes[i] = kArrayHandle;
+		op.func_tcodes[i] = kTVMDLTensorHandle;
 	}
 
 	op.workspace_ptrs.resize(spec.workspace_allocs.size());
