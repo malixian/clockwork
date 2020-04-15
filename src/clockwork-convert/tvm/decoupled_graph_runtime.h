@@ -15,7 +15,6 @@
 #include <dmlc/json.h>
 #include <tvm/runtime/ndarray.h>
 #include <tvm/runtime/packed_func.h>
-#include <tvm/runtime/managed_cuda_device_api.h>
 #include "clockwork/modeldef.h"
 
 #include <vector>

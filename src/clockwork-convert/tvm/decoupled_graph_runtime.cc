@@ -3,7 +3,6 @@
  * \file graph_runtime.cc
  */
 #include "clockwork-convert/tvm/decoupled_graph_runtime.h"
-#include <tvm/runtime/managed_cuda_device_api.h>
 
 #include <tvm/runtime/ndarray.h>
 #include <tvm/runtime/packed_func.h>
