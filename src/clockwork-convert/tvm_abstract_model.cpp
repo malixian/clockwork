@@ -64,11 +64,18 @@ Model Model::fromTVM(tvm_model::Model &model, tvm_model::Params &params, tvm_mod
 		weights->data = p.second->dataptr();
 		weights->size = p.second->Size();
 		weights->tensor = nullptr;
+
+		CHECK(out.weights.find(p.first) == out.weights.end()) << "Found duplicate layers with name " << p.first;
 		out.weights[p.first] = weights;
 	}
 
+	std::vector<std::string> seen_names;
+
 	for (unsigned i = 0; i < model.nodes_.size(); i++) {
 		tvm_model::Node &node = model.nodes_[i];
+
+		CHECK(std::find(seen_names.begin(), seen_names.end(), node.name) == seen_names.end()) << "Found duplicate node " << node.name;
+		seen_names.push_back(node.name);
 
 		if (node.op_type == "null") {
 			int input_index = model.node_row_ptr_[i];
@@ -203,7 +210,8 @@ void make_weights_lookup_table(Model &model, PageMappedStorage* mapped) {
 
 			// Store the actual weights data in the storage lookup table.
 			auto data = std::string(static_cast<char*>(weights->data), weights->size);
-			mapped->weights_lookup[data] = std::make_pair(page_number, index_in_page);
+
+			mapped->weights_lookup[data].push_back(PreMappedIndices{page_number, index_in_page});
 
 			index_in_page++;
 		}
@@ -213,6 +221,8 @@ void make_weights_lookup_table(Model &model, PageMappedStorage* mapped) {
 }
 
 std::vector<Page*> replicate_weights_mapping(Model &model, PageMappedStorage* existing_weights_mapping) {
+	std::unordered_map<std::string, unsigned> current_index;
+
 	std::vector<Page*> pages;
 	for (unsigned i = 0; i < existing_weights_mapping->weights.size(); i++) {
 		Page* page = new Page();
@@ -225,11 +235,12 @@ std::vector<Page*> replicate_weights_mapping(Model &model, PageMappedStorage* ex
 	for (auto &p : model.weights) {
 		LayerWeights* weights = p.second;
 		auto data = std::string(static_cast<char*>(weights->data), weights->size);
-		if (existing_weights_mapping->weights_lookup.find(data) == existing_weights_mapping->weights_lookup.end()) {
-			throw "Error: " + weights->name + " not found in existing weights mapping";
-		}
-		auto assignment = existing_weights_mapping->weights_lookup[data];
-		pages[assignment.first]->used_by[assignment.second] = weights->tensor->storage;
+		CHECK(existing_weights_mapping->weights_lookup.find(data) != existing_weights_mapping->weights_lookup.end())
+			<< "Error: " + weights->name + " not found in existing weights mapping";
+
+		unsigned position = current_index[data]++;
+		PreMappedIndices indices = existing_weights_mapping->weights_lookup[data][position];
+		pages[indices.page_index]->used_by[indices.location_index] = weights->tensor->storage;
 	}
 
 	for (unsigned i = 0; i < pages.size(); i++) {
@@ -258,8 +269,12 @@ PageMappedStorage* PageMappedStorage::calculate(Model &model, size_t weights_pag
 		CHECK(p.second->tensor != nullptr);
 		CHECK(p.second->tensor->storage != nullptr);
 
-		weights_storage.push_back(p.second->tensor->storage);
-		seen.push_back(p.second->tensor->storage);
+		StorageLocation* l = p.second->tensor->storage;
+
+		CHECK(std::find(seen.begin(), seen.end(), l) == seen.end()) << "Found duplicate storage location";
+
+		weights_storage.push_back(l);
+		seen.push_back(l);
 	}
 
 	// Pull out storage locations that are model inputs
@@ -310,6 +325,12 @@ PageMappedStorage* PageMappedStorage::calculate(Model &model, size_t weights_pag
 	// Pack the weights onto pages, or use existing mapping if provided
 	if (existing_weights_mapping == nullptr) {
 		mapped->weights = pack(weights_storage, weights_page_size);
+
+		int count = 0;
+		for (Page* page : mapped->weights) {
+			count += page->used_by.size();
+		}
+
 		make_weights_lookup_table(model, mapped);
 	} else {
 		mapped->weights = replicate_weights_mapping(model, existing_weights_mapping);
@@ -492,6 +513,9 @@ void makeModelDef(Model &model, size_t weights_page_size, clockwork::model::Page
 			tensordef.page_offset = pageptr.page_offset;
 			tensordef.size = tensor->Size();
 			tensordef.shape = tensor->shape;
+			tensordef.code = tensor->dltype.code;
+			tensordef.bits = tensor->dltype.bits;
+			tensordef.lanes = tensor->dltype.lanes;
 
 			opdef.inputs.push_back(tensordef);
 		}

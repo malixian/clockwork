@@ -178,6 +178,7 @@ void Params::Load(dmlc::Stream* strm) {
 	CHECK(size == names.size()) << "Invalid parameters file format";
 
 	for (std::string name : names) {
+    CHECK(data.find(name) == data.end()) << "Duplicate params for " << name;
 		data[name] = new tvm::runtime::NDArray();
 		data[name]->Load(strm);
 	}

@@ -90,6 +90,12 @@ public:
 	size_t Size();
 };
 
+class PreMappedIndices {
+public:
+	unsigned page_index;
+	unsigned location_index;
+};
+
 class PageMappedStorage {
 public:
 	std::vector<Page*> weights;
@@ -97,7 +103,7 @@ public:
 	std::vector<StorageLocation*> workspace_storage;
 	size_t transient_memory;
 
-	std::unordered_map<std::string, std::pair<unsigned, unsigned>> weights_lookup;
+	std::unordered_map<std::string, std::vector<PreMappedIndices>> weights_lookup;
 
 	static PageMappedStorage* calculate(Model &model, size_t weights_page_size, PageMappedStorage* existing_weights_mapping = nullptr);
 };
