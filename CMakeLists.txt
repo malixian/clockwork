@@ -72,6 +72,8 @@ add_library( clockwork
 	src/clockwork/controller/direct_controller.cpp
 	src/clockwork/network/client.cpp
 
+	$ENV{TVM_HOME}/src/runtime/meta_data.h
+
 ### No point maintaining the below any more
 #	src/clockwork/alternatives/runtime_model.cpp
 #	src/clockwork/alternatives/model_manager.cpp
@@ -91,9 +93,17 @@ target_link_libraries( clockwork PUBLIC
     ${Boost_FILESYSTEM_LIBRARY}
 )
 
-# cudafatbin is temporary / hacky 
-add_executable (cudafatbin src/cudafatbin.cc )
-target_link_libraries( cudafatbin
+
+# Converts from TVM models to clockwork models
+include_directories(clockwork-convert)
+add_executable (convert
+	src/clockwork-convert/tvm/decoupled_graph_runtime.cc
+	src/clockwork-convert/tvm_model.cpp
+	src/clockwork-convert/tvm_abstract_model.cpp
+	src/clockwork-convert/convert.cpp
+)
+
+target_link_libraries( convert
 	clockwork
 	clockwork_proto
 	Threads::Threads
@@ -107,17 +117,9 @@ target_link_libraries( cudafatbin
     ${Boost_FILESYSTEM_LIBRARY}
 )
 
-
-# Converts from TVM models to clockwork models
-include_directories(clockwork-convert)
-add_executable (convert
-	src/clockwork/tvm/decoupled_graph_runtime.cc
-	src/clockwork-convert/tvm_model.cpp
-	src/clockwork-convert/tvm_abstract_model.cpp
-	src/clockwork-convert/convert.cpp
-)
-
-target_link_libraries( convert
+# cudafatbin is temporary / hacky 
+add_executable (cudafatbin src/clockwork-convert/cudafatbin.cc )
+target_link_libraries( cudafatbin
 	clockwork
 	clockwork_proto
 	Threads::Threads

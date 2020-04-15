@@ -14,7 +14,6 @@
 #include <pods/binary.h>
 #include <pods/buffers.h>
 #include <pods/streams.h>
-#include "clockwork/tvm/decoupled_graph_runtime.h"
 #include "clockwork-convert/tvm_model.h"
 #include "clockwork-convert/tvm_abstract_model.h"
 
