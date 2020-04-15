@@ -76,13 +76,19 @@ struct PageMappedDLTensorDef {
     uint64_t page_offset;
     uint64_t size;
     std::vector<int64_t> shape;
+    int code = 2U; // kDLFloat
+    int bits = 32;
+    int lanes = 1;
 
     PODS_SERIALIZABLE(1,         
         PODS_MDR(base_offset),
         PODS_MDR(page),
         PODS_MDR(page_offset),
         PODS_MDR(size),
-        PODS_MDR(shape)
+        PODS_MDR(shape),
+        PODS_OPT(code),
+        PODS_OPT(bits),
+        PODS_OPT(lanes)
     )
 };
 

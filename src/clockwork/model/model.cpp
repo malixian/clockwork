@@ -208,11 +208,12 @@ void Model::make_op_exec(PageMappedOpDef &spec, OpExec &op) {
 
 	for (unsigned i = 0; i < op.num_inputs; i++) {
 		auto &tensor = op.input_tensors[i];
+		auto &tspec = spec.inputs[i];
 		tensor.data = nullptr;
 		tensor.ctx = DLContext{kDLGPU, 0}; // TODO: multiple devices
-		tensor.ndim = spec.inputs[i].shape.size();
-		tensor.dtype = DLDataType{kDLFloat, 32, 1};
-		tensor.shape = spec.inputs[i].shape.data();
+		tensor.ndim = tspec.shape.size();
+		tensor.dtype = DLDataType{tspec.code, tspec.bits, tspec.lanes};
+		tensor.shape = tspec.shape.data();
 		tensor.strides = nullptr;
 		tensor.byte_offset = 0;
 		op.func_inputs[i].v_handle = &tensor;

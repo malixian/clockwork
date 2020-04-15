@@ -41,7 +41,7 @@ void check_model(int page_size, std::string model_path) {
 
     model->instantiate_models_on_host();
 
-    size_t weights_page_size = 16 * 1024L * 1024L;
+    size_t weights_page_size = page_size;
     size_t weights_cache_size = model->num_weights_pages(weights_page_size) * weights_page_size;
     PageCache* weights_cache = make_GPU_cache(weights_cache_size, weights_page_size, GPU_ID_0);
 
