@@ -6,8 +6,8 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -O2")
 set(CXX "g++-8")
 set(CC "gcc-8")
 set(THREADS_PREFER_PTHREAD_FLAG ON)
-set(CMAKE_BUILD_TYPE Release)
-#set(CMAKE_BUILD_TYPE Debug)
+#set(CMAKE_BUILD_TYPE Release)
+set(CMAKE_BUILD_TYPE Debug)
 
 find_package(Threads REQUIRED)
 find_package(Boost COMPONENTS system filesystem REQUIRED)
@@ -97,7 +97,6 @@ target_link_libraries( clockwork PUBLIC
 # Converts from TVM models to clockwork models
 include_directories(clockwork-convert)
 add_executable (convert
-	src/clockwork-convert/tvm/decoupled_graph_runtime.cc
 	src/clockwork-convert/tvm_model.cpp
 	src/clockwork-convert/tvm_abstract_model.cpp
 	src/clockwork-convert/convert.cpp

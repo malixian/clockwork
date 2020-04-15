@@ -6,6 +6,7 @@
 #include <cstring>
 #include "clockwork-convert/tvm_model.h"
 #include <dmlc/logging.h>
+#include <tvm/runtime/packed_func.h>
 
 #include <dlpack/dlpack.h>
 
@@ -50,7 +51,7 @@ Model Model::fromTVM(tvm_model::Model &model, tvm_model::Params &params, tvm_mod
 	for (unsigned i = 0; i < model.attrs_.storage_id.size(); i++) {
 		Tensor* tensor = new Tensor();
 		tensor->id = i;
-		tensor->dltype = tvm::runtime::String2TVMType(model.attrs_.dltype[i]);
+		tensor->dltype = tvm::runtime::String2DLDataType(model.attrs_.dltype[i]);
 		tensor->shape = model.attrs_.shape[i];
 		tensor->storage = storage_locations[model.attrs_.storage_id[i]];
 		tensors.push_back(tensor);
