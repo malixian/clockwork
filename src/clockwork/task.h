@@ -8,7 +8,7 @@
 #include "clockwork/cache.h"
 #include "clockwork/model/model.h"
 #include "clockwork/memory.h"
-#include <tvm/runtime/cuda_common.h>
+#include "clockwork/cuda_common.h"
 
 /*
 This file contains logic for executing models directly

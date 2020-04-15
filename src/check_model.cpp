@@ -4,7 +4,7 @@
 #include "clockwork/model/batched.h"
 #include "clockwork/memory.h"
 #include "clockwork/cache.h"
-#include "tvm/runtime/cuda_common.h"
+#include "clockwork/cuda_common.h"
 
 using namespace clockwork;
 

@@ -14,7 +14,7 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <istream>
-#include "tvm/runtime/cuda_common.h"
+#include "clockwork/cuda_common.h"
 #include <cuda_runtime.h>
 #include <dmlc/logging.h>
 #include <nvml.h>
@@ -204,6 +204,8 @@ long filesize(std::string filename) {
     return rc == 0 ? buffer.st_size : -1;
 }
 
+thread_local cudaStream_t current_stream;
+
 void initializeCudaStream(unsigned gpu_id, int priority) {
   CUDA_CALL(cudaSetDevice(gpu_id));
   cudaStream_t stream;  
@@ -212,12 +214,11 @@ void initializeCudaStream(unsigned gpu_id, int priority) {
 }
 
 void SetStream(cudaStream_t stream) {
-  tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream = stream;
-  tvm::runtime::CUDAThreadEntry::ThreadLocal()->stream = stream;  
+  current_stream = stream;
 }
 
 cudaStream_t Stream() {
-  return tvm::runtime::ManagedCUDAThreadEntry::ThreadLocal()->stream;
+  return current_stream;
 }
 
 std::string get_clockwork_directory()

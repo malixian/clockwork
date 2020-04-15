@@ -7,7 +7,7 @@
 #include <memory>
 #include <atomic>
 #include <cuda_runtime.h>
-#include "tvm/runtime/cuda_common.h"
+#include "clockwork/cuda_common.h"
 #include "clockwork/telemetry.h"
 #include "clockwork/cache.h"
 #include "clockwork/model/model.h"

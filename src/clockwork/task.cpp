@@ -1,7 +1,7 @@
 #include "clockwork/task.h"
 
 #include "tbb/concurrent_queue.h"
-#include <tvm/runtime/cuda_common.h>
+#include "clockwork/cuda_common.h"
 #include "clockwork/api/worker_api.h"
 #include "clockwork/action.h"
 

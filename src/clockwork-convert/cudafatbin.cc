@@ -3,7 +3,6 @@
 #include <cuda_runtime.h>
 #include "clockwork/tvm/pack_args.h"
 
-#include <tvm/runtime/cuda_common.h>
 #include "clockwork/util.h"
 #include <iostream>
 #include "tbb/task_scheduler_init.h"
@@ -23,7 +22,7 @@
 #include <pods/streams.h>
 #include <cuda_runtime.h>
 #include <chrono>
-#include <tvm/runtime/cuda_common.h>
+#include "clockwork/cuda_common.h"
 #include "clockwork/cache.h"
 #include "clockwork/util.h"
 #include "clockwork/model/so.h"

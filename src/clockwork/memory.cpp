@@ -1,5 +1,5 @@
 #include "clockwork/memory.h"
-#include "tvm/runtime/cuda_common.h"
+#include "clockwork/cuda_common.h"
 
 namespace clockwork {
 

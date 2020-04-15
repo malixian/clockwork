@@ -1,6 +1,6 @@
 #include "clockwork/cache.h"
 #include <dmlc/logging.h>
-#include "tvm/runtime/cuda_common.h"
+#include "clockwork/cuda_common.h"
 
 namespace clockwork {
 

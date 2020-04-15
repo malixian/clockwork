@@ -3,7 +3,7 @@
 #include <cuda_runtime.h>
 #include <dlfcn.h>
 #include "dmlc/logging.h"
-#include "tvm/runtime/cuda_common.h"
+#include "clockwork/cuda_common.h"
 #include "tvm/runtime/c_backend_api.h"
 #include "clockwork/tvm/runtime_base.h"
 

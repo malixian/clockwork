@@ -1,7 +1,7 @@
 #include "clockwork/model/batched.h"
 
 #include <algorithm>
-#include "tvm/runtime/cuda_common.h"
+#include "clockwork/cuda_common.h"
 #include "clockwork/model/model.h"
 
 namespace clockwork {

@@ -3,7 +3,7 @@
 #include <cuda_runtime.h>
 #include "clockwork/tvm/pack_args.h"
 
-#include <tvm/runtime/cuda_common.h>
+#include "clockwork/cuda_common.h"
 #include "clockwork/util.h"
 
 namespace clockwork {
@@ -117,7 +117,6 @@ void LoadedCUDAFunc::operator()(tvm::runtime::TVMArgs args,
   //                                << wl.block_dim(0) << " "
   //                                << wl.block_dim(1) << " "
   //                                << wl.block_dim(2) << std::endl;
-  CUDA_LOG(
   CUresult result = cuLaunchKernel(
       f,
       wl.grid_dim(0),
@@ -127,7 +126,6 @@ void LoadedCUDAFunc::operator()(tvm::runtime::TVMArgs args,
       wl.block_dim(1),
       wl.block_dim(2),
       0, strm, void_args, 0);
-  )
   if (result != CUDA_SUCCESS && result != CUDA_ERROR_DEINITIALIZED) {
     const char *msg;
     cuGetErrorName(result, &msg);
@@ -140,7 +138,6 @@ void LoadedCUDAFunc::operator()(tvm::runtime::TVMArgs args,
     os << "// func_name=" << source->info.name << "\n";
     LOG(FATAL) << os.str();
   }
-  // CUDA_CALL(cudaStreamSynchronize(static_cast<cudaStream_t>(strm)));
 }
 
 UnloadedCUDAFunc::UnloadedCUDAFunc(const std::string &name, const tvm::runtime::FunctionInfo &info) : name(name), info(info) {
