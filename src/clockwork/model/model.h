@@ -9,8 +9,8 @@
 #include <cuda_runtime.h>
 #include "clockwork/util.h"
 
-#define MAX_OUTSTANDING_EVENTS 4
-#define MAX_OUTSTANDING_EXEC_EVENTS 4
+#define MAX_OUTSTANDING_EVENTS 16
+#define MAX_OUTSTANDING_EXEC_EVENTS 16
 #define MAX_OUTSTANDING_MEMCPY_EVENTS 2
 
 namespace clockwork{
