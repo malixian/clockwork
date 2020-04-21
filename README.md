@@ -88,6 +88,18 @@ DefaultLimitNOFILE=65535
 ```
 4. Restart
 
+## 3. Increase mmap limits
+
+Clockwork uses a lot of shared objects, and we need to increase the mmap limit.  As root, run
+```
+/usr/sbin/sysctl -w vm.max_map_count=10000000
+```
+
+In general you can check mmap limits with:
+```
+sysctl vm.max_map_count
+```
+
 ## 3. Disable CUDA JIT
 
 None of the models we feed to Clockwork should have CUDA PTX code (JIT'able code) -- to make sure, set the `CUDA_CACHE_DISABLE=1` environment variable
