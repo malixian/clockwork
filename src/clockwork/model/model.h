@@ -38,7 +38,7 @@ public:
 	unsigned gpu_id;
 
 	// Cool
-	const Memfile so_memfile;
+	Memfile so_memfile;
 	std::string serialized_spec;
 	int weights_size;
 	char* weights_pinned_host_memory; // alloced with cudaMallocHost

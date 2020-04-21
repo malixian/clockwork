@@ -2,6 +2,7 @@
 #include "clockwork/cuda_common.h"
 #include "clockwork/util.h"
 #include "clockwork/model/model.h"
+#include <unistd.h>
 
 using namespace clockwork::model;
 
@@ -48,6 +49,9 @@ void Model::instantiate_model_on_host() {
 	for (unsigned i = 0; i < spec->ops.size(); i++) {
 		make_op_exec(spec->ops[i], (*op_execs)[i]);
 	}
+
+	// Close original so_memfile
+	so_memfile.close();
 }
 
 void Model::uninstantiate_model_on_host() {

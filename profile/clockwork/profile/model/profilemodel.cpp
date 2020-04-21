@@ -484,15 +484,15 @@ TEST_CASE("Test max concurrent models", "[so_limits]") {
     util::setCudaFlags();
     util::initializeCudaStream();
 
-    std::string model_path = "/home/jcmace/clockwork-modelzoo-volta/super_resolution/model";
+    std::string model_path = "/home/jcmace/clockwork-modelzoo-volta/others/cifar_resnet20_v1/model";
 
-    // model::Model* model = load_model_from_disk(model_path);
+    model::Model* model = load_model_from_disk(model_path);
     std::vector<model::Model*> copies;
     for (unsigned i = 0; i < 100000; i++) {
-        // model::Model* copy = duplicate(model, false);
-        model::Model* copy = load_model_from_disk(model_path);
+        model::Model* copy = duplicate(model, false);
+        // model::Model* copy = load_model_from_disk(model_path);
         copy->instantiate_model_on_host();
-        copy->instantiate_model_on_device();
+        //copy->instantiate_model_on_device();
         copies.push_back(copy);
         std::cout << i << std::endl;
     }
