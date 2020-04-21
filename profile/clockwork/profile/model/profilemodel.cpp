@@ -480,6 +480,24 @@ TEST_CASE("Warmup works", "[profile] [warmup]") {
     }
 }
 
+TEST_CASE("Test max concurrent models", "[so_limits]") {
+    util::setCudaFlags();
+    util::initializeCudaStream();
+
+    std::string model_name = "resnet50";
+    std::string model_path = clockwork::util::get_example_model("resnet18_tesla-m40_batchsize1");
+
+    model::Model* model = load_model_from_disk(model_path);
+    std::vector<model::Model*> copies;
+    for (unsigned i = 0; i < 100000; i++) {
+        model::Model* copy = duplicate(model, false);
+        copy->instantiate_model_on_host();
+        copies.push_back(copy);
+        std::cout << i << std::endl;
+    }
+
+}
+
 void runMultiClientExperiment(int num_execs, int models_per_exec, bool duplicate_weights, int iterations, bool with_module_load) {
     util::setCudaFlags();
     for (unsigned i = 0; i < 3; i++) {
