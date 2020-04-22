@@ -152,4 +152,11 @@ Currently, the CMakeLists assumes CUDA lives in either `/usr/local/cuda/lib64` (
 
 Undefined reference to tvm::runtime::ManagedCuda... -- this probably means you didn't build TVM properly.  Make sure you haven't modified or deleted the file `build/config.cmake` in the TVM repository.  `make clean` and `make` TVM again.
 
-Unable to set number of open files with ulimit: default values are picked up from conf files, e.g. /etc/security/limits.conf, but they may be overwritten by files in a subdirectory, e.g. /etc/security/limits.d/*.conf
+Unable to set number of open files with ulimit: default values are picked up from conf files, e.g. /etc/security/limits.conf, but they may be overwritten by files in a subdirectory, e.g. /etc/security/limits.d/mpi.conf
+
+If you are loading lots of models, you might see the following:
+*  `src/clockwork/model/so.cpp:20: Check failed: lib_handle_ != nullptr: Failed to load SO /proc/26344/fd/14656/proc/26344/fd/14656: cannot apply additional memory protection after relocation: Cannot allocate memory`
+*  `src/clockwork/model/so.cpp:20: Check failed: lib_handle_ != nullptr: Failed to load SO /proc/12386/fd/11804/proc/12386/fd/11804: failed to map segment from shared object`
+To solve this you need to increase your mmap limits, described above.
+
+
