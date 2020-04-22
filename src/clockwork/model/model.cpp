@@ -43,6 +43,16 @@ void Model::instantiate_model_on_host() {
 	weights_pages_count = spec->weights_pages.size();
 	io_size = spec->io_memory;
 	workspace_size = spec->workspace_memory;
+	
+	inputs_size = 0;
+	for (auto &input : spec->inputs) {
+		inputs_size += input.size;
+	}
+
+	outputs_size = 0;
+	for (auto &output : spec->outputs) {
+		outputs_size += output.size;
+	}
 
 	// 3: setup model executor
 	op_execs = new std::vector<OpExec>(spec->ops.size());
@@ -123,9 +133,8 @@ void Model::transfer_weights_to_device(std::vector<char*> &weights_pages, cudaSt
 }
 
 size_t Model::input_size() {
-	/** TODO: for now, a model only has one input */
 	CHECK(spec != nullptr) << "input_size spec is nullptr";
-	return spec->inputs[0].size;
+	return inputs_size;
 }
 
 /* Preconditions: instantiate_model_on_host && set_workspace_pages */
@@ -135,9 +144,10 @@ void Model::transfer_input_to_device(const char* input_ptr, char* &dst_io_memory
 
 void Model::transfer_input_to_device(size_t input_size, const char* input_ptr, char* &dst_io_memory, cudaStream_t stream) {
 	CHECK(spec != nullptr) << "transfer_input_to_device spec is nullptr";
-	CHECK(input_size <= spec->inputs[0].size) << "transfer_input_to_device tried to transfer more bytes than allowed";
+	CHECK(input_size <= inputs_size) << "transfer_input_to_device tried to transfer more bytes than allowed";
 	CHECK(spec->inputs[0].page == weights_pages_count) << "transfer_input_to_device expected input on page " << weights_pages_count;
-	void* dst_ptr = dst_io_memory + spec->inputs[0].page_offset;
+	CHECK(spec->inputs[0].page_offset == 0) << "transfer_input_to_device expected inputs to start at offset 0 on io_memory but found";
+	void* dst_ptr = dst_io_memory;
 	CUDA_CALL(cudaSetDevice(gpu_id));
 	CUDA_CALL(
 		cudaMemcpyAsync(
@@ -152,9 +162,8 @@ void Model::transfer_input_to_device(size_t input_size, const char* input_ptr, c
 
 /* Preconditions: instantiate_model_on_host */
 size_t Model::output_size() {
-	/** TODO: for now, a model only has one output */
 	CHECK(spec != nullptr) << "output_size spec is nullptr";
-	return spec->outputs[0].size;
+	return outputs_size;
 }
 
 /* Preconditions: instantiate_model_on_host */
@@ -164,9 +173,10 @@ void Model::transfer_output_from_device(char* output_ptr, char* &src_io_memory, 
 
 void Model::transfer_output_from_device(size_t output_size, char* output_ptr, char* &src_io_memory, cudaStream_t stream) {
 	CHECK(spec != nullptr) << "transfer_output_from_device spec is nullptr";
-	CHECK(output_size <= spec->outputs[0].size) << "transfer_output_from_device tried to transfer more bytes than allowed";
-	CHECK(spec->inputs[0].page == weights_pages_count) << "transfer_output_from_device expected output on page " << weights_pages_count;
-	void* src_ptr = src_io_memory + spec->outputs[0].page_offset;
+	CHECK(output_size <= outputs_size) << "transfer_output_from_device tried to transfer more bytes than allowed";
+	CHECK(spec->outputs[0].page == weights_pages_count) << "transfer_output_from_device expected output on page " << weights_pages_count;
+	CHECK(spec->outputs[0].page_offset == inputs_size) << "transfer_input_to_device expected outputs to come after inputs";
+	void* src_ptr = src_io_memory + inputs_size;
 	CUDA_CALL(cudaSetDevice(gpu_id));
 	CUDA_CALL(
 		cudaMemcpyAsync(
