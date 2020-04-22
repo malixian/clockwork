@@ -5,7 +5,7 @@
 #include <thread>
 #include <catch2/catch.hpp>
 #include <cuda_runtime.h>
-#include "tvm/runtime/cuda_common.h"
+#include "clockwork/cuda_common.h"
 #include "clockwork/util.h"
 #include "clockwork/test/util.h"
 #include "clockwork/model/so.h"
@@ -478,6 +478,25 @@ TEST_CASE("Warmup works", "[profile] [warmup]") {
     for (unsigned i = 0; i < 3; i++) {
         warmup();
     }
+}
+
+TEST_CASE("Test max concurrent models", "[so_limits]") {
+    util::setCudaFlags();
+    util::initializeCudaStream();
+
+    std::string model_path = "/home/jcmace/clockwork-modelzoo-volta/others/cifar_resnet20_v1/model";
+
+    model::Model* model = load_model_from_disk(model_path);
+    std::vector<model::Model*> copies;
+    for (unsigned i = 0; i < 100000; i++) {
+        model::Model* copy = duplicate(model, false);
+        // model::Model* copy = load_model_from_disk(model_path);
+        copy->instantiate_model_on_host();
+        //copy->instantiate_model_on_device();
+        copies.push_back(copy);
+        std::cout << i << std::endl;
+    }
+
 }
 
 void runMultiClientExperiment(int num_execs, int models_per_exec, bool duplicate_weights, int iterations, bool with_module_load) {

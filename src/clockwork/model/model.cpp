@@ -2,6 +2,7 @@
 #include "clockwork/cuda_common.h"
 #include "clockwork/util.h"
 #include "clockwork/model/model.h"
+#include <unistd.h>
 
 using namespace clockwork::model;
 
@@ -48,6 +49,9 @@ void Model::instantiate_model_on_host() {
 	for (unsigned i = 0; i < spec->ops.size(); i++) {
 		make_op_exec(spec->ops[i], (*op_execs)[i]);
 	}
+
+	// Close original so_memfile
+	so_memfile.close();
 }
 
 void Model::uninstantiate_model_on_host() {
@@ -217,7 +221,7 @@ void Model::make_op_exec(PageMappedOpDef &spec, OpExec &op) {
 		tensor.strides = nullptr;
 		tensor.byte_offset = 0;
 		op.func_inputs[i].v_handle = &tensor;
-		op.func_tcodes[i] = kArrayHandle;
+		op.func_tcodes[i] = kTVMDLTensorHandle;
 	}
 
 	op.workspace_ptrs.resize(spec.workspace_allocs.size());

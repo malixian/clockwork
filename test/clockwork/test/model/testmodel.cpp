@@ -116,15 +116,15 @@ TEST_CASE("Model lifecycle 1", "[model]") {
 
     REQUIRE_NOTHROW(model->instantiate_model_on_host());
     REQUIRE_NOTHROW(model->uninstantiate_model_on_host());
-    REQUIRE_NOTHROW(model->instantiate_model_on_host());
-    REQUIRE_NOTHROW(model->uninstantiate_model_on_host());
-    REQUIRE_THROWS(model->uninstantiate_model_on_host());
+
+    // Instantiate on host can only happen once now
+    REQUIRE_THROWS(model->instantiate_model_on_host());
 
     delete model;
 }
 
 
-TEST_CASE("Model Lifecycle 2", "[model]") {
+TEST_CASE("Model Lifecycle 2", "[model] [model_lifecycle_2]") {
 
     std::string f = clockwork::util::get_example_model();
 
@@ -158,14 +158,11 @@ TEST_CASE("Model Lifecycle 2", "[model]") {
 
     assert_is_cool(model);
 
-    model->instantiate_model_on_host();
+    /*
+    We no longer support multiple instantiations on host.  Just once.
+    */
 
-    assert_is_warm(model);
-
-    model->instantiate_model_on_device();
-
-    assert_is_hot(model);
-
+    REQUIRE_THROWS(model->instantiate_model_on_host());
 
     delete model;
 

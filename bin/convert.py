@@ -9,6 +9,9 @@ Clockwork must be build in order to run this script.
 This script uses the `convert` binary and expects it to exist in the `build` folder
 """
 
+convert_exec = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../build/convert")
+
+
 parser = argparse.ArgumentParser(description='Convert a TVM model into a Clockwork model')
 parser.add_argument("input_dir", metavar="INDIR", type=str, help="Base directory where TVM models exist.  The utility expects multiple models, one per batch size, each in a subdirectory.")
 parser.add_argument("output_dir", metavar="OUTDIR", type=str, help="Output directory.  Directory will be created if it does not exist.")
@@ -75,7 +78,7 @@ def convert(args):
 	print("The following command will run:")
 
 	pargs = [str(v) for v in [
-		"../build/convert",
+		convert_exec,
 		"-o", args.output_dir,
 		"-p", args.page_size
 	] + [x for m in models for x in m]]
