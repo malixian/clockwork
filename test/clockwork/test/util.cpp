@@ -65,6 +65,26 @@ bool is_gpu_exclusive(int deviceId) {
     return computeMode == NVML_COMPUTEMODE_EXCLUSIVE_PROCESS;
 }
 
+bool is_persistence_mode_enabled_on_gpu(int deviceId) {
+    nvmlReturn_t status;
+
+    status = nvmlInit();
+    CHECK(status == NVML_SUCCESS);
+
+    nvmlDevice_t device;
+    status = nvmlDeviceGetHandleByIndex(deviceId, &device);
+    CHECK(status == NVML_SUCCESS);
+
+    nvmlEnableState_t mode;
+    status = nvmlDeviceGetPersistenceMode(device, &mode);
+    CHECK(status == NVML_SUCCESS);
+
+    status = nvmlShutdown();
+    CHECK(status == NVML_SUCCESS);
+
+    return mode == NVML_FEATURE_ENABLED;
+}
+
 std::pair<int, int> get_compute_capability(unsigned device_id) {
     nvmlReturn_t status;
 

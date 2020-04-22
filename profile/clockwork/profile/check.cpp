@@ -54,6 +54,12 @@ void check_environment() {
             std::cout << "  ✔ GPU " << i << " is in exclusive mode" << std::endl;
         }
 
+        if (!util::is_persistence_mode_enabled_on_gpu(i)) { // TODO: check all GPUs
+            std::cout << "  ✘ GPU " << i << " does not have persistent mode enabled; set with `nvidia-smi -i " << i << " -pm 1` or set for all GPUs with `nvidia-smi -pm 1`" << std::endl;
+        } else {
+            std::cout << "  ✔ GPU " << i << " persistent mode is enabled" << std::endl;
+        }
+
 
     }
 

@@ -19,6 +19,7 @@ bool is_cuda_cache_disabled();
 bool is_force_ptx_jit_enabled();
 
 bool is_gpu_exclusive(int deviceId);
+bool is_persistence_mode_enabled_on_gpu(int deviceId);
 std::pair<int, int> get_compute_capability(unsigned device_id);
 void nvml();
 
