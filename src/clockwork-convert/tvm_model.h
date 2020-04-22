@@ -16,7 +16,6 @@
 #include <tvm/runtime/module.h>
 #include <tvm/runtime/registry.h>
 #include <tvm/runtime/packed_func.h>
-#include "clockwork-convert/tvm/decoupled_graph_runtime.h"
 
 
 namespace tvm_model {

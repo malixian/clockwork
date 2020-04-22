@@ -17,7 +17,7 @@ void* SharedObject::GetSymbol(const char* symbolName) {
 
 SharedObject::SharedObject(const std::string &name) : name(name) {
     lib_handle_ = dlopen(name.c_str(), RTLD_LOCAL | RTLD_NOW);
-    CHECK(lib_handle_ != nullptr) << "Failed to load SO " << name << dlerror();
+    CHECK(lib_handle_ != nullptr) << "Failed to load SO " << name << ": " << dlerror();
 }
 
 SharedObject::~SharedObject() {

@@ -2,6 +2,7 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include "clockwork/tvm/pack_args.h"
+#include "dmlc/memory_io.h"
 
 #include "clockwork/cuda_common.h"
 #include "clockwork/util.h"

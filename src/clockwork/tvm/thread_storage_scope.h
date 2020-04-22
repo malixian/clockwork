@@ -1,5 +1,23 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ * 
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 /*!
- *  Copyright (c) 2017 by Contributors
  * \file thread_storage_scope.h
  * \brief Extract thread axis configuration from TVMArgs.
  */
@@ -31,7 +49,13 @@ enum class StorageRank {
    */
   kWarp = 2,
   /*! \brief thread local memory */
-  kLocal = 3
+  kLocal = 3,
+  /*! \brief wmma scope memory of matrix_a */
+  kWMMAMatrixA = 4,
+  /*! \brief wmma scope memory of matrix_b */
+  kWMMAMatrixB = 5,
+  /*! \brief wmma scope memory of accumulator */
+  kWMMAAccumulator = 6,
 };
 
 /*!
@@ -70,6 +94,9 @@ struct StorageScope {
       case StorageRank::kShared: return "shared" + tag;
       case StorageRank::kWarp: return "warp" + tag;
       case StorageRank::kLocal: return "local" + tag;
+      case StorageRank::kWMMAMatrixA: return "wmma.matrix_a" + tag;
+      case StorageRank::kWMMAMatrixB: return "wmma.matrix_b" + tag;
+      case StorageRank::kWMMAAccumulator: return "wmma.accumulator" + tag;
       default: LOG(FATAL) << "unknown storage scope"; return "";
     }
   }
@@ -92,6 +119,15 @@ struct StorageScope {
     } else if (s.compare(0, 5, "local") == 0) {
       r.rank = StorageRank::kLocal;
       r.tag = s.substr(5, std::string::npos);
+    } else if (s.compare(0, 13, "wmma.matrix_a") == 0) {
+      r.rank = StorageRank::kWMMAMatrixA;
+      r.tag = s.substr(13, std::string::npos);
+    } else if (s.compare(0, 13, "wmma.matrix_b") == 0) {
+      r.rank = StorageRank::kWMMAMatrixB;
+      r.tag = s.substr(13, std::string::npos);
+    } else if (s.compare(0, 16, "wmma.accumulator") == 0) {
+      r.rank = StorageRank::kWMMAAccumulator;
+      r.tag = s.substr(16, std::string::npos);
     } else {
       LOG(FATAL) << "unknown storage scope " << s;
     }
@@ -130,7 +166,7 @@ struct ThreadScope {
 };
 
 
-/*! \brief workload speccification */
+/*! \brief workload specification */
 struct ThreadWorkLoad {
   // array, first three are thread configuration.
   size_t work_size[6];

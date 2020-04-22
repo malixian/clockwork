@@ -1,6 +1,6 @@
 #include <catch2/catch.hpp>
 #include <cuda_runtime.h>
-#include "tvm/runtime/cuda_common.h"
+#include "clockwork/cuda_common.h"
 #include "clockwork/util.h"
 #include "clockwork/test/util.h"
 #include "clockwork/model/so.h"
