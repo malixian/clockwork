@@ -35,9 +35,6 @@ void check_model(int page_size, std::string model_path) {
 	clockwork::model::BatchedModel* model = load_model(model_path);
 
 	auto batch_sizes = model->implemented_batch_sizes();
-	for (unsigned batch_size : batch_sizes) {
-		std::cout << "  loaded batch size " << batch_size << std::endl;
-	}
 
     model->instantiate_models_on_host();
 
@@ -47,9 +44,32 @@ void check_model(int page_size, std::string model_path) {
 
     cudaError_t status;
     model->instantiate_models_on_device();
-	    
-    std::shared_ptr<Allocation> weights = weights_cache->alloc(model->num_weights_pages(weights_page_size), []{});
-    model->transfer_weights_to_device(weights->page_pointers, util::Stream());
+	
+	unsigned num_pages = model->num_weights_pages(weights_page_size);
+    std::shared_ptr<Allocation> weights = weights_cache->alloc(num_pages, []{});
+
+
+	int warmups = 20;
+    int iterations = 100;
+
+    // Time the transfer
+    for (unsigned i = 0; i < warmups; i++) {
+    	model->transfer_weights_to_device(weights->page_pointers, util::Stream());
+    }
+	status = cudaStreamSynchronize(util::Stream());
+	CHECK(status == cudaSuccess);
+	auto before_transfer = util::now();
+    for (unsigned i = 0; i < iterations; i++) {
+    	model->transfer_weights_to_device(weights->page_pointers, util::Stream());
+    }
+	status = cudaStreamSynchronize(util::Stream());
+	CHECK(status == cudaSuccess);
+	auto after_transfer = util::now();
+	std::cout << "  input_size:  " << model->input_size(1) << std::endl;
+	std::cout << "  output_size: " << model->output_size(1) << std::endl;
+	std::cout << "  weights size paged (non-paged) [num_pages]: " << (weights_page_size * num_pages) << " (" << model->weights_size << ") [" << num_pages << "]" << std::endl;
+	printf("  weights transfer latency: %.2f ms\n", ((float) (after_transfer-before_transfer)) / (iterations * 1000000.0));
+	std::cout << "  execution latency:" << std::endl;
 
     for (unsigned batch_size : batch_sizes) {
     	// Create inputs and outputs
@@ -70,21 +90,19 @@ void check_model(int page_size, std::string model_path) {
 	    model->transfer_input_to_device(batch_size, input, io_memory, util::Stream());
 
 	    // Time the call
-	    int warmups = 20;
 		for (int i = 0; i < warmups; i++) {    
 	    	model->call(batch_size, weights->page_pointers, io_memory, workspace_memory, util::Stream());
 	    }
             status = cudaStreamSynchronize(util::Stream());
             CHECK(status == cudaSuccess);
 	    auto before = util::now();
-            int iterations = 100;
 		for (int i = 0; i < iterations; i++) {    
 	    	model->call(batch_size, weights->page_pointers, io_memory, workspace_memory, util::Stream());
 	    }
             status = cudaStreamSynchronize(util::Stream());
             CHECK(status == cudaSuccess);
 	    auto after = util::now();
-	    printf("  b%d: %.2f ms per call\n", batch_size, ((float) (after-before)) / (iterations * 1000000.0));
+	    printf("    b%d: %.2f ms\n", batch_size, ((float) (after-before)) / (iterations * 1000000.0));
 
 	    model->transfer_output_from_device(batch_size, output, io_memory, util::Stream());
 
