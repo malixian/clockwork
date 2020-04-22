@@ -106,7 +106,7 @@ None of the models we feed to Clockwork should have CUDA PTX code (JIT'able code
 
 ## 4. Disable GPU frequency autoscaling
 
-Enable persistence mode
+Enable persistence mode.  NOTE: This must be done on every restart
 ```
 nvidia-smi -pm 1
 ```
