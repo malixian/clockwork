@@ -20,13 +20,15 @@ void show_usage() {
     std::cout << "  -p, --page_size" << std::endl;
     std::cout << "      Weights page size used by Clockwork.  Defaults to 16MB.  You shouldn't" << std::endl;
     std::cout << "      need to set this because we are using 16MB pages." << std::endl;
+    std::cout << "  -i, --iterations" << std::endl;
+    std::cout << "      Number of iterations to measure" << std::endl;
 }
 
 model::BatchedModel* load_model(std::string model) {
 	return model::BatchedModel::loadFromDisk(model, 0);
 }
 
-void check_model(int page_size, std::string model_path) {
+void check_model(int page_size, int iterations, std::string model_path) {
 	std::cout << "Checking " << model_path << std::endl;
 
 	util::setCudaFlags();
@@ -49,8 +51,7 @@ void check_model(int page_size, std::string model_path) {
     std::shared_ptr<Allocation> weights = weights_cache->alloc(num_pages, []{});
 
 
-	int warmups = 20;
-    int iterations = 100;
+	int warmups = 10;
 
     // Time the transfer
     for (unsigned i = 0; i < warmups; i++) {
@@ -67,6 +68,7 @@ void check_model(int page_size, std::string model_path) {
 	auto after_transfer = util::now();
 	std::cout << "  input_size:  " << model->input_size(1) << std::endl;
 	std::cout << "  output_size: " << model->output_size(1) << std::endl;
+	std::cout << "  workspace:   " << model->workspace_memory_size(1) << std::endl;
 	std::cout << "  weights size paged (non-paged) [num_pages]: " << (weights_page_size * num_pages) << " (" << model->weights_size << ") [" << num_pages << "]" << std::endl;
 	printf("  weights transfer latency: %.2f ms\n", ((float) (after_transfer-before_transfer)) / (iterations * 1000000.0));
 	std::cout << "  execution latency:" << std::endl;
@@ -132,6 +134,7 @@ void check_model(int page_size, std::string model_path) {
 int main(int argc, char *argv[]) {
 	std::vector<std::string> non_argument_strings;
 
+	int iterations = 100;
 	int page_size = 16 * 1024 * 1024;
 	for (int i = 1; i < argc; ++i) {
 		std::string arg = argv[i];
@@ -140,6 +143,8 @@ int main(int argc, char *argv[]) {
 		    return 0;
 		} else if ((arg == "-p") || (arg == "--page_size")) {
 		    page_size = atoi(argv[++i]);
+		} else if ((arg == "-i") || (arg == "--iterations")) {
+		    iterations = atoi(argv[++i]);
 		} else {
 		 	non_argument_strings.push_back(arg);
 		}
@@ -152,5 +157,5 @@ int main(int argc, char *argv[]) {
 
 	std::string model_path = non_argument_strings[0];
 
-	check_model(page_size, model_path);
+	check_model(page_size, iterations, model_path);
 }
