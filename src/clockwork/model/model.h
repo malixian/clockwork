@@ -36,6 +36,7 @@ struct OpExec {
 class Model {
 public:
 	unsigned gpu_id;
+	bool rate_limit = true;
 
 	// Cool
 	Memfile so_memfile;

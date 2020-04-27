@@ -63,7 +63,7 @@ unsigned shmem_counter = 0;
 ShmemFile* ShmemFile::readFrom(const std::string &filename) {
 	// Filename of the shmem file
 	std::stringstream name;
-	name << "/clockwork-" << shmem_counter++;
+	name << "/clockwork-" << getpid() << "-" << shmem_counter++;
 	std::string shmem_name = name.str();
 	int shmem_fd = make_shmemfd(shmem_name);
 

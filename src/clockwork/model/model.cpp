@@ -125,10 +125,12 @@ void Model::transfer_weights_to_device(std::vector<char*> &weights_pages, cudaSt
 				stream
 			)
 		)
-		if (i > MAX_OUTSTANDING_MEMCPY_EVENTS) {
-			CUDA_CALL(cudaEventSynchronize(rate_limit_events[i % MAX_OUTSTANDING_MEMCPY_EVENTS]));
+		if (rate_limit) {
+			if (i > MAX_OUTSTANDING_MEMCPY_EVENTS) {
+				CUDA_CALL(cudaEventSynchronize(rate_limit_events[i % MAX_OUTSTANDING_MEMCPY_EVENTS]));
+			}
+			CUDA_CALL(cudaEventRecord(rate_limit_events[i % MAX_OUTSTANDING_MEMCPY_EVENTS], stream));
 		}
-		CUDA_CALL(cudaEventRecord(rate_limit_events[i % MAX_OUTSTANDING_MEMCPY_EVENTS], stream));
 	}
 }
 
@@ -203,10 +205,12 @@ void Model::call(std::vector<char*> &weights_pages, char* &io_memory, char* &wor
 
 	for (unsigned i = 0; i < op_execs->size(); i++) {
 		call_op_exec((*op_execs)[i], pages);
-		if (i > MAX_OUTSTANDING_EXEC_EVENTS) {
-			CUDA_CALL(cudaEventSynchronize(rate_limit_events[i % MAX_OUTSTANDING_EXEC_EVENTS]));
+		if (rate_limit) {
+			if (i > MAX_OUTSTANDING_EXEC_EVENTS) {
+				CUDA_CALL(cudaEventSynchronize(rate_limit_events[i % MAX_OUTSTANDING_EXEC_EVENTS]));
+			}
+			CUDA_CALL(cudaEventRecord(rate_limit_events[i % MAX_OUTSTANDING_EXEC_EVENTS], stream));
 		}
-		CUDA_CALL(cudaEventRecord(rate_limit_events[i % MAX_OUTSTANDING_EXEC_EVENTS], stream));
 	}
 }
 
