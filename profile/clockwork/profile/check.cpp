@@ -37,11 +37,34 @@ void check_environment() {
     }
 
     getrlimit(RLIMIT_MEMLOCK, &rlim);
-    if (rlim.rlim_cur < 1024L * 1024L * 1024L * 1024L) {
+    if (rlim.rlim_cur != RLIM_INFINITY) {
         std::cout << "✘ Resource limit on memlocked pages is " << rlim.rlim_cur << ", require unlimited" << std::endl;
         environmentIsOK = false;
     } else {
-        std::cout << "✔ RLIMIT_MEMLOCK is " << rlim.rlim_cur << std::endl;
+        std::cout << "✔ RLIMIT_MEMLOCK is unlimited" << std::endl;
+    }
+
+    getrlimit(RLIMIT_RTPRIO, &rlim);
+    if (rlim.rlim_cur != RLIM_INFINITY) {
+        std::cout << "✘ rtprio is not unlimited; this will prevent setting thread priority.  Current value: " << rlim.rlim_cur << std::endl;
+        environmentIsOK = false;
+    } else {
+        std::cout << "✔ RLIMIT_RTPRIO is unlimited" << std::endl;
+    }
+
+    FILE* statusf = fopen("/proc/sys/vm/max_map_count", "r");
+    if (!statusf) {
+        std::cout << "✘ Unable to read /proc/sys/vm/max_map_count.  Manually check.  Value should be > 1000000" << std::endl;
+        environmentIsOK = false;
+    } else {
+        char line[100];
+        int max_map_count = atoi(fgets(line, 100, statusf));
+        if (max_map_count < 10000000) {
+            std::cout << "✘ vm.max_map_count is " << max_map_count << std::endl;               
+            environmentIsOK = false;
+        } else {
+            std::cout << "✔ vm.max_map_count is " << max_map_count << std::endl;            
+        }
     }
 
     unsigned num_gpus = util::get_num_gpus();

@@ -65,7 +65,7 @@ Set the "performance" governor to prevent CPU clock scaling
 echo performance | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
 ```
 
-## 2. Increase file and memlock limits
+## 2. Increase file, memlock, and rtprio limits
 
 Limits on the number of open files, and the amount of page-locked memory, reduce the total number of DNNs clockwork can keep in memory at any point in time.  A limit of 1024 is too low.  A limit of 16k or higher is acceptable.
 
@@ -79,6 +79,8 @@ Increase the `RLIMIT_NOFILE` (number of open files) and `RLIMIT_MEMLOCK` (amount
 *            soft   memlock           unlimited
 *            hard   nofile            unlimited
 *            soft   nofile            unlimited
+*            hard   rtprio            unlimited
+*            soft   rtprio            unlimited
 ```
 Note: for MPI cluster machines with the default Debian distribution, you will also need to modify `/etc/security/limits.d/mpiprefs.conf`
 

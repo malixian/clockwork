@@ -155,16 +155,19 @@ char* getGPUModelToBuffer(int deviceNumber, char* buf) {
 
 void setCurrentThreadMaxPriority() {
   pthread_t thId = pthread_self();
-  pthread_attr_t thAttr;
+  
+  struct sched_param params;
+  params.sched_priority = sched_get_priority_max(SCHED_FIFO);
+  int ret = pthread_setschedparam(thId, SCHED_FIFO, &params);
+  if (ret != 0) {
+    std::cout << "Warning!  Cannot set thread priority.  Don't forget to set rtprio unlimited in limits.conf.  See README for details." << std::endl;
+    return;
+  }
+
   int policy = 0;
-  int max_prio_for_policy = 0;
-
-  pthread_attr_init(&thAttr);
-  pthread_attr_getschedpolicy(&thAttr, &policy);
-  max_prio_for_policy = sched_get_priority_max(policy);
-
-  pthread_setschedprio(thId, max_prio_for_policy);
-  pthread_attr_destroy(&thAttr);
+  ret = pthread_getschedparam(thId, &policy, &params);
+  CHECK(ret == 0) << "Could not retrieve thread scheduler parameters for setting thread priority";
+  CHECK(policy == SCHED_FIFO) << "Inconsistent thread scheduler parameters encountered";
 }
 
 
