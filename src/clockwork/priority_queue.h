@@ -79,6 +79,7 @@ public:
 		std::vector<T*> elements;
 		while (!reader_queue.empty()) {
 			elements.push_back(reader_queue.top().element);
+			reader_queue.pop();
 		}
 
 		return elements;
