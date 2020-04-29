@@ -5,8 +5,91 @@
 #include <mutex>
 #include <condition_variable>
 #include <queue>
+#include "tbb/concurrent_queue.h"
 
 namespace clockwork {
+
+
+/* This is a priority queue with the same semantics as time_release_priority_queue
+but only when there is a single thread reading.  It uses a thread-safe concurrent queue
+and a non-thread-safe queue maintained by the reader */
+template <typename T> class single_reader_priority_queue {
+private:
+	struct container {
+		T* element;
+		uint64_t priority;
+		uint64_t version;
+
+		friend bool operator < (const container& lhs, const container &rhs) {
+			return lhs.priority < rhs.priority || 
+			  (lhs.priority == rhs.priority && lhs.version < rhs.version);
+		}
+		friend bool operator > (const container& lhs, const container &rhs) {
+			return lhs.priority > rhs.priority ||
+			  (lhs.priority == rhs.priority && lhs.version > rhs.version);
+		}
+	};
+
+	std::atomic_bool alive;
+	tbb::concurrent_queue<container> queue;
+
+	uint64_t version;
+	std::priority_queue<container, std::vector<container>, std::greater<container>> reader_queue;
+
+	void pull_new_elements() {
+		container next;
+		while (queue.try_pop(next)) {
+			next.version = version++;
+			reader_queue.push(next);
+		}
+	}
+
+public:
+
+	single_reader_priority_queue() : alive(true) {}
+
+	bool enqueue(T* element, uint64_t priority) {
+		if (alive) {
+			queue.push(container{element, priority, 0});
+		}
+		return alive;
+	}
+
+	bool try_dequeue(T* &element) {
+		pull_new_elements();
+
+		if (!alive || reader_queue.empty() || reader_queue.top().priority > util::now()) {
+			return false;
+		}
+
+		element = reader_queue.top().element;
+		reader_queue.pop();
+		return true;
+	}
+
+	T* dequeue() {
+		T* element = nullptr;
+		while (alive && !try_dequeue(element));
+		return element;
+	}
+
+	std::vector<T*> drain() {
+		pull_new_elements();
+
+		std::vector<T*> elements;
+		while (!reader_queue.empty()) {
+			elements.push_back(reader_queue.top().element);
+		}
+
+		return elements;
+	}
+
+	void shutdown() {
+		alive = false;
+	}
+
+};
+
 	/* This is a priority queue, but one where priorities also define a minimum
 time that an enqueued task is eligible to be dequeued.  The queue will block
 if no eligible tasks are available */
