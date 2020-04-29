@@ -41,9 +41,9 @@ public:
 	void limit(cudaStream_t stream) {
 		if (count++ == skip) {
 			CUDA_CALL(cudaEventSynchronize(events[position]));
-			CUDA_CALL(cudaEventRecord(events[position]));
+			CUDA_CALL(cudaEventRecord(events[position], stream));
 
-			position = position++ % num_events;
+			position = (position+1) % num_events;
 			count = 0;
 		}
 	}
