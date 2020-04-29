@@ -157,8 +157,8 @@ void setCurrentThreadMaxPriority() {
   pthread_t thId = pthread_self();
   
   struct sched_param params;
-  params.sched_priority = sched_get_priority_max(SCHED_FIFO);
-  int ret = pthread_setschedparam(thId, SCHED_FIFO, &params);
+  params.sched_priority = sched_get_priority_max(SCHED_RR);
+  int ret = pthread_setschedparam(thId, SCHED_RR, &params);
   if (ret != 0) {
     std::cout << "Warning!  Cannot set thread priority.  Don't forget to set rtprio unlimited in limits.conf.  See README for details." << std::endl;
     return;
@@ -167,7 +167,7 @@ void setCurrentThreadMaxPriority() {
   int policy = 0;
   ret = pthread_getschedparam(thId, &policy, &params);
   CHECK(ret == 0) << "Could not retrieve thread scheduler parameters for setting thread priority";
-  CHECK(policy == SCHED_FIFO) << "Inconsistent thread scheduler parameters encountered";
+  CHECK(policy == SCHED_RR) << "Inconsistent thread scheduler parameters encountered";
 }
 
 

@@ -29,8 +29,8 @@ CPUExecutor::CPUExecutor(TaskType type, std::vector<unsigned> cores) : BaseExecu
 
 void CPUExecutor::executorMain(unsigned executor_id, unsigned core) {
 	std::cout << TaskTypeName(type) << "-" << executor_id << " binding to core " << core << std::endl;
-	util::set_core(core);
-	util::setCurrentThreadMaxPriority();
+	// util::set_core(core);
+	// util::setCurrentThreadMaxPriority();
 
 	while (alive.load()) {
 		// TODO: possibility off too many outstanding asyc tasks
@@ -64,8 +64,8 @@ GPUExecutorShared::GPUExecutorShared(TaskType type, std::vector<unsigned> cores,
 
 void GPUExecutorShared::executorMain(unsigned executor_id, unsigned core) {
 	std::cout << TaskTypeName(type) << "-" << executor_id << " binding to core " << core << std::endl;
-	util::set_core(core);
-	util::setCurrentThreadMaxPriority();
+	// util::set_core(core);
+	// util::setCurrentThreadMaxPriority();
 
 	unsigned priority = 0;
 	std::vector<cudaStream_t> streams;
@@ -119,8 +119,8 @@ GPUExecutorExclusive::GPUExecutorExclusive(TaskType type, std::vector<unsigned> 
 
 void GPUExecutorExclusive::executorMain(unsigned executor_id, unsigned core) {
 	std::cout << TaskTypeName(type) << "-" << executor_id << " binding to core " << core << std::endl;
-	util::set_core(core);
-	util::setCurrentThreadMaxPriority();
+	// util::set_core(core);
+	// util::setCurrentThreadMaxPriority();
 	util::initializeCudaStream(gpu_id);
 	cudaStream_t stream = util::Stream();
 
@@ -170,8 +170,8 @@ void AsyncTaskChecker::join() {
 
 void AsyncTaskChecker::executorMain(unsigned executor_id, unsigned core) {
 	std::cout << "Checker-" << executor_id << " binding to core " << core << std::endl;
-	util::set_core(core);
-	util::setCurrentThreadMaxPriority();
+	// util::set_core(core);
+	// util::setCurrentThreadMaxPriority();
 	//util::initializeCudaStream(GPU_ID_0); // TODO Is this call necessary?
 
 	std::vector<AsyncTask*> pending_tasks;
