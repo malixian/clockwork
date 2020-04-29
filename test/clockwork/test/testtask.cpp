@@ -305,8 +305,6 @@ public:
     cudaStream_t stream;
 	unsigned gpu_id = 0;
     Autostream(unsigned gpu_id = 0): gpu_id(gpu_id) {
-		util::set_core(0);
-		util::setCurrentThreadMaxPriority();
 		REQUIRE(cudaSetDevice(gpu_id) == cudaSuccess);
 		REQUIRE(cudaStreamCreateWithPriority(&stream, cudaStreamNonBlocking, 0)
 			== cudaSuccess);
