@@ -6,6 +6,31 @@
 
 using namespace clockwork::model;
 
+class PerGPULimiters {
+public:
+	const unsigned num_events;
+	const unsigned skip;
+	std::vector<CudaRateLimiter*> limiters;
+
+	PerGPULimiters(unsigned num_events, unsigned skip) : num_events(num_events), skip(skip) {
+	}
+
+	CudaRateLimiter* get(unsigned gpu_id) {
+		if (gpu_id >= limiters.size()) {
+			limiters.resize(gpu_id+1, nullptr);
+		}
+		if (limiters[gpu_id] == nullptr) {
+			CUDA_CALL(cudaSetDevice(gpu_id));
+			limiters[gpu_id] = new CudaRateLimiter(num_events, skip);
+		}
+		return limiters[gpu_id];
+	}
+
+};
+
+thread_local PerGPULimiters exec_limiters(2, 5);
+thread_local PerGPULimiters transfer_limiters(2, 0);
+
 Model::Model(Memfile so_memfile, std::string &serialized_spec, int weights_size,
 	char* weights_pinned_host_memory, unsigned gpu_id):
 		so_memfile(so_memfile),	
@@ -13,20 +38,13 @@ Model::Model(Memfile so_memfile, std::string &serialized_spec, int weights_size,
 		weights_size(weights_size),
 		weights_pinned_host_memory(weights_pinned_host_memory),
 		gpu_id(gpu_id) {
-	CUDA_CALL(cudaSetDevice(gpu_id));
-	for (unsigned i = 0; i < rate_limit_events.size(); i++) {
-		CUDA_CALL(cudaEventCreateWithFlags(&rate_limit_events[i], cudaEventDisableTiming));
-	}
+	exec_limiter = exec_limiters.get(gpu_id);
+	transfer_limiter = transfer_limiters.get(gpu_id);
 }
 
 Model::~Model() {
 	if (hot_so != nullptr) uninstantiate_model_on_device();
 	if (warm_so != nullptr) uninstantiate_model_on_host();
-
-	CUDA_CALL(cudaSetDevice(gpu_id));
-	for (unsigned i = 0; i < rate_limit_events.size(); i++) {
-		CUDA_CALL(cudaEventDestroy(rate_limit_events[i]));
-	}
 }
 
 void Model::instantiate_model_on_host() {
@@ -79,6 +97,7 @@ void Model::uninstantiate_model_on_host() {
 void Model::instantiate_model_on_device() {
 	CHECK(hot_so == nullptr) << "instantiate_model_on_device hot_so is not nullptr";
 
+
 	/* 1: load the CUDA module onto device, which ultimately calls cuModuleLoad
 	cuModuleLoad requires a barrier on kernel execution, and will block until
 	current outstanding kernels have completed.  It will also block submission
@@ -125,12 +144,7 @@ void Model::transfer_weights_to_device(std::vector<char*> &weights_pages, cudaSt
 				stream
 			)
 		)
-		if (rate_limit) {
-			if (i > MAX_OUTSTANDING_MEMCPY_EVENTS) {
-				CUDA_CALL(cudaEventSynchronize(rate_limit_events[i % MAX_OUTSTANDING_MEMCPY_EVENTS]));
-			}
-			CUDA_CALL(cudaEventRecord(rate_limit_events[i % MAX_OUTSTANDING_MEMCPY_EVENTS], stream));
-		}
+		if (rate_limit) transfer_limiter->limit(stream);
 	}
 }
 
@@ -205,12 +219,7 @@ void Model::call(std::vector<char*> &weights_pages, char* &io_memory, char* &wor
 
 	for (unsigned i = 0; i < op_execs->size(); i++) {
 		call_op_exec((*op_execs)[i], pages);
-		if (rate_limit) {
-			if (i > MAX_OUTSTANDING_EXEC_EVENTS) {
-				CUDA_CALL(cudaEventSynchronize(rate_limit_events[i % MAX_OUTSTANDING_EXEC_EVENTS]));
-			}
-			CUDA_CALL(cudaEventRecord(rate_limit_events[i % MAX_OUTSTANDING_EXEC_EVENTS], stream));
-		}
+		if (rate_limit) exec_limiter->limit(stream);
 	}
 }
 
@@ -230,7 +239,11 @@ void Model::make_op_exec(PageMappedOpDef &spec, OpExec &op) {
 		tensor.data = nullptr;
 		tensor.ctx = DLContext{kDLGPU, 0}; // TODO: multiple devices
 		tensor.ndim = tspec.shape.size();
-		tensor.dtype = DLDataType{tspec.code, tspec.bits, tspec.lanes};
+		tensor.dtype = DLDataType{
+			static_cast<uint8_t>(tspec.code), 
+			static_cast<uint8_t>(tspec.bits), 
+			static_cast<uint16_t>(tspec.lanes)
+		};
 		tensor.shape = tspec.shape.data();
 		tensor.strides = nullptr;
 		tensor.byte_offset = 0;

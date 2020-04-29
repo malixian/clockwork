@@ -33,12 +33,16 @@ void check_model(int page_size, int iterations, std::string model_path) {
 
 	util::setCudaFlags();
     util::initializeCudaStream();
+    util::setCurrentThreadMaxPriority();
 
 	clockwork::model::BatchedModel* model = load_model(model_path);
 
 	auto batch_sizes = model->implemented_batch_sizes();
 
     model->instantiate_models_on_host();
+    for (auto &p : model->models) {
+    	p.second->rate_limit = false;
+    }
 
     size_t weights_page_size = page_size;
     size_t weights_cache_size = model->num_weights_pages(weights_page_size) * weights_page_size;

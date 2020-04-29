@@ -8,6 +8,7 @@
 #include "clockwork/model/so.h"
 #include <cuda_runtime.h>
 #include "clockwork/util.h"
+#include "clockwork/cuda_common.h"
 
 #define MAX_OUTSTANDING_EVENTS 16
 #define MAX_OUTSTANDING_EXEC_EVENTS 16
@@ -15,6 +16,39 @@
 
 namespace clockwork{
 namespace model {
+
+// Rate-limits cuda calls on a stream
+class CudaRateLimiter {
+private:
+	const unsigned num_events, skip;
+	unsigned position, count;
+
+public:
+	std::vector<cudaEvent_t> events;
+	CudaRateLimiter(unsigned num_events, unsigned skip) : 
+			num_events(num_events), skip(skip), position(0), count(0) {
+		events.resize(num_events);
+		for (unsigned i = 0; i < num_events; i++) {
+			CUDA_CALL(cudaEventCreateWithFlags(&events[i], cudaEventDisableTiming));
+		}
+	}
+	~CudaRateLimiter() {
+		for (unsigned i = 0; i < num_events; i++) {
+			CUDA_CALL(cudaEventDestroy(events[i]));
+		}
+	}
+
+	void limit(cudaStream_t stream) {
+		if (count++ == skip) {
+			CUDA_CALL(cudaEventSynchronize(events[position]));
+			CUDA_CALL(cudaEventRecord(events[position]));
+
+			position = position++ % num_events;
+			count = 0;
+		}
+	}
+
+};
 
 // TVM Function signature for generated packed function in shared library
 typedef int (*OpFunc)(void* args, int* type_codes, int num_args);
@@ -47,16 +81,17 @@ public:
 	Model(Memfile so_memfile, std::string &serialized_spec, int weights_size,
 		char* weights_pinned_host_memory, unsigned gpu_id);
 
-
-private:
-
 	/* These events are used to rate-limit submission of asynchronous CUDA operations.
 	Executing a model comprises potentially dozens of CUDA kernels.  With paged memory,
 	copying model weights comprises on the order of a dozen asynchronous memcpys.
 	Internally, CUDA has very short queues for managing submitted asynchronous tasks,
 	and surprisingly quickly will block ALL asynchronous submissions if there are too
 	many outstanding, even those in completely independent streams */
-	std::array<cudaEvent_t, MAX_OUTSTANDING_EVENTS> rate_limit_events;
+	CudaRateLimiter* exec_limiter;
+	CudaRateLimiter* transfer_limiter;
+
+
+private:
 
 
 	// Warm
