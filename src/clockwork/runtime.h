@@ -87,6 +87,7 @@ public:
 	void executorMain(unsigned executor_id, unsigned core);
 };
 
+
 class ClockworkRuntime {
 public:
 	unsigned num_gpus;
@@ -136,26 +137,60 @@ public:
 	void join();
 
 protected:
+
+	// Utility class for allocating cores
+	class CoreAllocator {
+	public:
+		std::vector<unsigned> usage_count;
+		CoreAllocator() {
+			usage_count.resize(util::get_num_cores(), 0);
+		}
+
+		int try_acquire(unsigned gpu_id) {
+			std::vector<unsigned> preferred = util::get_gpu_core_affinity(gpu_id);
+			for (unsigned i = preferred.size()-1; i >= 0; i--) {
+				unsigned core = preferred[i];
+				if (usage_count[core] == 0) {
+					usage_count[core]++;
+					return core;
+				}
+			}
+			for (unsigned core = 0; core < usage_count.size(); core++) {
+				if (usage_count[core] == 0) {
+					usage_count[core]++;
+					return core;
+				}
+			}
+			return -1;
+		}
+
+		unsigned acquire(unsigned gpu_id) {
+			int core = try_acquire(gpu_id);
+			CHECK(core >= 0) << "Unable to acquire core for GPU " << gpu_id << "; all cores exhausted";
+			return static_cast<unsigned>(core);
+		}
+
+	};
+
 	void initialize(ClockworkWorkerSettings settings) {
 
 		num_gpus = settings.num_gpus;
 
 		manager = new MemoryManager(settings);
 
+		CoreAllocator cores;
+
 		for (unsigned gpu_id = 0; gpu_id < num_gpus; gpu_id++) {
 			event_pools.push_back(new CudaEventPool(gpu_id));
-
-			auto cores = util::get_gpu_core_affinity(gpu_id);
-			int i = cores.size()-1;
 			
-			gpu_executors.push_back(new GPUExecutorExclusive(GPU, {cores[i--]}, gpu_id)); // Type 3
+			gpu_executors.push_back(new GPUExecutorExclusive(GPU, {cores.acquire(gpu_id)}, gpu_id)); // Type 3
 
 			if (gpu_id == 0) {
-				load_model_executor = new CPUExecutor(CPU, {cores[i--]}); // Type 0
-				weights_executor = new GPUExecutorShared(PCIe_H2D_Weights, {cores[i--]}, num_gpus);	// Type 1
-				inputs_executor = new GPUExecutorShared(PCIe_H2D_Inputs, {cores[i--]}, num_gpus);	// Type 2
-				outputs_executor = new GPUExecutorShared(PCIe_D2H_Output, {cores[i--]}, num_gpus);	// Type 4
-				checker = new AsyncTaskChecker({cores[i--]});
+				load_model_executor = new CPUExecutor(CPU, {cores.acquire(gpu_id)}); // Type 0
+				weights_executor = new GPUExecutorShared(PCIe_H2D_Weights, {cores.acquire(gpu_id)}, num_gpus);	// Type 1
+				inputs_executor = new GPUExecutorShared(PCIe_H2D_Inputs, {cores.acquire(gpu_id)}, num_gpus);	// Type 2
+				outputs_executor = new GPUExecutorShared(PCIe_D2H_Output, {cores.acquire(gpu_id)}, num_gpus);	// Type 4
+				checker = new AsyncTaskChecker({cores.acquire(gpu_id)});
 			}
 		}
 		std::string task_file_name = settings.task_telemetry_log_dir;
