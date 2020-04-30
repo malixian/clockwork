@@ -19,7 +19,7 @@ public:
 
 	// TODO: actually instantiate the clockwork runtime properly and set the controller
 	ClockworkWorker();
-	ClockworkWorker(ClockworkWorkerSettings settings);
+	ClockworkWorker(ClockworkWorkerConfig config);
 	~ClockworkWorker();
 
 	void shutdown(bool await_completion);

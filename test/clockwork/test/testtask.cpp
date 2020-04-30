@@ -10,6 +10,7 @@
 #include "clockwork/model/model.h"
 #include "clockwork/task.h"
 #include "clockwork/memory.h"
+#include "clockwork/config.h"
 #include <catch2/catch.hpp>
 #include <stdio.h>
 
@@ -323,15 +324,15 @@ std::shared_ptr<MemoryManager> make_manager(
         size_t host_io_pool_size,
 		unsigned num_gpus) {
 
-	clockwork::ClockworkWorkerSettings settings = clockwork::ClockworkWorkerSettings();
-	settings.weights_cache_size = weights_cache_size;
-	settings.weights_cache_page_size = weights_page_size;
-	settings.io_pool_size = io_pool_size;
-	settings.workspace_pool_size = workspace_pool_size;
-	settings.host_io_pool_size = host_io_pool_size;
-	settings.num_gpus = num_gpus;
+	ClockworkWorkerConfig config = ClockworkWorkerConfig();
+	config.weights_cache_size = weights_cache_size;
+	config.weights_cache_page_size = weights_page_size;
+	config.io_pool_size = io_pool_size;
+	config.workspace_pool_size = workspace_pool_size;
+	config.host_io_pool_size = host_io_pool_size;
+	config.num_gpus = num_gpus;
 
-	return std::make_shared<MemoryManager>(settings);
+	return std::make_shared<MemoryManager>(config);
 }
 
 std::shared_ptr<MemoryManager> make_manager() {

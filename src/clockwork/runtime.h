@@ -18,6 +18,7 @@
 #include "tbb/concurrent_queue.h"
 #include "clockwork/task.h"
 #include "clockwork/memory.h"
+#include "clockwork/config.h"
 
 /*
 This file contains the clockwork scheduling and thread pool logic for executing tasks, asynchronous
@@ -109,11 +110,11 @@ public:
 	ActionTelemetryLogger* action_telemetry_logger; 
 
 	ClockworkRuntime() {
-		initialize(ClockworkWorkerSettings());
+		initialize(ClockworkWorkerConfig());
 	}
 
-	ClockworkRuntime(ClockworkWorkerSettings settings) {
-		initialize(settings);
+	ClockworkRuntime(ClockworkWorkerConfig config) {
+		initialize(config);
 	}
 
 	virtual ~ClockworkRuntime() {
@@ -172,11 +173,11 @@ protected:
 
 	};
 
-	void initialize(ClockworkWorkerSettings settings) {
+	void initialize(ClockworkWorkerConfig config) {
 
-		num_gpus = settings.num_gpus;
+		num_gpus = config.num_gpus;
 
-		manager = new MemoryManager(settings);
+		manager = new MemoryManager(config);
 
 		CoreAllocator cores;
 
@@ -193,16 +194,16 @@ protected:
 				checker = new AsyncTaskChecker({cores.acquire(gpu_id)});
 			}
 		}
-		std::string task_file_name = settings.task_telemetry_log_dir;
-		std::string action_file_name = settings.action_telemetry_log_dir;
+		std::string task_file_path = config.telemetry_log_dir + "/" + config.task_telemetry_log_file;
+		std::string action_file_path = config.telemetry_log_dir + "/" + config.action_telemetry_log_file;
 
-		if (settings.task_telemetry_logging_enabled)
-			task_telemetry_logger = new TaskTelemetryFileLogger(task_file_name);
+		if (config.task_telemetry_logging_enabled)
+			task_telemetry_logger = new TaskTelemetryFileLogger(task_file_path);
 		else
 			task_telemetry_logger = new TaskTelemetryDummyLogger();
 
-		if (settings.action_telemetry_logging_enabled)
-			action_telemetry_logger = new ActionTelemetryFileLogger(action_file_name);
+		if (config.action_telemetry_logging_enabled)
+			action_telemetry_logger = new ActionTelemetryFileLogger(action_file_path);
 		else
 			action_telemetry_logger = new ActionTelemetryDummyLogger();
 

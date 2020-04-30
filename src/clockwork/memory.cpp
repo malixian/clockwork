@@ -1,5 +1,8 @@
 #include "clockwork/memory.h"
 #include "clockwork/cuda_common.h"
+#include <exception>
+#include <libconfig.h++>
+
 
 namespace clockwork {
 
@@ -81,20 +84,21 @@ bool ModelStore::put_if_absent(int model_id, unsigned gpu_id, RuntimeModel* mode
 	return did_put;
 }
 
-void MemoryManager::initialize(ClockworkWorkerSettings settings) {
-	for (unsigned gpu_id = 0; gpu_id < settings.num_gpus; gpu_id++) {
-		weights_caches.push_back(make_GPU_cache(settings.weights_cache_size, settings.weights_cache_page_size, gpu_id));
-		workspace_pools.push_back(CUDAMemoryPool::create(settings.workspace_pool_size, gpu_id));
-		io_pools.push_back(CUDAMemoryPool::create(settings.io_pool_size, gpu_id));
+
+void MemoryManager::initialize(ClockworkWorkerConfig config) {
+	for (unsigned gpu_id = 0; gpu_id < config.num_gpus; gpu_id++) {
+		weights_caches.push_back(make_GPU_cache(config.weights_cache_size, config.weights_cache_page_size, gpu_id));
+		workspace_pools.push_back(CUDAMemoryPool::create(config.workspace_pool_size, gpu_id));
+		io_pools.push_back(CUDAMemoryPool::create(config.io_pool_size, gpu_id));
 	}
 }
 
-MemoryManager::MemoryManager(ClockworkWorkerSettings settings) :
-			host_io_pool(CUDAHostMemoryPool::create(settings.host_io_pool_size)),
+MemoryManager::MemoryManager(ClockworkWorkerConfig config) :
+			host_io_pool(CUDAHostMemoryPool::create(config.host_io_pool_size)),
 			models(new ModelStore()),
-			num_gpus(settings.num_gpus) {
+			num_gpus(config.num_gpus) {
 
-	initialize(settings);
+	initialize(config);
 }
 
 MemoryManager::~MemoryManager() {
