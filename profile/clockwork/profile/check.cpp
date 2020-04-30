@@ -86,6 +86,12 @@ void check_environment() {
 
     }
 
+	if(const char* env_config = std::getenv("CLOCKWORK_CONFIG_FILE"))
+		std::cout << "CLOCKWORK_CONFIG_FILE is set to " << env_config << std::endl;
+	else
+		std::cout << "CLOCKWORK_CONFIG_FILE is not set! It can be set in order to override the defautlt config file path " << std::endl;
+
+
     util::nvml();
 
     REQUIRE(environmentIsOK);

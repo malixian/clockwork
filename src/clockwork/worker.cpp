@@ -20,8 +20,8 @@ ClockworkWorker::ClockworkWorker() :
 		runtime(new ClockworkRuntime()) {
 }
 
-ClockworkWorker::ClockworkWorker(ClockworkWorkerSettings settings) : 
-		runtime(new ClockworkRuntime(settings)) {
+ClockworkWorker::ClockworkWorker(ClockworkWorkerConfig config) :
+		runtime(new ClockworkRuntime(config)) {
 }
 ClockworkWorker::~ClockworkWorker() {
 	this->shutdown(false);

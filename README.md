@@ -54,6 +54,8 @@ cmake ..
 make -j40
 ```
 
+Set the environment variable `CLOCKWORK_CONFIG_FILE` to override the default path of Clockwork worker configurations. An example configuration file is given in `src/clockwork/config/default.cfg`
+
 # Highly Recommended Environment Modifications
 
 Clockwork is a high-performance system that depends upon predictability.  There are various tweaks to your environment that will make executions more predictable:

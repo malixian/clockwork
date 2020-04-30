@@ -71,6 +71,7 @@ add_library( clockwork
 	src/clockwork/network/controller.cpp
 	src/clockwork/controller/closed_loop_controller.cpp
 	src/clockwork/controller/direct_controller.cpp
+	src/clockwork/config.cpp
 	src/clockwork/network/client.cpp
 
 	$ENV{TVM_HOME}/src/runtime/meta_data.h
@@ -90,6 +91,7 @@ target_link_libraries( clockwork PUBLIC
 	tvm_runtime
 	tbb
 	nvidia-ml
+	config++
 	rt
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
@@ -185,6 +187,7 @@ add_executable (tests
 	test/clockwork/test/testclient.cpp
 	test/clockwork/test/testtelemetry.cpp
 	test/clockwork/test/testnetwork.cpp
+	test/clockwork/test/testconfig.cpp
 	test/clockwork/test/model/testmodel.cpp
 	test/clockwork/test/model/testbatched.cpp
 )
