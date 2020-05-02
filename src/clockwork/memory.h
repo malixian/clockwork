@@ -44,6 +44,7 @@ public:
 	bool contains(int model_id, unsigned gpu_id);
 	void put(int model_id, unsigned gpu_id, RuntimeModel* model);
 	bool put_if_absent(int model_id, unsigned gpu_id, RuntimeModel* model);
+	void get_model_info(clockwork::workerapi::WorkerMemoryInfo &worker_memory_info);
 
 };
 
@@ -89,6 +90,8 @@ public:
 
 class MemoryManager {
 public:
+	const size_t page_size;
+
 	// Device-side GPU-specific page cache for model weights
 	std::vector<PageCache*> weights_caches;
 
@@ -107,10 +110,10 @@ public:
 
 	unsigned num_gpus;
 
-	MemoryManager(ClockworkWorkerConfig config);
+	MemoryManager(ClockworkWorkerConfig &config);
 	~MemoryManager();
 
-	void initialize(ClockworkWorkerConfig config);
+	void initialize(ClockworkWorkerConfig &config);
 	void get_worker_memory_info(clockwork::workerapi::WorkerMemoryInfo &worker_memory_info);
 };
 

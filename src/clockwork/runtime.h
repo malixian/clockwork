@@ -110,10 +110,11 @@ public:
 	ActionTelemetryLogger* action_telemetry_logger; 
 
 	ClockworkRuntime() {
-		initialize(ClockworkWorkerConfig());
+		ClockworkWorkerConfig config;
+		initialize(config);
 	}
 
-	ClockworkRuntime(ClockworkWorkerConfig config) {
+	ClockworkRuntime(ClockworkWorkerConfig &config) {
 		initialize(config);
 	}
 
@@ -173,7 +174,7 @@ protected:
 
 	};
 
-	void initialize(ClockworkWorkerConfig config) {
+	void initialize(ClockworkWorkerConfig &config) {
 
 		num_gpus = config.num_gpus;
 

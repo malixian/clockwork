@@ -109,8 +109,8 @@ class Server {
 private:
 	clientapi::ClientAPI* api;
 	std::atomic_bool alive;
-	std::thread network_thread;
 	asio::io_service io_service;
+	std::thread network_thread;
 
 public:
 	Server(clientapi::ClientAPI* api, int port = 12346);

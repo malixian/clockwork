@@ -282,6 +282,7 @@ int main(int argc, char *argv[])
 	{
 		std::vector<uint8_t> input(model->input_size());
 		model->infer(input);
+		usleep(1000000);
 	}
 
 	std::cout << "Clockwork Client Exiting" << std::endl;

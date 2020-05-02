@@ -60,6 +60,7 @@ public:
   		msg.add_supported_batch_sizes(batch_size);
   	}
   	msg.set_weights_size_in_cache(result.weights_size_in_cache);
+    msg.set_num_weights_pages(result.num_weights_pages);
   	msg.mutable_timing()->set_begin(result.begin);
   	msg.mutable_timing()->set_end(result.end);
   	msg.mutable_timing()->set_duration(result.duration);
@@ -81,6 +82,7 @@ public:
   		result.supported_batch_sizes.push_back(msg.supported_batch_sizes(i));
   	}
   	result.weights_size_in_cache = msg.weights_size_in_cache();
+    result.num_weights_pages = msg.num_weights_pages();
   }
 };
 
@@ -294,43 +296,96 @@ public:
 
 class get_worker_state_result_tx : public msg_protobuf_tx_with_body<RES_GET_WORKER_STATE, GetWorkerStateResultProto, workerapi::GetWorkerStateResult>{
 public:
+
+  void setgpu(const workerapi::GPUInfo &gpu, GPUInfoProto* proto) {
+    proto->set_id(gpu.id);
+    proto->set_weights_cache_size(gpu.weights_cache_size);
+    proto->set_weights_cache_total_pages(gpu.weights_cache_total_pages);
+    for (unsigned model_id : gpu.models) {
+      proto->add_models(model_id);
+    }
+    proto->set_io_pool_size(gpu.io_pool_size);
+    proto->set_workspace_pool_size(gpu.workspace_pool_size);    
+  }
+
+  void setmodel(const workerapi::ModelInfo &model, ModelInfoProto* proto) {
+    proto->set_id(model.id);
+    proto->set_source(model.source);
+    proto->set_input_size(model.input_size);
+    proto->set_output_size(model.output_size);
+    for (unsigned batch_size : model.supported_batch_sizes) {
+      proto->add_supported_batch_sizes(batch_size);
+    }
+    proto->set_weights_size(model.weights_size);
+    proto->set_num_weights_pages(model.num_weights_pages);
+  }
+
   virtual void set(workerapi::GetWorkerStateResult &result) {
-	msg.set_action_id(result.id);
-	auto msg_info = msg.mutable_worker_memory_info();
-	workerapi::WorkerMemoryInfo& result_info = result.worker_memory_info;
-	msg_info->set_weights_cache_total(result_info.weights_cache_total);
-	msg_info->set_weights_cache_remaining(result_info.weights_cache_remaining);
-	msg_info->set_io_pool_total(result_info.io_pool_total);
-	msg_info->set_io_pool_remaining(result_info.io_pool_remaining);
-	msg_info->set_workspace_pool_total(result_info.workspace_pool_total);
-	msg_info->set_workspace_pool_remaining(result_info.workspace_pool_remaining);
-	for (unsigned i = 0; i < result_info.models.size(); i++) {
-		ModelInfoProto* model = msg_info->add_models();
-		model->set_id(result_info.models[i].id);
-		model->set_size(result_info.models[i].size);
-	}
+  	msg.set_action_id(result.id);
+  	auto proto = msg.mutable_worker_memory_info();
+  	
+    workerapi::WorkerMemoryInfo& worker = result.worker;
+    proto->set_page_size(worker.page_size);
+    proto->set_host_weights_cache_size(worker.host_weights_cache_size);
+    proto->set_host_io_pool_size(worker.host_io_pool_size);
+
+    for (auto &gpu : worker.gpus) {
+      GPUInfoProto* gpuproto = proto->add_gpus();
+      setgpu(gpu, gpuproto);
+    }
+
+    for (auto &model : worker.models) {
+      ModelInfoProto* modelproto = proto->add_models();
+      setmodel(model, modelproto);
+    }
   }
 };
 
 class get_worker_state_result_rx : public msg_protobuf_rx_with_body<RES_GET_WORKER_STATE, GetWorkerStateResultProto, workerapi::GetWorkerStateResult>{
 public:
+
+  void getgpu(workerapi::GPUInfo &gpu, const GPUInfoProto &proto) {
+    gpu.id = proto.id();
+    gpu.weights_cache_size = proto.weights_cache_size();
+    gpu.weights_cache_total_pages = proto.weights_cache_total_pages();
+    for (unsigned i = 0; i < proto.models_size(); i++) {
+      gpu.models.push_back(proto.models(i));
+    }
+    gpu.io_pool_size = proto.io_pool_size();
+    gpu.workspace_pool_size = proto.workspace_pool_size();
+  }
+
+  void getmodel(workerapi::ModelInfo &model, const ModelInfoProto &proto) {
+    model.id = proto.id();
+    model.source = proto.source();
+    model.input_size = proto.input_size();
+    model.output_size = proto.output_size();
+    for (unsigned i = 0; i < proto.supported_batch_sizes_size(); i++) {
+      model.supported_batch_sizes.push_back(proto.supported_batch_sizes(i));
+    }
+    model.weights_size = proto.weights_size();
+    model.num_weights_pages = proto.num_weights_pages();
+  }
+
   virtual void get(workerapi::GetWorkerStateResult &result) {
-	result.id = msg.action_id();
-	result.action_type = workerapi::getWorkerStateAction;
-	workerapi::WorkerMemoryInfo& result_info = result.worker_memory_info;
-	auto msg_info = msg.worker_memory_info();
-	result_info.weights_cache_total = msg_info.weights_cache_total();
-	result_info.weights_cache_remaining = msg_info.weights_cache_remaining();
-	result_info.io_pool_total = msg_info.io_pool_total();
-	result_info.io_pool_remaining = msg_info.io_pool_remaining();
-	result_info.workspace_pool_total = msg_info.workspace_pool_total();
-	result_info.workspace_pool_remaining = msg_info.workspace_pool_remaining();
-	for (unsigned i = 0; i < msg_info.models_size(); i++) {
-		workerapi::ModelInfo model;
-		model.id = msg_info.models(i).id();
-		model.size = msg_info.models(i).size();
-		result_info.models.push_back(model);
-	}
+    result.id = msg.action_id();
+    result.action_type = workerapi::getWorkerStateAction;
+    workerapi::WorkerMemoryInfo& worker = result.worker;
+
+    auto proto = msg.worker_memory_info();
+    worker.page_size = proto.page_size();
+    worker.host_weights_cache_size = proto.host_weights_cache_size();
+    worker.host_io_pool_size = proto.host_io_pool_size();
+    for (unsigned i = 0; i < proto.gpus_size(); i++) {
+      workerapi::GPUInfo gpu;
+      getgpu(gpu, proto.gpus(i));
+      worker.gpus.push_back(gpu);
+    }
+    for (unsigned i = 0; i < proto.models_size(); i++) {
+      workerapi::ModelInfo model;
+      getmodel(model, proto.models(i));
+      worker.models.push_back(model);
+    }
   }
 };
 

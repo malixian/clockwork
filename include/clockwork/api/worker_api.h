@@ -138,13 +138,28 @@ public:
 	virtual std::string str();
 };
 
+class ModelInfo {
+public:
+	int id;
+	std::string source; // Useful for experiments but not strictly necessary
+	size_t input_size;
+	size_t output_size;
+	std::vector<unsigned> supported_batch_sizes;
+	size_t weights_size;
+	unsigned num_weights_pages;
+
+	virtual std::string str();
+};
+
 class LoadModelFromDiskResult : public Result, public Timing {
 public:
+	// TODO: use ModelInfo instead of putting it all here.
 	size_t input_size;
 	size_t output_size;
 	std::vector<unsigned> supported_batch_sizes;
 
 	size_t weights_size_in_cache;
+	unsigned num_weights_pages;
 
 	// TODO: put some measurements like weight load time and exec time here
 	
@@ -180,26 +195,32 @@ public:
 	virtual std::string str();	
 };
 
-class ModelInfo {
+class GPUInfo {
 public:
 	int id;
-	unsigned size;
+	size_t weights_cache_size;
+	unsigned weights_cache_total_pages;
+	std::vector<unsigned> models; // Models currently on GPU
+	size_t io_pool_size; // Not actually useful but included for completeness
+	size_t workspace_pool_size; // Not actually useful but included for completeness
+
+	virtual std::string str();	
 };
 
 class WorkerMemoryInfo {
 public:
-	unsigned weights_cache_total;
-	unsigned weights_cache_remaining;
-	unsigned io_pool_total;
-	unsigned io_pool_remaining;
-	unsigned workspace_pool_total;
-	unsigned workspace_pool_remaining;
+	size_t page_size;
+	size_t host_weights_cache_size; // Host doesn't actually have a fixed-size cache at the moment
+	size_t host_io_pool_size; // Not actually useful but included for completeness
+	std::vector<GPUInfo> gpus;
 	std::vector<ModelInfo> models;
+
+	virtual std::string str();	
 };
 
 class GetWorkerStateResult : public Result {
 public:
-	WorkerMemoryInfo worker_memory_info;
+	WorkerMemoryInfo worker;
 
 	virtual std::string str();
 };

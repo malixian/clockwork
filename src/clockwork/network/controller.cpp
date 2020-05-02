@@ -324,8 +324,9 @@ void ClientConnection::aborted_transmit(message_connection *tcp_conn, message_tx
 
 Server::Server(clientapi::ClientAPI* api, int port) :
 		api(api),
-		network_thread(&Server::run, this, port),
-		alive(true) {
+		io_service(),
+		alive(true),
+		network_thread(&Server::run, this, port) {
 }
 
 void Server::shutdown(bool awaitShutdown) {
@@ -341,9 +342,10 @@ void Server::join() {
 
 void Server::run(int port) {
 	try {
-		tcp::acceptor acceptor(io_service, tcp::endpoint(tcp::v4(), port));
+		auto endpoint = tcp::endpoint(tcp::v4(), port);
+		tcp::acceptor acceptor(io_service, endpoint);
 		start_accept(&acceptor);
-		std::cout << "Running io service thread" << std::endl;
+		std::cout << "IO service thread listening for clients on " << endpoint << std::endl;
 		io_service.run();
 	} catch (std::exception& e) {
 		CHECK(false) << "Exception in network thread: " << e.what();
