@@ -60,7 +60,8 @@ void LoadModelFromDiskAction::LoadModelFromDiskTaskImpl::success(RuntimeModel* r
 
 	// TODO Verify: I assume that GPU-specific weights_caches have identical page_size
 	int page_size = load_model->runtime->manager->weights_caches[0]->page_size;
-	result->weights_size_in_cache = rm->model->num_weights_pages(page_size) * page_size;
+	result->num_weights_pages = rm->model->num_weights_pages(page_size);
+	result->weights_size_in_cache = result->num_weights_pages * page_size;
 
 	extract_timing_sync(result.get(), telemetry);
 

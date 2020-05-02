@@ -54,8 +54,8 @@ class Server : public workerapi::Controller {
 private:
 	std::atomic_bool is_started;
 	ClockworkWorker* worker;
-	std::thread network_thread;
 	asio::io_service io_service;
+	std::thread network_thread;
 
 	Connection* current_connection;
 

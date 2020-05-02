@@ -2,6 +2,7 @@
 #include "clockwork/cuda_common.h"
 #include <exception>
 #include <libconfig.h++>
+#include <algorithm>
 
 
 namespace clockwork {
@@ -84,8 +85,50 @@ bool ModelStore::put_if_absent(int model_id, unsigned gpu_id, RuntimeModel* mode
 	return did_put;
 }
 
+void ModelStore::get_model_info(workerapi::WorkerMemoryInfo &info) {
+	while (in_use.test_and_set());
 
-void MemoryManager::initialize(ClockworkWorkerConfig config) {
+	std::map<int, workerapi::ModelInfo> models_info;
+
+	for (auto p : models) {
+		int model_id = p.first.first;
+		unsigned gpu_id = p.first.second;
+		RuntimeModel* rm = p.second;
+
+		auto it = models_info.find(model_id);
+		if (it == models_info.end()) {
+			workerapi::ModelInfo modelinfo;
+			modelinfo.id = model_id;
+			modelinfo.source = rm->model->source;
+			modelinfo.input_size = rm->model->single_input_size;
+			modelinfo.output_size = rm->model->single_output_size;
+			modelinfo.supported_batch_sizes = rm->model->implemented_batch_sizes();
+			modelinfo.num_weights_pages = rm->model->num_weights_pages(info.page_size);
+			modelinfo.weights_size = rm->model->weights_size;
+			models_info[model_id] = modelinfo;
+		}
+
+		// Also store which models are loaded
+		if (rm->weights != nullptr && !rm->weights->evicted) {
+			info.gpus[gpu_id].models.push_back(model_id);
+		}
+	}
+
+	// Add models to model info
+	for (auto &p : models_info) {
+		info.models.push_back(p.second);
+	}
+
+	// Sort model ids on GPU
+	for (unsigned i = 0; i < info.gpus.size(); i++) {
+		std::sort(info.gpus[i].models.begin(), info.gpus[i].models.end());
+	}
+
+	in_use.clear();
+}
+
+
+void MemoryManager::initialize(ClockworkWorkerConfig &config) {
 	for (unsigned gpu_id = 0; gpu_id < config.num_gpus; gpu_id++) {
 		weights_caches.push_back(make_GPU_cache(config.weights_cache_size, config.weights_cache_page_size, gpu_id));
 		workspace_pools.push_back(CUDAMemoryPool::create(config.workspace_pool_size, gpu_id));
@@ -93,10 +136,11 @@ void MemoryManager::initialize(ClockworkWorkerConfig config) {
 	}
 }
 
-MemoryManager::MemoryManager(ClockworkWorkerConfig config) :
+MemoryManager::MemoryManager(ClockworkWorkerConfig &config) :
 			host_io_pool(CUDAHostMemoryPool::create(config.host_io_pool_size)),
 			models(new ModelStore()),
-			num_gpus(config.num_gpus) {
+			num_gpus(config.num_gpus),
+			page_size(config.weights_cache_page_size) {
 
 	initialize(config);
 }
@@ -111,45 +155,26 @@ MemoryManager::~MemoryManager() {
 	}
 }
 
-void MemoryManager::get_worker_memory_info(workerapi::WorkerMemoryInfo &worker_memory_info) {
-	// For weights cachs, IO pool, and workspace pool, which are replicated to
-	// support multiple GPUs, we return the total (and total remaining) size
-	// of the respective cache/pool across all GPUs
-	worker_memory_info.weights_cache_total = 0;
-	worker_memory_info.weights_cache_remaining = 0;
-	worker_memory_info.io_pool_total = 0;
-	worker_memory_info.io_pool_remaining = 0;
-	worker_memory_info.workspace_pool_total = 0;
-	worker_memory_info.workspace_pool_remaining = 0;
+void MemoryManager::get_worker_memory_info(workerapi::WorkerMemoryInfo &info) {
+	// Store basic info
+	info.page_size = page_size;
+	info.host_weights_cache_size = ULONG_MAX; // Not currently fixed
+	info.host_io_pool_size = host_io_pool->size;
+
+	// Store GPU info
 	for (unsigned i = 0; i < num_gpus; i++) {
-		worker_memory_info.weights_cache_total += weights_caches[i]->size;
-		worker_memory_info.weights_cache_remaining += weights_caches[i]->page_size * weights_caches[i]->freePages.size();
-		worker_memory_info.io_pool_total += io_pools[i]->size;
-		worker_memory_info.io_pool_remaining += io_pools[i]->remaining();
-		worker_memory_info.workspace_pool_total += workspace_pools[i]->size;
-		worker_memory_info.workspace_pool_remaining += workspace_pools[i]->remaining();
+		workerapi::GPUInfo gpu;
+		gpu.id = i;
+		gpu.weights_cache_size = weights_caches[i]->size;
+		gpu.weights_cache_total_pages = weights_caches[i]->n_pages;
+		gpu.io_pool_size = io_pools[i]->size;
+		gpu.workspace_pool_size = workspace_pools[i]->size;
+		// Add models later
+		info.gpus.push_back(gpu);
 	}
 
-	while (models->in_use.test_and_set());
-
-	// assuming models for different GPUs have the same weights_size,
-	// only returning the weights size of the model corresponding to GPU 0 here
-
-	for (auto it = models->models.begin(); it != models->models.end(); ++it) {
-		// Note that the key used in models is a pair (model ID, GPU ID)
-		// Thus, std::get<0>(it->first) returns the model ID and
-		// std::get<1>(it->first) returns the GPU ID
-
-		if (std::get<1>(it->first) != 0) { continue; }
-		workerapi::ModelInfo model;
-		model.id = std::get<0>(it->first);
-		RuntimeModel *runtime_model = it->second;
-		model::BatchedModel* batched_model = runtime_model->model;
-		model.size = batched_model->weights_size;
-		worker_memory_info.models.push_back(model);
-	}
-
-	models->in_use.clear();
+	// Store model info
+	models->get_model_info(info);
 }
 
 MemoryPool::MemoryPool(char* base_ptr, size_t size) : base_ptr(base_ptr), size(size) {

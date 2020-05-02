@@ -124,6 +124,7 @@ message LoadModelFromDiskResultProto {
   required uint64 output_size = 4;
   repeated uint32 supported_batch_sizes = 5;
   required uint64 weights_size_in_cache = 6;
+  required uint32 num_weights_pages = 7;
 }
 
 message LoadWeightsActionProto {
@@ -185,17 +186,29 @@ message GetWorkerStateActionProto {
 
 message ModelInfoProto {
   required int32 id = 1;
-  required uint32 size = 2; // bytes
+  required string source = 2;
+  required uint64 input_size = 3;
+  required uint64 output_size = 4;
+  repeated uint32 supported_batch_sizes = 5;
+  required uint64 weights_size = 6;
+  required uint32 num_weights_pages = 7;
+}
+
+message GPUInfoProto {
+  required int32 id = 1;
+  required uint64 weights_cache_size = 2;
+  required int32 weights_cache_total_pages = 3;
+  repeated uint32 models = 4;
+  required uint64 io_pool_size = 5;
+  required uint64 workspace_pool_size = 6;
 }
 
 message WorkerMemoryInfoProto {
-  required uint64 weights_cache_total = 1; // bytes
-  required uint64 weights_cache_remaining = 2; // bytes
-  required uint64 io_pool_total = 3; // bytes
-  required uint64 io_pool_remaining = 4; // bytes
-  required uint64 workspace_pool_total = 5; // bytes
-  required uint64 workspace_pool_remaining = 6; // bytes
-  repeated ModelInfoProto models = 7;
+  required uint64 page_size = 1;
+  required uint64 host_weights_cache_size = 2;
+  required uint64 host_io_pool_size = 3;
+  repeated GPUInfoProto gpus = 4;
+  repeated ModelInfoProto models = 5;
 }
 
 message GetWorkerStateResultProto {

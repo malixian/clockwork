@@ -90,6 +90,10 @@ message_rx* Connection::new_rx_message(message_connection *tcp_conn, uint64_t he
 		msg->set_body_len(body_len);
 		msg->set_msg_id(msg_id);
 		return msg;
+	} else if (msg_type == ACT_GET_WORKER_STATE) {
+		auto msg = new get_worker_state_action_rx();
+		msg->set_msg_id(msg_id);
+		return msg;
 	} else if (msg_type == ACT_EVICT_WEIGHTS) {
 		auto msg = new evict_weights_action_rx();
 		msg->set_msg_id(msg_id);
@@ -196,7 +200,8 @@ void Connection::closed() {
 
 Server::Server(ClockworkWorker* worker, int port) :
 		is_started(false),
-		worker(worker), 
+		worker(worker),
+		io_service(),
 		network_thread(&Server::run, this, port) {
 }
 
@@ -216,10 +221,11 @@ void Server::join() {
 
 void Server::run(int port) {
 	try {
+		auto endpoint = tcp::endpoint(tcp::v4(), port);
 		is_started.store(true);
-		tcp::acceptor acceptor(io_service, tcp::endpoint(tcp::v4(), port));
+		tcp::acceptor acceptor(io_service, endpoint);
 		start_accept(&acceptor);
-		std::cout << "Running io service thread" << std::endl;
+		std::cout << "IO service thread listening on " << endpoint << std::endl;
 		io_service.run();
 	} catch (std::exception& e) {
 		CHECK(false) << "Exception in network thread: " << e.what();

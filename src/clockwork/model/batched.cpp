@@ -8,11 +8,12 @@ namespace clockwork {
 namespace model {
 
 BatchedModel::BatchedModel(int weights_size, char* weights_pinned_host_memory,
-	std::vector<std::pair<unsigned, Model*>> models, unsigned gpu_id):
+	std::vector<std::pair<unsigned, Model*>> models, unsigned gpu_id, std::string source):
 		weights_size(weights_size),
 		weights_pinned_host_memory(weights_pinned_host_memory),
 		models(models),
-		gpu_id(gpu_id) {
+		gpu_id(gpu_id),
+		source(source) {
 	std::sort(models.begin(), models.end());
 
 	unsigned batch_size = 0;
@@ -203,7 +204,7 @@ BatchedModel* BatchedModel::loadFromDisk(std::string base_filename, unsigned gpu
 
 	CHECK(batchsize != 1) << "No valid batch sizes found for " << base_filename;
 
-	return new BatchedModel(weights_size, weights_pinned_host_memory, models, gpu_id);
+	return new BatchedModel(weights_size, weights_pinned_host_memory, models, gpu_id, base_filename);
 }
 
 }

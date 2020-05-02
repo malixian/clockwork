@@ -12,12 +12,13 @@ namespace clockwork
 class NetworkClient : public Client
 {
 public:
+	bool print;
 	std::atomic_int request_id_seed;
 	int user_id;
 	network::client::ConnectionManager *manager;
 	network::client::Connection *connection;
 
-	NetworkClient(network::client::ConnectionManager *manager, network::client::Connection *connection);
+	NetworkClient(network::client::ConnectionManager *manager, network::client::Connection *connection, bool print);
 	virtual ~NetworkClient();
 
 	virtual Model *get_model(int model_id);
@@ -31,12 +32,13 @@ public:
 class ModelImpl : public Model
 {
 public:
+	bool print;
 	NetworkClient *client;
 
 	const int model_id_;
 	const int input_size_;
 
-	ModelImpl(NetworkClient *client, int model_id, int input_size);
+	ModelImpl(NetworkClient *client, int model_id, int input_size, bool print);
 
 	virtual int id();
 	virtual int input_size();
@@ -47,7 +49,7 @@ public:
 	virtual std::future<void> evict_async();
 };
 
-NetworkClient::NetworkClient(network::client::ConnectionManager *manager, network::client::Connection *connection) : manager(manager), connection(connection), user_id(0), request_id_seed(0)
+NetworkClient::NetworkClient(network::client::ConnectionManager *manager, network::client::Connection *connection, bool print) : manager(manager), connection(connection), user_id(0), request_id_seed(0), print(print)
 {
 }
 
@@ -65,7 +67,8 @@ Model *NetworkClient::get_model(int model_id)
 std::future<Model *> NetworkClient::get_model_async(int model_id)
 {
 	auto promise = std::make_shared<std::promise<Model *>>();
-	promise->set_value(new ModelImpl(this, model_id, 602112));
+	promise->set_value(new ModelImpl(this, model_id, 602112, print));
+	// TODO: implement this properly
 	return promise->get_future();
 }
 
@@ -95,13 +98,13 @@ std::future<Model *> NetworkClient::load_remote_model_async(std::string model_pa
 	load_model.header.user_request_id = request_id_seed++;
 	load_model.remote_path = model_path;
 
-	std::cout << "<--  " << load_model.str() << std::endl;
+	if (print) std::cout << "<--  " << load_model.str() << std::endl;
 
 	connection->loadRemoteModel(load_model, [this, promise](clientapi::LoadModelFromRemoteDiskResponse &response) {
-		std::cout << " --> " << response.str() << std::endl;
+		if (print) std::cout << " --> " << response.str() << std::endl;
 		if (response.header.status == clockworkSuccess)
 		{
-			promise->set_value(new ModelImpl(this, response.model_id, response.input_size));
+			promise->set_value(new ModelImpl(this, response.model_id, response.input_size, print));
 		}
 		else
 		{
@@ -113,7 +116,7 @@ std::future<Model *> NetworkClient::load_remote_model_async(std::string model_pa
 	return promise->get_future();
 }
 
-ModelImpl::ModelImpl(NetworkClient *client, int model_id, int input_size) : client(client), model_id_(model_id), input_size_(input_size)
+ModelImpl::ModelImpl(NetworkClient *client, int model_id, int input_size, bool print) : client(client), model_id_(model_id), input_size_(input_size), print(print)
 {
 }
 
@@ -144,10 +147,10 @@ std::future<std::vector<uint8_t>> ModelImpl::infer_async(std::vector<uint8_t> &i
 	request.input_size = input.size();
 	request.input = input_data;
 
-	std::cout << "<--  " << request.str() << std::endl;
+	if (print) std::cout << "<--  " << request.str() << std::endl;
 
 	client->connection->infer(request, [this, promise, input_data](clientapi::InferenceResponse &response) {
-		std::cout << " --> " << response.str() << std::endl;
+		if (print) std::cout << " --> " << response.str() << std::endl;
 		if (response.header.status == clockworkSuccess)
 		{
 			uint8_t *output = static_cast<uint8_t *>(response.output);
@@ -178,7 +181,7 @@ std::future<void> ModelImpl::evict_async()
 	return promise->get_future();
 }
 
-Client *Connect(const std::string &hostname, const std::string &port)
+Client *Connect(const std::string &hostname, const std::string &port, bool print)
 {
 	// ConnectionManager internally has a thread for doing IO.
 	// For now just have a separate thread per client
@@ -188,7 +191,7 @@ Client *Connect(const std::string &hostname, const std::string &port)
 	// Connect to clockwork
 	network::client::Connection *clockwork_connection = manager->connect(hostname, port);
 
-	return new NetworkClient(manager, clockwork_connection);
+	return new NetworkClient(manager, clockwork_connection, print);
 }
 
 } // namespace clockwork

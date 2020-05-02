@@ -79,7 +79,7 @@ public:
 
 
 /* Connect to a Clockwork instance */
-extern "C" Client* Connect(const std::string &hostname, const std::string &port);
+extern "C" Client* Connect(const std::string &hostname, const std::string &port, bool print = true);
 
 }
 

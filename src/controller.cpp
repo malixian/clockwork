@@ -8,8 +8,8 @@ using namespace clockwork;
 int main(int argc, char *argv[]) {
 	std::cout << "Starting Clockwork Controller" << std::endl;
 
-	if ( argc < 3) {
-		std::cerr << "USAGE ./controller [CLOSED_LOOP/DIRECT] MAX_BATH_SIZE" << std::endl;
+	if ( argc < 4) {
+		std::cerr << "USAGE ./controller [CLOSED_LOOP/DIRECT] MAX_BATCH_SIZE worker1:port1 worker2:port2 ..." << std::endl;
 		return 1;
 	}
 	
@@ -19,9 +19,15 @@ int main(int argc, char *argv[]) {
 
 	int client_requests_listen_port = 12346;
 
-	std::vector<std::pair<std::string, std::string>> worker_host_port_pairs = {
-		{"127.0.0.1", "12345"}
-	};
+
+	std::vector<std::pair<std::string, std::string>> worker_host_port_pairs;
+	for (int i = 3; i < argc; i++) {
+		std::string addr = std::string(argv[i]);
+		auto split = addr.find(":");
+		std::string hostname = addr.substr(0, split);
+		std::string port = addr.substr(split+1, addr.size());
+		worker_host_port_pairs.push_back({hostname, port});
+	}
 
 	if ( controller_type == "CLOSED_LOOP"){
 		ClosedLoopControllerImpl* controller = new ClosedLoopControllerImpl(client_requests_listen_port, worker_host_port_pairs, batch_size);
@@ -29,7 +35,17 @@ int main(int argc, char *argv[]) {
 	} else if (controller_type == "DIRECT") {
 		DirectControllerImpl* controller = new DirectControllerImpl(client_requests_listen_port, worker_host_port_pairs);
 		controller->join();
-
+	} else if (controller_type == "ECHO") {
+		Scheduler* scheduler = new EchoScheduler();
+		controller::ControllerWithStartupPhase* controller = new controller::ControllerWithStartupPhase(
+			client_requests_listen_port,
+			worker_host_port_pairs,
+			10000000000UL, // 10s load stage timeout
+			10, // 10 profiling iterations
+			new controller::ControllerStartup(), // in future the startup type might be customizable
+			scheduler
+		);
+		controller->join();
 	}
 
 	std::cout << "Clockwork Worker Exiting" << std::endl;

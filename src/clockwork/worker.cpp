@@ -20,7 +20,7 @@ ClockworkWorker::ClockworkWorker() :
 		runtime(new ClockworkRuntime()) {
 }
 
-ClockworkWorker::ClockworkWorker(ClockworkWorkerConfig config) :
+ClockworkWorker::ClockworkWorker(ClockworkWorkerConfig &config) :
 		runtime(new ClockworkRuntime(config)) {
 }
 ClockworkWorker::~ClockworkWorker() {
@@ -126,7 +126,7 @@ void ClockworkWorker::getWorkerState(std::shared_ptr<workerapi::Action> action) 
 		auto result = std::make_shared<workerapi::GetWorkerStateResult>();
 		result->id = action->id;
 		result->action_type = workerapi::getWorkerStateAction;
-		runtime->manager->get_worker_memory_info(result->worker_memory_info);
+		runtime->manager->get_worker_memory_info(result->worker);
 		result->status = actionSuccess; // TODO What about error handling?
 		controller->sendResult(result);
 	} else {

@@ -10,10 +10,10 @@ int main(int argc, char *argv[]) {
 	std::string config_file_path;
 	for (int i = 1; i < argc; i++){
 		if ((strcmp(argv[i], "--config") == 0))
-			config_file_path = argv[i+1];
+			config_file_path = argv[++i];
 	}
 
-	ClockworkWorkerConfig config = ClockworkWorkerConfig(config_file_path);
+	ClockworkWorkerConfig config(config_file_path);
 
 	clockwork::ClockworkWorker* clockwork = new clockwork::ClockworkWorker(config);
 	clockwork::network::worker::Server* server = new clockwork::network::worker::Server(clockwork);
