@@ -90,6 +90,9 @@ public:
 	CudaRateLimiter* exec_limiter;
 	CudaRateLimiter* transfer_limiter;
 
+	// Just used for model management; some models have measurements
+	uint64_t exec_measurement = 0;
+
 
 private:
 

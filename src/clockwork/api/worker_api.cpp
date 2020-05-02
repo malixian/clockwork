@@ -88,34 +88,43 @@ std::string Timing::str() {
 	return ss.str();
 }
 
+float as_ms(uint64_t duration_nanos) {
+	return duration_nanos / 1000000.0;
+}
+float as_gb(size_t size) {
+	return size / ((float) (1024*1024*1024));
+}
+float as_mb(size_t size) {
+	return size / ((float) (1024*1024));	
+}
+
 std::string ModelInfo::str() {
 	std::stringstream ss;
 	ss << "M-" << id
 	   << " src=" << source
 	   << " input=" << input_size
 	   << " output=" << output_size
-	   << " batch=[";
+	   << " weights=" << as_mb(weights_size) << " MB (" << num_weights_pages << " pages)"
+	   << " xfer=" << as_ms(weights_load_time_nanos);
 	for (unsigned i = 0; i < supported_batch_sizes.size(); i++) {
-		if (i > 0) ss << ", ";
-		ss << supported_batch_sizes[i];
+		ss << " b" << supported_batch_sizes[i] << "=" << as_ms(batch_size_exec_times_nanos[i]);
 	}
-	ss << "] weights=" << weights_size
-	   << " (" << num_weights_pages << " pages)";
 	return ss.str();	
 }
 
 std::string LoadModelFromDiskResult::str() {
 	std::stringstream ss;
+	ss.precision(1);
+	ss << std::fixed;
 	ss << "R" << id << ":LoadModelFromDisk"
 	   << " input=" << input_size
 	   << " output=" << output_size
-	   << " batch=[";
+	   << " weights=" << as_mb(weights_size_in_cache) << " MB (" << num_weights_pages << " pages)"
+	   << " xfer=" << as_ms(weights_load_time_nanos);
 	for (unsigned i = 0; i < supported_batch_sizes.size(); i++) {
-		if (i > 0) ss << ", ";
-		ss << supported_batch_sizes[i];
+		ss << " b" << supported_batch_sizes[i] << "=" << as_ms(batch_size_exec_times_nanos[i]);
 	}
-	ss << "] weights=" << weights_size_in_cache
-	   << " duration=" << millis(duration);
+	ss << " duration=" << as_ms(duration);
 	return ss.str();
 }
 
@@ -146,13 +155,6 @@ std::string ClearCacheResult::str() {
 	std::stringstream ss;
 	ss << "R" << id << ":ClearCache";
 	return ss.str();
-}
-
-float as_gb(size_t size) {
-	return size / ((float) (1024*1024*1024));
-}
-float as_mb(size_t size) {
-	return size / ((float) (1024*1024));	
 }
 
 std::string GPUInfo::str() {

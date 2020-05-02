@@ -91,13 +91,12 @@ public:
 /* For now, load, deserialize, and instantiate on host and device all in one.  TODO: split up. */
 class LoadModelFromDiskTask : public Task {
 private:
-	int model_id;
-	std::string model_path;
-
 	MemoryManager* manager;
 	uint64_t earliest, latest;
 
 public:
+	int model_id;
+	std::string model_path;
 
 	LoadModelFromDiskTask(MemoryManager* manager, int model_id, std::string model_path, uint64_t earliest, uint64_t latest);
 	~LoadModelFromDiskTask();

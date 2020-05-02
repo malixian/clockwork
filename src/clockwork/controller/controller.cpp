@@ -71,10 +71,12 @@ void QueryWorkerStage::populate_model_state(BatchedModelState &model, workerapi:
 	model.output_size = info.output_size;
 	model.weights_size = info.weights_size;
 	model.num_weights_pages = info.num_weights_pages;
-	model.weights_transfer_duration = 0; // no info yet
+	model.weights_transfer_duration = info.weights_load_time_nanos;
 	model.supported_batch_sizes = info.supported_batch_sizes;
-	for (auto &batch_size : info.supported_batch_sizes) {
-		model.exec_duration[batch_size] = 0; // no info yet
+	for (unsigned i = 0; i < info.supported_batch_sizes.size(); i++) {
+		auto batch_size = info.supported_batch_sizes[i];
+		auto duration = info.batch_size_exec_times_nanos[i];
+		model.exec_duration[batch_size] = duration;
 	}
 }
 
@@ -172,11 +174,13 @@ void LoadingStage::Pending::add_to_state(ClockworkState &state, std::shared_ptr<
 	b.output_size = result->output_size;
 	b.weights_size = result->weights_size_in_cache;
 	b.num_weights_pages = result->num_weights_pages;
-	b.weights_transfer_duration = 0; // Will populate later
+	b.weights_transfer_duration = result->weights_load_time_nanos;
 	b.supported_batch_sizes = result->supported_batch_sizes;
 
-	for (auto &batch_size : result->supported_batch_sizes) {
-		b.exec_duration[batch_size] = 0; // Will populate later
+	for (unsigned i = 0; i < result->supported_batch_sizes.size(); i++) {
+		auto batch_size = result->supported_batch_sizes[i];
+		auto duration = result->batch_size_exec_times_nanos[i];
+		b.exec_duration[batch_size] = duration;
 	}
 
 	unsigned worker_id = action_worker_mapping[result->id];

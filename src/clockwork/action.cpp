@@ -57,6 +57,10 @@ void LoadModelFromDiskAction::LoadModelFromDiskTaskImpl::success(RuntimeModel* r
 	result->input_size = rm->model->input_size(1);
 	result->output_size = rm->model->output_size(1);
 	result->supported_batch_sizes = rm->model->implemented_batch_sizes();
+	result->weights_load_time_nanos = rm->model->transfer_measurement;
+	for (auto &p : rm->model->models) {
+		result->batch_size_exec_times_nanos.push_back(p.second->exec_measurement);
+	}
 
 	// TODO Verify: I assume that GPU-specific weights_caches have identical page_size
 	int page_size = load_model->runtime->manager->weights_caches[0]->page_size;

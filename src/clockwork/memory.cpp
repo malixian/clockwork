@@ -105,6 +105,10 @@ void ModelStore::get_model_info(workerapi::WorkerMemoryInfo &info) {
 			modelinfo.supported_batch_sizes = rm->model->implemented_batch_sizes();
 			modelinfo.num_weights_pages = rm->model->num_weights_pages(info.page_size);
 			modelinfo.weights_size = rm->model->weights_size;
+			modelinfo.weights_load_time_nanos = rm->model->transfer_measurement;
+			for (auto &p : rm->model->models) {
+				modelinfo.batch_size_exec_times_nanos.push_back(p.second->exec_measurement);
+			}
 			models_info[model_id] = modelinfo;
 		}
 

@@ -20,6 +20,9 @@ public:
 	int weights_size;
 	char* weights_pinned_host_memory; // alloced with cudaMallocHost
 
+	// Just used for model management; some models have measurements
+	uint64_t transfer_measurement = 0;
+
 	BatchedModel(int weights_size, char* weights_pinned_host_memory,
 		std::vector<std::pair<unsigned, Model*>> models, unsigned gpu_id, std::string source="");
 

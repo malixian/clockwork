@@ -3,6 +3,8 @@
 #include <algorithm>
 #include "clockwork/cuda_common.h"
 #include "clockwork/model/model.h"
+#include <libconfig.h++>
+#include <sstream>
 
 namespace clockwork {
 namespace model {
@@ -165,6 +167,13 @@ void BatchedModel::call(unsigned batch_size, std::vector<char*> &weights_pages, 
 	model_lookup[batch_size]->call(weights_pages, io_memory, workspace_memory, stream);
 }
 
+void lookupValue(libconfig::Config &config, std::string key, uint64_t &value) {
+	unsigned long long v = 0;
+	if (config.getRoot().lookupValue(key, v)) {
+		value = v;
+	}
+}
+
 BatchedModel* BatchedModel::loadFromDisk(std::string base_filename, unsigned gpu_id) {
 	std::string clockwork_weights_filename = base_filename + ".clockwork_params";
 
@@ -204,7 +213,25 @@ BatchedModel* BatchedModel::loadFromDisk(std::string base_filename, unsigned gpu
 
 	CHECK(batchsize != 1) << "No valid batch sizes found for " << base_filename;
 
-	return new BatchedModel(weights_size, weights_pinned_host_memory, models, gpu_id, base_filename);
+	auto batched = new BatchedModel(weights_size, weights_pinned_host_memory, models, gpu_id, base_filename);
+
+	// Lastly, load measurements if they exist
+	try {
+		std::string measurements_file = base_filename + ".measurements";
+		libconfig::Config measurements;
+		measurements.readFile(measurements_file.c_str());
+
+		lookupValue(measurements, "weights", batched->transfer_measurement);
+		for (auto p : models) {
+			std::stringstream key;
+			key << "b" << p.first;
+			lookupValue(measurements, key.str(), p.second->exec_measurement);
+		}
+	} catch (const libconfig::FileIOException& e) {
+		// No measurements file; just ignore and move on
+	}
+
+	return batched;
 }
 
 }

@@ -147,6 +147,8 @@ public:
 	std::vector<unsigned> supported_batch_sizes;
 	size_t weights_size;
 	unsigned num_weights_pages;
+	uint64_t weights_load_time_nanos;
+	std::vector<uint64_t> batch_size_exec_times_nanos;
 
 	virtual std::string str();
 };
@@ -161,7 +163,9 @@ public:
 	size_t weights_size_in_cache;
 	unsigned num_weights_pages;
 
-	// TODO: put some measurements like weight load time and exec time here
+	// If measurements exist, they will be populated here; otherwise 0
+	uint64_t weights_load_time_nanos;
+	std::vector<uint64_t> batch_size_exec_times_nanos;
 	
 	virtual std::string str();
 };

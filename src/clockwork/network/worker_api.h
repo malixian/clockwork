@@ -61,6 +61,10 @@ public:
   	}
   	msg.set_weights_size_in_cache(result.weights_size_in_cache);
     msg.set_num_weights_pages(result.num_weights_pages);
+    msg.set_weights_load_time_nanos(result.weights_load_time_nanos);
+    for (uint64_t &t : result.batch_size_exec_times_nanos) {
+      msg.add_batch_size_exec_times_nanos(t);
+    }
   	msg.mutable_timing()->set_begin(result.begin);
   	msg.mutable_timing()->set_end(result.end);
   	msg.mutable_timing()->set_duration(result.duration);
@@ -83,6 +87,10 @@ public:
   	}
   	result.weights_size_in_cache = msg.weights_size_in_cache();
     result.num_weights_pages = msg.num_weights_pages();
+    result.weights_load_time_nanos = msg.weights_load_time_nanos();
+    for (unsigned i = 0; i < msg.batch_size_exec_times_nanos_size(); i++) {
+      result.batch_size_exec_times_nanos.push_back(msg.batch_size_exec_times_nanos(i));
+    }
   }
 };
 
@@ -318,6 +326,10 @@ public:
     }
     proto->set_weights_size(model.weights_size);
     proto->set_num_weights_pages(model.num_weights_pages);
+    proto->set_weights_load_time_nanos(model.weights_load_time_nanos);
+    for (auto &t : model.batch_size_exec_times_nanos) {
+      proto->add_batch_size_exec_times_nanos(t);
+    }
   }
 
   virtual void set(workerapi::GetWorkerStateResult &result) {
@@ -365,6 +377,10 @@ public:
     }
     model.weights_size = proto.weights_size();
     model.num_weights_pages = proto.num_weights_pages();
+    model.weights_load_time_nanos = proto.weights_load_time_nanos();
+    for (unsigned i = 0; i < proto.batch_size_exec_times_nanos_size(); i++) {
+      model.batch_size_exec_times_nanos.push_back(proto.batch_size_exec_times_nanos(i));
+    }
   }
 
   virtual void get(workerapi::GetWorkerStateResult &result) {
