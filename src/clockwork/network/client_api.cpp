@@ -47,7 +47,8 @@ void msg_inference_rsp_tx::set(clientapi::InferenceResponse &response) {
   	msg.set_model_id(response.model_id);
   	msg.set_batch_size(response.batch_size);
   	body_len_ = response.output_size;
-  	body_ = new uint8_t[response.output_size];
+    if (body_len_ > 0) body_ = new uint8_t[response.output_size];
+    else body_ = nullptr;
     std::memcpy(body_, response.output, response.output_size);
 }
 

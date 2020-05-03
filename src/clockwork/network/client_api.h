@@ -25,7 +25,7 @@ public:
 class msg_inference_rsp_tx : public msg_protobuf_tx_with_body<RSP_INFERENCE, ModelInferenceRspProto, clientapi::InferenceResponse> {
 public:
   virtual ~msg_inference_rsp_tx() {
-    delete static_cast<uint8_t*>(body_);
+    if (body_ != nullptr) delete static_cast<uint8_t*>(body_);
   }
   void set(clientapi::InferenceResponse &response);
 };
