@@ -272,6 +272,7 @@ void ClientConnection::completed_receive(message_connection *tcp_conn, message_r
 		auto request = new clientapi::InferenceRequest();
 		infer->get(*request);
 		api->infer(*request, [this, request, request_id] (clientapi::InferenceResponse &response) {
+    		delete static_cast<uint8_t*>(request->input);
 			delete request;
 			auto rsp = new msg_inference_rsp_tx();
 			rsp->set(response);
