@@ -243,6 +243,11 @@ message_rx* ClientConnection::new_rx_message(message_connection *tcp_conn, uint6
 		msg->set_msg_id(msg_id);
 		return msg;
 
+	} else if (msg_type == REQ_LS) {
+		auto msg = new msg_ls_req_rx();
+		msg->set_msg_id(msg_id);
+		return msg;
+
 	}
 	
 	CHECK(false) << "Unsupported msg_type " << msg_type;
@@ -302,6 +307,17 @@ void ClientConnection::completed_receive(message_connection *tcp_conn, message_r
 		api->uploadModel(*request, [this, request, request_id] (clientapi::UploadModelResponse &response) {
 			delete request;
 			auto rsp = new msg_upload_model_rsp_tx();
+			rsp->set(response);
+			rsp->set_msg_id(request_id);
+			msg_tx_.send_message(*rsp);
+		});
+
+	} else if (auto ls = dynamic_cast<msg_ls_req_rx*>(req)) {
+		auto request = new clientapi::LSRequest();
+		ls->get(*request);
+		api->ls(*request, [this, request, request_id] (clientapi::LSResponse &response) {
+			delete request;
+			auto rsp = new msg_ls_rsp_tx();
 			rsp->set(response);
 			rsp->set_msg_id(request_id);
 			msg_tx_.send_message(*rsp);

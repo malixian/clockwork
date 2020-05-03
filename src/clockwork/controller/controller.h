@@ -44,6 +44,7 @@ public:
 	virtual void infer(clientapi::InferenceRequest &request, std::function<void(clientapi::InferenceResponse&)> callback) = 0;
 	virtual void evict(clientapi::EvictRequest &request, std::function<void(clientapi::EvictResponse&)> callback) = 0;
 	virtual void loadRemoteModel(clientapi::LoadModelFromRemoteDiskRequest &request, std::function<void(clientapi::LoadModelFromRemoteDiskResponse&)> callback) = 0;
+	virtual void ls(clientapi::LSRequest &request, std::function<void(clientapi::LSResponse&)> callback);
 };
 
 namespace controller {
@@ -60,6 +61,7 @@ public:
 };
 typedef Request<clientapi::InferenceRequest, clientapi::InferenceResponse> InferRequest;
 typedef Request<clientapi::LoadModelFromRemoteDiskRequest, clientapi::LoadModelFromRemoteDiskResponse> LoadModelRequest;
+typedef Request<clientapi::LSRequest, clientapi::LSResponse> LSRequest;
 
 /* Handles fetching information from workers about currently-loaded models */
 class QueryWorkerStage {
@@ -118,7 +120,12 @@ public:
 
 	ClockworkState state;
 
-	std::unordered_map<unsigned, std::shared_ptr<Pending>> pending;
+	struct PendingAction {
+		Worker &worker;
+		std::shared_ptr<Pending> pending;
+	};
+
+	std::unordered_map<unsigned, PendingAction> actions;
 	std::vector<Worker> workers;
 
 
@@ -154,33 +161,26 @@ public:
 	   Expects template parameter T to be a Request type */
 	template<typename T> class Bouncer {
 	public:
-		uint64_t timeout_nanos = 10000000000UL; // 10 seconds
+		uint64_t timeout_nanos = 12000000000UL; // 12 seconds
 		std::atomic_bool alive = true;
-		tbb::concurrent_queue<T> queue;
+		tbb::concurrent_queue<T> &queue;
 		std::function<void(T&)> bounce;
 		std::thread thread;
-		Bouncer(tbb::concurrent_queue<T> queue, std::function<void(T&)> bounce) :
+		Bouncer(tbb::concurrent_queue<T> &queue, std::function<void(T&)> bounce) :
 		    queue(queue), bounce(bounce), thread(&Bouncer<T>::run, this) {
 		}
 
 		void run() {
-			T next = nullptr;
 			while (alive) {
-				if (next == nullptr) queue.try_pop(next);
+				usleep(10000);
 
-				if (next == nullptr || ((next->arrival + timeout_nanos) > util::now())) {
-					usleep(10000);
-					continue;
-				};
-
-				bounce(next);
-				next = nullptr;
-			}
-
-			// Immediately bounce all remaining infer requests
-			if (next != nullptr) bounce(next);
-			while (queue.try_pop(next)) {
-				bounce(next);
+				T next;
+				while (queue.try_pop(next)) {
+					while (alive && (next->arrival + timeout_nanos) > util::now()) {
+						usleep(10000);
+					}
+					bounce(next);
+				}
 			}
 		}
 
@@ -190,11 +190,13 @@ public:
 		}
 	};
 
+	void bounceLSRequest(std::shared_ptr<startup::LSRequest> &request);
 	void bounceInferRequest(std::shared_ptr<startup::InferRequest> &request);
 	void bounceLoadModelRequest(std::shared_ptr<startup::LoadModelRequest> &request);
 
 	tbb::concurrent_queue<std::shared_ptr<startup::InferRequest>> infer_request_queue;
 	tbb::concurrent_queue<std::shared_ptr<startup::LoadModelRequest>> load_model_request_queue;
+	tbb::concurrent_queue<std::shared_ptr<startup::LSRequest>> ls_request_queue;
 	tbb::concurrent_queue<std::shared_ptr<workerapi::Result>> worker_results_queue;
 
 	/*
@@ -211,6 +213,7 @@ public:
 
 	void infer(clientapi::InferenceRequest &request, std::function<void(clientapi::InferenceResponse&)> callback);
 	void loadRemoteModel(clientapi::LoadModelFromRemoteDiskRequest &request, std::function<void(clientapi::LoadModelFromRemoteDiskResponse&)> callback);
+	void ls(clientapi::LSRequest &request, std::function<void(clientapi::LSResponse&)> callback);
 	void sendResult(std::shared_ptr<workerapi::Result> result);
 
 };
@@ -222,6 +225,7 @@ private:
 	std::thread startup_thread;
 	std::mutex startup_mutex;
 
+	ClockworkState state;
 	Scheduler* scheduler;
 
 public:
@@ -241,6 +245,7 @@ public:
 	void loadRemoteModel(clientapi::LoadModelFromRemoteDiskRequest &request, std::function<void(clientapi::LoadModelFromRemoteDiskResponse&)> callback);
 	void evict(clientapi::EvictRequest &request, std::function<void(clientapi::EvictResponse&)> callback);
 	void uploadModel(clientapi::UploadModelRequest &request, std::function<void(clientapi::UploadModelResponse&)> callback);
+	void ls(clientapi::LSRequest &request, std::function<void(clientapi::LSResponse&)> callback);
 };
 }
 }

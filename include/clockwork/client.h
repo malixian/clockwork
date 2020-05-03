@@ -4,6 +4,7 @@
 #include <future>
 #include <functional>
 #include <string>
+#include <stdexcept>
 
 /**
 This is the user-facing Clockwork Client
@@ -11,11 +12,21 @@ This is the user-facing Clockwork Client
 
 namespace clockwork {
 
+class clockwork_error : public std::runtime_error {
+public:
+	clockwork_error(std::string what) : std::runtime_error(what) {}
+};
+
+class clockwork_initializing : public std::runtime_error {
+public:
+	clockwork_initializing(std::string what) : std::runtime_error(what) {}
+};
+
 /* Represents a model that can be inferred */
 class Model {
 public:
 	virtual int id() = 0;
-
+	virtual std::string source() = 0;
 	virtual int input_size() = 0;
 
 	/* 
@@ -42,6 +53,8 @@ public:
 	virtual std::future<void> evict_async() = 0;
 
 };
+
+typedef std::unordered_map<unsigned, Model*> ModelSet;
 
 /* 
 Represents a client to Clockwork 
@@ -74,6 +87,11 @@ public:
 	*/
 	virtual Model* load_remote_model(std::string model_path) = 0;
 	virtual std::future<Model*> load_remote_model_async(std::string model_path) = 0;
+
+
+	virtual ModelSet ls() = 0;
+	virtual std::future<ModelSet> ls_async() = 0;
+
 
 };
 

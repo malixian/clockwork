@@ -109,5 +109,34 @@ std::string LoadModelFromRemoteDiskResponse::str() {
 	return ss.str();
 }
 
+std::string LSRequest::str() {
+	std::stringstream ss;
+	ss << "Req" << header.user_request_id << ":LS";
+	return ss.str();	
+}
+
+std::string ClientModelInfo::str() {
+	std::stringstream ss;
+	ss << "M-" << model_id
+	   << " src=" << remote_path
+	   << " input=" << input_size
+	   << " output=" << output_size;
+	return ss.str();
+}
+
+std::string LSResponse::str() {
+	std::stringstream ss;
+	ss << "Rsp" << header.user_request_id << ":LS";
+	if (header.status != clockworkSuccess) {
+		ss << " error " << header.status << ": " << header.message;
+	} else {
+		ss << " " << models.size() << " models:";
+		for (auto &model : models) {
+			ss << std::endl << " " << model.str();
+		}
+	}
+	return ss.str();	
+}
+
 }
 }
