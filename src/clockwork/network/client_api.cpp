@@ -75,6 +75,45 @@ void msg_evict_rsp_rx::get(clientapi::EvictResponse &request) {
     get_header(request.header, msg.header());
 }
 
+void msg_ls_req_tx::set(clientapi::LSRequest &request) {
+    set_header(request.header, msg.mutable_header());
+}
+
+void msg_ls_req_rx::get(clientapi::LSRequest &request) {
+    get_header(request.header, msg.header());
+}
+
+void set_client_model_info(const clientapi::ClientModelInfo &model, ClientModelInfoProto* proto) {
+    proto->set_model_id(model.model_id);
+    proto->set_remote_path(model.remote_path);
+    proto->set_input_size(model.input_size);
+    proto->set_output_size(model.output_size);
+}
+
+void msg_ls_rsp_tx::set(clientapi::LSResponse &request) {
+    set_header(request.header, msg.mutable_header());
+    for (auto &model : request.models) {
+      ClientModelInfoProto* modelproto = msg.add_models();
+      set_client_model_info(model, modelproto);
+    }
+}
+
+void get_client_model_info(clientapi::ClientModelInfo &model, const ClientModelInfoProto &proto) {
+    model.model_id = proto.model_id();
+    model.remote_path = proto.remote_path();
+    model.input_size = proto.input_size();
+    model.output_size = proto.output_size();
+}
+
+void msg_ls_rsp_rx::get(clientapi::LSResponse &request) {
+    get_header(request.header, msg.header());
+    for (unsigned i = 0; i < msg.models_size(); i++) {
+      clientapi::ClientModelInfo model;
+      get_client_model_info(model, msg.models(i));
+      request.models.push_back(model);
+    }
+}
+
 void msg_load_remote_model_req_tx::set(clientapi::LoadModelFromRemoteDiskRequest &request) {
     set_header(request.header, msg.mutable_header());
     msg.set_remote_path(request.remote_path);

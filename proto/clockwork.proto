@@ -12,11 +12,13 @@ enum RequestType {
   REQ_INFERENCE = 2;
   REQ_LOAD_REMOTE_MODEL = 3;
   REQ_EVICT = 4;
+  REQ_LS = 5;
 
   RSP_UPLOAD_MODEL = 101;
   RSP_INFERENCE = 102;
   RSP_LOAD_REMOTE_MODEL = 103;
   RSP_EVICT = 104;
+  RSP_LS = 105;
 }
 
 message RequestHeaderProto {
@@ -77,6 +79,22 @@ message LoadModelFromDiskRspProto {
   required uint32 model_id = 2;
   required uint64 input_size = 3;
   required uint64 output_size = 4;
+}
+
+message LSReqProto {
+  required RequestHeaderProto header = 1;
+}
+
+message ClientModelInfoProto {
+  required uint32 model_id = 1;
+  required string remote_path = 2;
+  required uint64 input_size = 3;
+  required uint64 output_size = 4;
+}
+
+message LSRspProto {
+  required ResponseHeaderProto header = 1;
+  repeated ClientModelInfoProto models = 2;
 }
 
 enum ActionType {

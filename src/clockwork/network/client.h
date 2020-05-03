@@ -33,6 +33,7 @@ public:
   virtual void infer(InferenceRequest &request, std::function<void(InferenceResponse&)> callback);
   virtual void evict(EvictRequest &request, std::function<void(EvictResponse&)> callback);
   virtual void loadRemoteModel(LoadModelFromRemoteDiskRequest &request, std::function<void(LoadModelFromRemoteDiskResponse&)> callback);
+  virtual void ls(LSRequest &request, std::function<void(LSResponse&)> callback);
 
 };
 

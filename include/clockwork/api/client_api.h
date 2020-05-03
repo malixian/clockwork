@@ -95,6 +95,28 @@ struct EvictResponse {
 	std::string str();
 };
 
+struct LSRequest {
+	RequestHeader header;
+
+	std::string str();
+};
+
+struct ClientModelInfo {
+	int model_id;
+	std::string remote_path; // For convenience
+	size_t input_size;
+	size_t output_size;
+
+	std::string str();
+};
+
+struct LSResponse {
+	ResponseHeader header;
+	std::vector<ClientModelInfo> models;
+
+	std::string str();
+};
+
 /** This is a 'backdoor' API function for ease of experimentation */
 struct LoadModelFromRemoteDiskRequest {
 	RequestHeader header;
@@ -125,6 +147,8 @@ public:
 
 	/** This is a 'backdoor' API function for ease of experimentation */
 	virtual void loadRemoteModel(LoadModelFromRemoteDiskRequest &request, std::function<void(LoadModelFromRemoteDiskResponse&)> callback) = 0;
+
+	virtual void ls(LSRequest &request, std::function<void(LSResponse&)> callback) = 0;
 
 };
 

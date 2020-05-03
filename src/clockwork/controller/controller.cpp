@@ -6,6 +6,14 @@ using namespace clockwork::controller;
 using namespace clockwork::controller::startup;
 
 
+void Controller::ls(clientapi::LSRequest &request, std::function<void(clientapi::LSResponse&)> callback) {
+	clientapi::LSResponse response;
+	response.header.user_request_id = request.header.user_request_id;
+	response.header.status = clockworkError;
+	response.header.message = "ls not supported by this controller";
+	callback(response);
+}
+
 float as_gb(size_t size) {
 	return size / ((float) (1024*1024*1024));
 }
@@ -266,7 +274,7 @@ void LoadingStage::Worker::check() {
 	}
 
 	for (auto &action : actions) {
-		std::cout << "Worker <-- " << action->str() << std::endl;
+		std::cout << "Worker <--  " << action->str() << std::endl;
 	}
 
 	worker->sendActions(actions);
@@ -297,8 +305,6 @@ LoadingStage::LoadingStage(ClockworkState &state, std::vector<network::controlle
 void LoadingStage::on_request(std::shared_ptr<LoadModelRequest> &request) {
 	std::shared_ptr<Pending> p = std::make_shared<Pending>(model_id_seed++, request);
 
-	std::cout << "Client --> " << request->request.str() << std::endl;
-
 	for (unsigned i = 0; i < workers.size(); i++) {
 		auto load_model = std::make_shared<workerapi::LoadModelFromDisk>();
 		load_model->id = action_id_seed++;
@@ -309,24 +315,25 @@ void LoadingStage::on_request(std::shared_ptr<LoadModelRequest> &request) {
 
 		p->add_action(i, load_model);
 		workers[i].add_action(load_model);
-		pending[load_model->id] = p;
+		actions.insert(std::make_pair<unsigned, PendingAction>(load_model->id, PendingAction{workers[i], p}));
 	}
 }
 
 void LoadingStage::on_result(std::shared_ptr<workerapi::Result> &result) {
-	auto it = pending.find(result->id);
-	CHECK(it != pending.end()) << "Received a result for a non-existent action " << result->str();
+	auto it = actions.find(result->id);
+	CHECK(it != actions.end()) << "Received a result for a non-existent action " << result->str();
 
 	auto &p = it->second;
-	p->result_received(result);
-	p->check_completion(state);
+	p.worker.result_received();
+	p.pending->result_received(result);
+	p.pending->check_completion(state);
 
-	pending.erase(it);
+	actions.erase(it);
 }
 
 bool LoadingStage::is_loading_stage_complete() {
 	return last_action != 0 &&
-		   pending.size() == 0 &&
+		   actions.size() == 0 &&
 		   (last_action + timeout) < util::now();
 }	
 
@@ -355,7 +362,7 @@ ClockworkState LoadingStage::run(tbb::concurrent_queue<std::shared_ptr<LoadModel
 
 		// Print a timeout-warning
 		uint64_t now = util::now();
-		if (warn_at != 0 && pending.size() == 0 && (last_action + timeout) > now && warn_at < now) {
+		if (warn_at != 0 && actions.size() == 0 && (last_action + timeout) > now && warn_at < now) {
 			uint64_t seconds_remaining = (last_action + timeout - now) / 1000000000;
 			std::stringstream ss;
 			ss << std::fixed << "(Startup-5) LoadModelStage ending in " << seconds_remaining << " seconds...";
@@ -365,6 +372,16 @@ ClockworkState LoadingStage::run(tbb::concurrent_queue<std::shared_ptr<LoadModel
 	}
 
 	return state;
+}
+
+void ControllerStartup::bounceLSRequest(std::shared_ptr<LSRequest> &request) {
+	clientapi::LSResponse response;
+	response.header.user_request_id = request->request.header.user_request_id;
+	response.header.status = clockworkInitializing;
+	response.header.message = "Controller initializing";
+
+	std::cout << "Client <--  " << response.str() << std::endl;
+	request->callback(response);
 }
 
 void ControllerStartup::bounceInferRequest(std::shared_ptr<InferRequest> &request) {
@@ -399,8 +416,9 @@ ClockworkState ControllerStartup::run(std::vector<network::controller::WorkerCon
 
 	// Immediately bounce infer requests
 
-	std::cout << "(Startup-1) Bouncing inference requests until startup is complete" << std::endl;
+	std::cout << "(Startup-1) Bouncing LS and Infer requests until startup is complete" << std::endl;
 	Bouncer<std::shared_ptr<InferRequest>> infer_bouncer(infer_request_queue, std::bind(&ControllerStartup::bounceInferRequest, this, std::placeholders::_1));
+	Bouncer<std::shared_ptr<LSRequest>> ls_bouncer(ls_request_queue, std::bind(&ControllerStartup::bounceLSRequest, this, std::placeholders::_1));
 
 	// Let loadModel requests buffer while querying worker state
 	std::cout << "(Startup-2) Querying current worker state" << std::endl;
@@ -420,15 +438,11 @@ ClockworkState ControllerStartup::run(std::vector<network::controller::WorkerCon
 	std::cout << "(Startup-6) LoadModelStage complete.  Printing loaded models: " << std::endl;
 	std::cout << state.str() << std::endl;
 
-	std::cout << "(Startup-7) Begin profiling loaded models" << std::endl;
-
-
-	std::cout << "(Startup-8) Profiling complete, begin admitting infer requests" << std::endl;
-	infer_bouncer.shutdown();
-	// load_model_bouncer.shutdown();
 
 	std::cout << "(Startup-end) Transitioning to scheduler" << std::endl;
 
+	infer_bouncer.shutdown();
+	ls_bouncer.shutdown();
 	return state;
 }
 
@@ -446,6 +460,12 @@ void ControllerStartup::shutdown() {
 	std::shared_ptr<InferRequest> infer = nullptr;
 	while (infer_request_queue.try_pop(infer)) {
 		bounceInferRequest(infer);
+	}
+
+	// Bouncers are already shut down but stuff could have come in
+	std::shared_ptr<LSRequest> ls = nullptr;
+	while (ls_request_queue.try_pop(ls)) {
+		bounceLSRequest(ls);
 	}
 
 	// Bouncers are already shut down but stuff could have come in
@@ -469,6 +489,11 @@ void ControllerStartup::loadRemoteModel(clientapi::LoadModelFromRemoteDiskReques
 	load_model_request_queue.push(std::make_shared<LoadModelRequest>(request, callback));
 }
 
+void ControllerStartup::ls(clientapi::LSRequest &request, std::function<void(clientapi::LSResponse&)> callback) {
+	std::cout << "Client  --> " << request.str() << std::endl;
+	ls_request_queue.push(std::make_shared<LSRequest>(request, callback));
+}
+
 void ControllerStartup::sendResult(std::shared_ptr<workerapi::Result> result) {
 	worker_results_queue.push(result);
 }
@@ -488,7 +513,7 @@ ControllerWithStartupPhase::ControllerWithStartupPhase(
 }
 
 void ControllerWithStartupPhase::runStartup() {
-	ClockworkState state = startup->run(this->workers);
+	this->state = startup->run(this->workers);
 
 	std::lock_guard<std::mutex> lock(startup_mutex);
 
@@ -539,6 +564,43 @@ void ControllerWithStartupPhase::loadRemoteModel(clientapi::LoadModelFromRemoteD
 		response.header.message = "Controller startup phase has completed";
 		callback(response);
 	}
+}
+
+void ControllerWithStartupPhase::ls(clientapi::LSRequest &request, std::function<void(clientapi::LSResponse&)> callback) {
+	if (startup_phase) {
+		std::lock_guard<std::mutex> lock(startup_mutex);
+
+		if (startup_phase) {
+			startup->ls(request, callback);
+			return;
+		}
+	}
+
+	// Extract the model info, preventing duplicates
+	std::map<unsigned, clientapi::ClientModelInfo> models;
+	for (auto &worker : state.workers) {
+		for (auto &p : worker.models) {
+			auto &model = p.second;
+			if (models.find(model.id) == models.end()) {
+				clientapi::ClientModelInfo info;
+				info.model_id = model.id;
+				info.remote_path = model.model_path;
+				info.input_size = model.input_size;
+				info.output_size = model.output_size;
+				models[model.id] = info;
+			}
+		}
+	}
+
+	// Send response
+	clientapi::LSResponse response;
+	response.header.user_request_id = request.header.user_request_id;
+	response.header.status = clockworkSuccess;
+	for (auto &p : models) {
+		response.models.push_back(p.second);
+	}
+
+	callback(response);
 }
 
 void ControllerWithStartupPhase::evict(clientapi::EvictRequest &request, std::function<void(clientapi::EvictResponse&)> callback) {

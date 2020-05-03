@@ -32,6 +32,9 @@ public:
 };
 
 
+const size_t max_header_len = 10*1024*1024;
+
+
 class message_sender {
 public:
   message_sender(message_connection *conn, message_handler &handler);
@@ -56,7 +59,6 @@ private:
 
   asio::ip::tcp::socket &socket_;
 
-  static const size_t max_header_len = 1024;
   char header_buf[max_header_len];
   /* header length,  body length, message type, message id */
   uint64_t pre_header[4];
@@ -99,7 +101,6 @@ private:
 
   asio::ip::tcp::socket &socket_;
 
-  static const size_t max_header_len = 1024;
   char header_buf[max_header_len];
   /* header length,  body length, message type, message id */
   uint64_t pre_header[4];

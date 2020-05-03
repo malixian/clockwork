@@ -68,6 +68,18 @@ void Connection::loadRemoteModel(LoadModelFromRemoteDiskRequest &request, std::f
 	send_request(*rpc);
 }
 
+void Connection::ls(LSRequest &request, std::function<void(LSResponse&)> callback) {
+	auto rpc = new net_rpc<msg_ls_req_tx, msg_ls_rsp_rx>(
+		[callback](msg_ls_rsp_rx &rsp) {
+			LSResponse response;
+			rsp.get(response);
+			callback(response);
+		});
+
+	rpc->req.set(request);
+	send_request(*rpc);	
+}
+
 ConnectionManager::ConnectionManager() : alive(true), network_thread(&ConnectionManager::run, this) {}
 
 void ConnectionManager::run() {

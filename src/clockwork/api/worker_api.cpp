@@ -100,6 +100,8 @@ float as_mb(size_t size) {
 
 std::string ModelInfo::str() {
 	std::stringstream ss;
+	ss.precision(1);
+	ss << std::fixed;
 	ss << "M-" << id
 	   << " src=" << source
 	   << " input=" << input_size

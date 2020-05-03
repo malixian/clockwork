@@ -72,6 +72,26 @@ public:
   void get(clientapi::LoadModelFromRemoteDiskResponse &response);
 };
 
+class msg_ls_req_tx : public msg_protobuf_tx<REQ_LS, LSReqProto, clientapi::LSRequest> {
+public:
+  void set(clientapi::LSRequest &request);
+};
+
+class msg_ls_req_rx : public msg_protobuf_rx<REQ_LS, LSReqProto, clientapi::LSRequest> {
+public:
+  void get(clientapi::LSRequest &request);
+};
+
+class msg_ls_rsp_tx : public msg_protobuf_tx<RSP_LS, LSRspProto, clientapi::LSResponse> {
+public:
+  void set(clientapi::LSResponse &request);
+};
+
+class msg_ls_rsp_rx : public msg_protobuf_rx<RSP_LS, LSRspProto, clientapi::LSResponse> {
+public:
+  void get(clientapi::LSResponse &request);
+};
+
 
 class msg_upload_model_req_tx : public msg_protobuf_tx<REQ_UPLOAD_MODEL, ModelUploadReqProto, clientapi::UploadModelRequest> {
 private:
