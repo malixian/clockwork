@@ -32,6 +32,7 @@ public:
   virtual void set(workerapi::LoadModelFromDisk &action) {
   	msg.set_action_id(action.id);
   	msg.set_model_id(action.model_id);
+  	msg.set_no_of_copies(action.no_of_copies);
   	msg.set_model_path(action.model_path);
   	msg.set_earliest(action.earliest);
   	msg.set_latest(action.latest);
@@ -44,6 +45,7 @@ public:
   	action.id = msg.action_id();
   	action.action_type = workerapi::loadModelFromDiskAction;
   	action.model_id = msg.model_id();
+  	action.no_of_copies = msg.no_of_copies();
   	action.model_path = msg.model_path();
   	action.earliest = msg.earliest();
   	action.latest = msg.latest();
@@ -56,6 +58,7 @@ public:
   	msg.set_action_id(result.id);
   	msg.set_input_size(result.input_size);
   	msg.set_output_size(result.output_size);
+  	msg.set_copies_created(result.copies_created);
   	for (unsigned batch_size : result.supported_batch_sizes) {
   		msg.add_supported_batch_sizes(batch_size);
   	}
@@ -82,6 +85,7 @@ public:
   	result.duration = msg.timing().duration();
   	result.input_size = msg.input_size();
   	result.output_size = msg.output_size();
+  	result.copies_created = msg.copies_created();
   	for (unsigned i = 0; i < msg.supported_batch_sizes_size(); i++) {
   		result.supported_batch_sizes.push_back(msg.supported_batch_sizes(i));
   	}

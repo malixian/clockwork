@@ -87,6 +87,8 @@ public:
 	*/
 	virtual Model* load_remote_model(std::string model_path) = 0;
 	virtual std::future<Model*> load_remote_model_async(std::string model_path) = 0;
+	virtual std::vector<Model*> load_remote_models(std::string model_path, int no_of_copies) = 0;
+	virtual std::future<std::vector<Model*>> load_remote_models_async(std::string model_path, int no_of_copies) = 0;
 
 
 	virtual ModelSet ls() = 0;

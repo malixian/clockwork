@@ -59,8 +59,8 @@ float CudaAsyncTask::async_duration() {
 }
 
 
-LoadModelFromDiskTask::LoadModelFromDiskTask(MemoryManager* manager, int model_id, std::string model_path, uint64_t earliest, uint64_t latest) :
-		manager(manager), model_id(model_id), model_path(model_path), earliest(earliest), latest(latest) {
+LoadModelFromDiskTask::LoadModelFromDiskTask(MemoryManager* manager, int model_id, std::string model_path, uint64_t earliest, uint64_t latest, int no_of_copies) :
+		manager(manager), model_id(model_id), model_path(model_path), earliest(earliest), latest(latest), no_of_copies(no_of_copies) {
 }
 
 LoadModelFromDiskTask::~LoadModelFromDiskTask() {}
@@ -92,20 +92,24 @@ void LoadModelFromDiskTask::run(cudaStream_t stream) {
 			// TODO: loadFromDisk will call cudaMallocHost; in future don't use this, and manage host memory manually
 			// TODO: for now just wrap dmlc error for failing to load model, since the existence of this task is a
 			//       giant hack anyway
-			model::BatchedModel* batched_model;
+			std::vector<model::BatchedModel*> duplicate_batched_models;
 			try {
-				batched_model = model::BatchedModel::loadFromDisk(model_path, gpu_id);
-				batched_models.push_back(batched_model);
-				batched_model->instantiate_models_on_host();
-				batched_model->instantiate_models_on_device();
+				duplicate_batched_models = model::BatchedModel::loadMultipleFromDisk(model_path, gpu_id, no_of_copies);
+				for (auto batched_model : duplicate_batched_models) {
+					batched_models.push_back(batched_model);
+					batched_model->instantiate_models_on_host();
+					batched_model->instantiate_models_on_device();
+				}
 			} catch (dmlc::Error &error) {
 				throw TaskError(actionErrorInvalidModelPath, error.what());
 			}
 
-			RuntimeModel* runtime_model = new RuntimeModel(batched_model, gpu_id);
-			runtime_models.push_back(runtime_model);
-			if (!manager->models->put_if_absent(model_id, gpu_id, runtime_model)) {
-				throw TaskError(actionErrorInvalidModelID, "LoadModelFromDiskTask specified ID that already exists");
+			for (int i = 0; i < no_of_copies; i++) {
+				RuntimeModel* runtime_model = new RuntimeModel(duplicate_batched_models[i], gpu_id);
+				runtime_models.push_back(runtime_model);
+				if (!manager->models->put_if_absent(model_id + i, gpu_id, runtime_model)) {
+					throw TaskError(actionErrorInvalidModelID, "LoadModelFromDiskTask specified ID that already exists");
+				}
 			}
 		}
 	} catch (TaskError e) {

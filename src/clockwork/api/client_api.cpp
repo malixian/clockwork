@@ -104,7 +104,7 @@ std::string LoadModelFromRemoteDiskResponse::str() {
 	if (header.status != clockworkSuccess) {
 		ss << " error " << header.status << ": " << header.message;
 	} else {
-		ss << " model_id=" << model_id << " input=" << input_size << " output=" << output_size;
+		ss << " model_id=[" << model_id << "->" << (model_id + copies_created - 1) << "] input=" << input_size << " output=" << output_size;
 	}
 	return ss.str();
 }

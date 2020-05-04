@@ -131,7 +131,7 @@ public:
 
 std::shared_ptr<workerapi::LoadModelFromDisk> load_model_from_disk_action();
 
-std::shared_ptr<workerapi::LoadWeights> load_weights_action();
+std::shared_ptr<workerapi::LoadWeights> load_weights_action(int model_id = 0);
 
 std::shared_ptr<workerapi::EvictWeights> evict_weights_action();
 

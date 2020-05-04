@@ -10,19 +10,20 @@ std::shared_ptr<workerapi::LoadModelFromDisk> load_model_from_disk_action() {
     action->action_type = workerapi::loadModelFromDiskAction;
     action->model_id = 0;
     action->model_path = clockwork::util::get_example_model();
+	action->no_of_copies = 1;
     action->earliest = util::now();
     action->latest = util::now() + 1000000000;
     return action;
 }
 
-std::shared_ptr<workerapi::LoadWeights> load_weights_action() {
+std::shared_ptr<workerapi::LoadWeights> load_weights_action(int model_id) {
     auto action = std::make_shared<workerapi::LoadWeights>();
     action->id = id_seed++;
     action->action_type = workerapi::loadWeightsAction;
     action->earliest = util::now();
     action->latest = util::now() + 1000000000;
     action->expected_duration = 0;
-    action->model_id = 0;
+    action->model_id = model_id;
     action->gpu_id = 0;
     return action;
 }

@@ -10,6 +10,7 @@
 #include <iostream>
 #include "clockwork/util.h"
 #include <stdexcept>
+#include <vector>
 
 using namespace clockwork;
 
@@ -276,10 +277,13 @@ int main(int argc, char *argv[])
 
 	clockwork::Client *client = clockwork::Connect(argv[1], argv[2]);
 
-	clockwork::Model *model = client->load_remote_model(get_example_model());
+	
+	clockwork::Model * model = client->load_remote_model(get_example_model());
 	clockwork::Model *model2 = client->load_remote_model(get_example_model());
 	clockwork::Model *model3 = client->load_remote_model(get_example_model());
 
+	int no_of_copies = 5;
+	std::vector<clockwork::Model*> client_models = client->load_remote_models(get_example_model(), no_of_copies);
 	ModelSet models;
 	while (true) {
 		try {
@@ -297,16 +301,19 @@ int main(int argc, char *argv[])
 
 	while (true)
 	{
-		std::vector<uint8_t> input(model->input_size());
-		try {
-			model->infer(input);
-		} catch (const clockwork_initializing& e1) {
-			std::cout << "Clockwork initializing, retrying " << e1.what() << std::endl;
-		} catch (const std::runtime_error& e2) {
-			std::cout << "Infer error: " << e2.what() << std::endl;
-			exit(1);
+
+		for (auto model : client_models) {
+			std::vector<uint8_t> input(model->input_size());
+			try {
+				model->infer(input);
+			} catch (const clockwork_initializing& e1) {
+				std::cout << "Clockwork initializing, retrying " << e1.what() << std::endl;
+			} catch (const std::runtime_error& e2) {
+				std::cout << "Infer error: " << e2.what() << std::endl;
+				exit(1);
+			}
+			usleep(1000000);
 		}
-		usleep(1000000);
 	}
 
 	std::cout << "Clockwork Client Exiting" << std::endl;

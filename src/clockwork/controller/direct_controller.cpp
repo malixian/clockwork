@@ -157,17 +157,20 @@ void DirectControllerImpl::loadRemoteModel(clientapi::LoadModelFromRemoteDiskReq
 	int user_request_id = request.header.user_request_id;
 	int action_id = DirectControllerImpl::action_id_seed++;
 	int model_id = DirectControllerImpl::model_id_seed++;
-		
+	int no_of_copies = request.no_of_copies;
+	DirectControllerImpl::model_id_seed += no_of_copies - 1;
+
 	// Translate clientapi request into a workerapi action
 	auto load_model = std::make_shared<workerapi::LoadModelFromDisk>();
 	load_model->id = action_id;
 	load_model->model_id = model_id;
-	load_model->model_path = util::get_example_model_path();
+	load_model->no_of_copies = no_of_copies;
+	load_model->model_path = request.remote_path;
 	load_model->earliest = 0;
 	load_model->latest = util::now() + 10000000000UL;
 
 	// When the result is received, call this callback
-	auto result_callback = [this, callback, user_request_id, model_id] (std::shared_ptr<workerapi::Result> result) {
+	auto result_callback = [this, callback, user_request_id, model_id, no_of_copies] (std::shared_ptr<workerapi::Result> result) {
 		std::cout << "Worker  -> " << result->str() << std::endl;
 
 		// Translate workerapi result into a clientapi response
@@ -180,6 +183,7 @@ void DirectControllerImpl::loadRemoteModel(clientapi::LoadModelFromRemoteDiskReq
 			response.header.status = clockworkSuccess;
 			response.header.message = "";
 			response.model_id = model_id;
+			response.copies_created = load_model_result->copies_created;
 			response.input_size = load_model_result->input_size;
 			response.output_size = load_model_result->output_size;
 		} else {

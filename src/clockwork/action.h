@@ -37,6 +37,7 @@ protected:
 		void run(cudaStream_t stream);
 		void success(RuntimeModel* rm);
 		void cancel();
+		int duplicate(RuntimeModel* rm, int model_id, int no_of_copies);
 	};
 
 	ClockworkRuntime* runtime;

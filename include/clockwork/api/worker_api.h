@@ -58,6 +58,7 @@ public:
 class LoadModelFromDisk : public Action {
 public:
 	int model_id;
+	int no_of_copies;
 	std::string model_path;
 	uint64_t earliest;
 	uint64_t latest;
@@ -158,6 +159,7 @@ public:
 	// TODO: use ModelInfo instead of putting it all here.
 	size_t input_size;
 	size_t output_size;
+	int copies_created;
 	std::vector<unsigned> supported_batch_sizes;
 
 	size_t weights_size_in_cache;
