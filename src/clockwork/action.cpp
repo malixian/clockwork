@@ -1,5 +1,10 @@
 #include "clockwork/action.h"
 #include "clockwork/telemetry.h"
+#include <bits/types/FILE.h>
+#include <cstdio>
+#include <sys/mman.h>
+#include <sys/syscall.h>
+#include<malloc.h>
 
 namespace clockwork {
 
@@ -36,7 +41,8 @@ LoadModelFromDiskAction::LoadModelFromDiskTaskImpl::LoadModelFromDiskTaskImpl(Lo
 			load_model->action->model_id,
 			load_model->action->model_path,
 			load_model->action->earliest,
-			load_model->action->latest), 
+			load_model->action->latest,
+			load_model->action->no_of_copies),
 		load_model(load_model) {
 }
 
@@ -49,6 +55,7 @@ void LoadModelFromDiskAction::LoadModelFromDiskTaskImpl::run(cudaStream_t stream
 }
 
 void LoadModelFromDiskAction::LoadModelFromDiskTaskImpl::success(RuntimeModel* rm) {
+
 	auto result = std::make_shared<workerapi::LoadModelFromDiskResult>();
 
 	result->id = load_model->action->id;
@@ -57,6 +64,7 @@ void LoadModelFromDiskAction::LoadModelFromDiskTaskImpl::success(RuntimeModel* r
 	result->input_size = rm->model->input_size(1);
 	result->output_size = rm->model->output_size(1);
 	result->supported_batch_sizes = rm->model->implemented_batch_sizes();
+	result->copies_created = load_model->action->no_of_copies;
 	result->weights_load_time_nanos = rm->model->transfer_measurement;
 	for (auto &p : rm->model->models) {
 		result->batch_size_exec_times_nanos.push_back(p.second->exec_measurement);

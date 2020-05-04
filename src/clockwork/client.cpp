@@ -26,8 +26,10 @@ public:
 	virtual std::future<Model *> get_model_async(int model_id);
 	virtual Model *upload_model(std::vector<uint8_t> &serialized_model);
 	virtual std::future<Model *> upload_model_async(std::vector<uint8_t> &serialized_model);
-	virtual Model *load_remote_model(std::string model_path);
+	virtual Model* load_remote_model(std::string model_path);
 	virtual std::future<Model *> load_remote_model_async(std::string model_path);
+	virtual std::vector<Model*> load_remote_models(std::string model_path, int no_of_copies);
+	virtual std::future<std::vector<Model *>> load_remote_models_async(std::string model_path, int no_of_copies);
 	virtual ModelSet ls();
 	virtual std::future<ModelSet> ls_async();
 };
@@ -102,19 +104,30 @@ std::future<Model *> NetworkClient::upload_model_async(std::vector<uint8_t> &ser
 	return promise->get_future();
 }
 
-Model *NetworkClient::load_remote_model(std::string model_path)
-{
+Model* NetworkClient::load_remote_model(std::string model_path) {
 	return load_remote_model_async(model_path).get();
 }
 
-std::future<Model *> NetworkClient::load_remote_model_async(std::string model_path)
-{
+std::future<Model *> NetworkClient::load_remote_model_async(std::string model_path) {
 	auto promise = std::make_shared<std::promise<Model *>>();
+	promise->set_value(load_remote_models_async(model_path, 1).get()[0]);
+	return promise->get_future();
+}
+
+std::vector<Model*> NetworkClient::load_remote_models(std::string model_path, int no_of_copies)
+{
+	return load_remote_models_async(model_path, no_of_copies).get();
+}
+
+std::future<std::vector<Model *>> NetworkClient::load_remote_models_async(std::string model_path, int no_of_copies)
+{
+	auto promise = std::make_shared<std::promise<std::vector<Model *>>>();
 
 	clientapi::LoadModelFromRemoteDiskRequest load_model;
 	load_model.header.user_id = 0;
 	load_model.header.user_request_id = request_id_seed++;
 	load_model.remote_path = model_path;
+	load_model.no_of_copies = no_of_copies;
 
 	if (print) std::cout << "<--  " << load_model.str() << std::endl;
 
@@ -122,7 +135,10 @@ std::future<Model *> NetworkClient::load_remote_model_async(std::string model_pa
 		if (print) std::cout << " --> " << response.str() << std::endl;
 		if (response.header.status == clockworkSuccess)
 		{
-			promise->set_value(new ModelImpl(this, response.model_id, model_path, response.input_size, print));
+			std::vector<Model*> models = std::vector<Model*>();
+			for (int i = 0; i < response.copies_created; i++)
+				models.push_back(new ModelImpl(this, (response.model_id + i), model_path, response.input_size, print));
+			promise->set_value(models);
 		}
 		else if (response.header.status == clockworkInitializing)
 		{

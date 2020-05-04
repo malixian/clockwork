@@ -121,6 +121,7 @@ struct LSResponse {
 struct LoadModelFromRemoteDiskRequest {
 	RequestHeader header;
 	std::string remote_path;
+	int no_of_copies;
 
 	std::string str();
 };
@@ -129,6 +130,7 @@ struct LoadModelFromRemoteDiskRequest {
 struct LoadModelFromRemoteDiskResponse {
 	ResponseHeader header;
 	int model_id;
+	int copies_created;
 	size_t input_size;
 	size_t output_size;
 

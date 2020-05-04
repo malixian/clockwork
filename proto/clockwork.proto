@@ -72,6 +72,7 @@ message EvictRspProto {
 message LoadModelFromDiskReqProto {
   required RequestHeaderProto header = 1;
   required string remote_path = 2;
+  required int32 no_of_copies = 3;
 }
 
 message LoadModelFromDiskRspProto {
@@ -79,6 +80,7 @@ message LoadModelFromDiskRspProto {
   required uint32 model_id = 2;
   required uint64 input_size = 3;
   required uint64 output_size = 4;
+  required int32 copies_created = 5;
 }
 
 message LSReqProto {
@@ -133,6 +135,7 @@ message LoadModelFromDiskActionProto {
   required string model_path = 3;
   required uint64 earliest = 4;
   required uint64 latest = 5;
+  required int32 no_of_copies = 6;
 }
 
 message LoadModelFromDiskResultProto {
@@ -145,6 +148,7 @@ message LoadModelFromDiskResultProto {
   required uint32 num_weights_pages = 7;
   required uint64 weights_load_time_nanos = 8;
   repeated uint64 batch_size_exec_times_nanos = 9;
+  required int32 copies_created = 10;
 }
 
 message LoadWeightsActionProto {

@@ -5,6 +5,7 @@
 
 #include "clockwork/test/util.h"
 #include "clockwork/model/model.h"
+#include "clockwork/test/actions.h"
 #include <catch2/catch.hpp>
 
 using namespace clockwork::model;
@@ -280,3 +281,42 @@ TEST_CASE("Batched model produces correct output", "[e2e2] [model]") {
         REQUIRE(actualOutputF[i] == expectedOutputF[i]);
     }
 }
+
+TEST_CASE("Load multiple models", "[model]") {
+
+	auto clockwork = std::make_shared<ClockworkRuntimeWrapper>();
+    std::string path = clockwork::util::get_example_batched_model();
+	unsigned gpu_id = 0;
+	int copies = 5;
+	std::vector<BatchedModel*> batched_models = BatchedModel::loadMultipleFromDisk(path, gpu_id, copies);
+
+	assert(batched_models.size() == copies);
+	for (auto batched_model : batched_models){
+		batched_model->instantiate_models_on_host();
+		batched_model->instantiate_models_on_device();
+	}
+
+	for (int i = 0; i < copies; i ++) {
+		RuntimeModel* rm = new RuntimeModel(batched_models[i], gpu_id);
+		if (!clockwork->manager->models->put_if_absent(i, gpu_id, rm)) {
+			throw TaskError(actionErrorInvalidModelID, "LoadModelFromDiskTask specified ID that already exists");
+		}
+	}
+
+	int i = 0;
+	for (auto model : batched_models) {
+		TestLoadWeightsAction load_weights(clockwork.get(), load_weights_action(i));
+		load_weights.submit();
+		load_weights.await();
+		load_weights.check_success(true);
+
+		TestInferAction infer(clockwork.get(), infer_action(1, model));
+		infer.submit();
+		infer.await();
+		infer.check_success(true);
+		i++;
+	}
+
+}
+
+

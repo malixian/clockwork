@@ -93,12 +93,13 @@ class LoadModelFromDiskTask : public Task {
 private:
 	MemoryManager* manager;
 	uint64_t earliest, latest;
+	int no_of_copies;
 
 public:
 	int model_id;
 	std::string model_path;
 
-	LoadModelFromDiskTask(MemoryManager* manager, int model_id, std::string model_path, uint64_t earliest, uint64_t latest);
+	LoadModelFromDiskTask(MemoryManager* manager, int model_id, std::string model_path, uint64_t earliest, uint64_t latest, int no_of_copies = 1);
 	~LoadModelFromDiskTask();
 
 	// Task

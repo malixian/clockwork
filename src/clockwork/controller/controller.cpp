@@ -228,6 +228,7 @@ void LoadingStage::Pending::check_completion(ClockworkState &state) {
 		response.header.status = clockworkSuccess;
 		response.header.message = "";
 		response.model_id = model_id;
+		response.copies_created = loadresults[0]->copies_created;
 		response.input_size = loadresults[0]->input_size;
 		response.output_size = loadresults[0]->output_size;
 
@@ -303,13 +304,16 @@ LoadingStage::LoadingStage(ClockworkState &state, std::vector<network::controlle
 }
 
 void LoadingStage::on_request(std::shared_ptr<LoadModelRequest> &request) {
-	std::shared_ptr<Pending> p = std::make_shared<Pending>(model_id_seed++, request);
+	int id = model_id_seed;
+	model_id_seed += request->request.no_of_copies;
+	std::shared_ptr<Pending> p = std::make_shared<Pending>(id, request);
 
 	for (unsigned i = 0; i < workers.size(); i++) {
 		auto load_model = std::make_shared<workerapi::LoadModelFromDisk>();
 		load_model->id = action_id_seed++;
 		load_model->model_id = p->model_id;
 		load_model->model_path = request->request.remote_path;
+		load_model->no_of_copies = request->request.no_of_copies;
 		load_model->earliest = 0;
 		load_model->latest = ULONG_MAX;
 

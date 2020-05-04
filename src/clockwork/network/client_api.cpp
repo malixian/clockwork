@@ -117,11 +117,13 @@ void msg_ls_rsp_rx::get(clientapi::LSResponse &request) {
 void msg_load_remote_model_req_tx::set(clientapi::LoadModelFromRemoteDiskRequest &request) {
     set_header(request.header, msg.mutable_header());
     msg.set_remote_path(request.remote_path);
+    msg.set_no_of_copies(request.no_of_copies);
 }
 
 void msg_load_remote_model_req_rx::get(clientapi::LoadModelFromRemoteDiskRequest &request) {
     get_header(request.header, msg.header());
     request.remote_path = msg.remote_path();
+    request.no_of_copies = msg.no_of_copies();
 }
 
 void msg_load_remote_model_rsp_tx::set(clientapi::LoadModelFromRemoteDiskResponse &response) {
@@ -129,6 +131,7 @@ void msg_load_remote_model_rsp_tx::set(clientapi::LoadModelFromRemoteDiskRespons
     msg.set_model_id(response.model_id);
     msg.set_input_size(response.input_size);
     msg.set_output_size(response.output_size);
+    msg.set_copies_created(response.copies_created);
 }
 
 void msg_load_remote_model_rsp_rx::get(clientapi::LoadModelFromRemoteDiskResponse &response) {
@@ -136,6 +139,7 @@ void msg_load_remote_model_rsp_rx::get(clientapi::LoadModelFromRemoteDiskRespons
 	response.model_id = msg.model_id();
 	response.input_size = msg.input_size();
 	response.output_size = msg.output_size();
+	response.copies_created = msg.copies_created();
 }
 
 void msg_upload_model_req_tx::set(clientapi::UploadModelRequest &request) {

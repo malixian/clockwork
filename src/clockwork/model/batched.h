@@ -78,6 +78,7 @@ public:
 public:
 
 	static BatchedModel* loadFromDisk(std::string base_filename, unsigned gpu_id);
+	static std::vector<BatchedModel*> loadMultipleFromDisk(std::string base_filename, unsigned gpu_id, int num_copies);
 
 
 };

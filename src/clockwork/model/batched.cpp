@@ -234,5 +234,50 @@ BatchedModel* BatchedModel::loadFromDisk(std::string base_filename, unsigned gpu
 	return batched;
 }
 
+std::vector<BatchedModel*> BatchedModel::loadMultipleFromDisk(std::string base_filename, unsigned gpu_id, int num_copies) {
+
+	std::vector<BatchedModel*> batched_models;
+	BatchedModel* loaded_model = BatchedModel::loadFromDisk(base_filename, gpu_id);
+	batched_models.push_back(loaded_model);
+
+	if ( num_copies > 1) {
+		std::vector<std::pair<unsigned, model::Model*>> models = loaded_model->models;
+
+		void* mega_memory;
+		size_t mega_size = (size_t) loaded_model->weights_size * (num_copies - 1);
+		CUDA_CALL(cudaMallocHost(&mega_memory, mega_size));
+
+		int copies_so_far = 0;
+		for (int id = 1; id < num_copies; id++) {
+
+			std::vector<std::pair<unsigned, model::Model*>> duplicate_models;
+
+			size_t offset = (size_t) loaded_model->weights_size * copies_so_far;
+			char* weights_pinned_host_memory = static_cast<char*>(mega_memory) + offset;
+			std::memcpy(weights_pinned_host_memory, loaded_model->weights_pinned_host_memory, loaded_model->weights_size);
+			copies_so_far ++;
+
+			for (auto &p : models) {
+
+				Memfile so_memfile = Memfile::readFrom(p.second->so_memfile.filename);
+				std::string serialized_spec = p.second->serialized_spec;
+
+				model::Model* model = new model::Model(so_memfile, serialized_spec, p.second->weights_size,  static_cast<char*>(weights_pinned_host_memory), gpu_id);
+				model->exec_measurement = p.second->exec_measurement;
+
+				duplicate_models.push_back(std::make_pair(p.first, model));
+			}
+
+			model::BatchedModel* duplicate_model =  new model::BatchedModel( loaded_model->weights_size, static_cast<char*>(weights_pinned_host_memory), duplicate_models, gpu_id);
+			duplicate_model->transfer_measurement = loaded_model->transfer_measurement;
+
+
+			batched_models.push_back(duplicate_model);
+
+		}
+	}
+	return batched_models;
+}
+
 }
 }
