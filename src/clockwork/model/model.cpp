@@ -28,7 +28,7 @@ public:
 
 };
 
-thread_local PerGPULimiters exec_limiters(2, 5);
+thread_local PerGPULimiters exec_limiters(2, 20);
 thread_local PerGPULimiters transfer_limiters(2, 0);
 
 Model::Model(Memfile so_memfile, std::string &serialized_spec, int weights_size,

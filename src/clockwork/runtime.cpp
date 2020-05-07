@@ -69,8 +69,8 @@ void GPUExecutorShared::executorMain(unsigned executor_id, unsigned core) {
 	}
 
 	std::cout << TaskTypeName(type) << "-" << executor_id << " binding to core " << core << " with GPU priority " << priority << std::endl;
-	// util::set_core(core);
-	// util::setCurrentThreadMaxPriority();
+	util::set_core(core);
+	util::setCurrentThreadMaxPriority();
 
 	std::vector<cudaStream_t> streams;
 	for (unsigned gpu_id = 0; gpu_id < num_gpus; gpu_id++) {
@@ -124,7 +124,7 @@ GPUExecutorExclusive::GPUExecutorExclusive(TaskType type, std::vector<unsigned> 
 void GPUExecutorExclusive::executorMain(unsigned executor_id, unsigned core) {
 	std::cout << TaskTypeName(type) << "-" << executor_id << " binding to core " << core << std::endl;
 	util::set_core(core);
-	// util::setCurrentThreadMaxPriority();
+	util::setCurrentThreadMaxPriority();
 	util::initializeCudaStream(gpu_id);
 	cudaStream_t stream = util::Stream();
 
