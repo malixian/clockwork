@@ -178,7 +178,7 @@ LoadWeightsAction::~LoadWeightsAction() {
 
 void LoadWeightsAction::submit() {
 	task = new LoadWeightsTaskImpl(this);
-	runtime->weights_executor->enqueue(task);
+	runtime->weights_executors[action->gpu_id]->enqueue(task);
 }
 
 void LoadWeightsAction::handle_error(TaskError &error) {
@@ -261,7 +261,7 @@ void EvictWeightsAction::submit() {
 	task = new EvictWeightsTaskImpl(this);
 	// Rather than have an entire new executor for this, just for now
 	// use the outputs executor because it's never even close to full utilization
-	runtime->outputs_executor->enqueue(task);
+	runtime->outputs_executors[action->gpu_id]->enqueue(task);
 }
 
 void EvictWeightsAction::handle_error(TaskError &error) {
@@ -362,7 +362,7 @@ void InferAction::ExecTaskImpl::process_completion() {
 
 void InferAction::ExecTaskImpl::success() {
 	infer->copy_output = new CopyOutputTaskImpl(infer);
-	infer->runtime->outputs_executor->enqueue(infer->copy_output);
+	infer->runtime->outputs_executors[gpu_id]->enqueue(infer->copy_output);
 }
 
 void InferAction::ExecTaskImpl::cancel() {
@@ -424,7 +424,7 @@ InferAction::~InferAction() {
 
 void InferAction::submit() {
 	copy_input = new CopyInputTaskImpl(this);
-	runtime->inputs_executor->enqueue(copy_input);
+	runtime->inputs_executors[action->gpu_id]->enqueue(copy_input);
 }
 
 void InferAction::handle_completion(char* output) {
