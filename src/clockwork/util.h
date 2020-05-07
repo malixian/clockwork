@@ -27,6 +27,8 @@ unsigned get_num_cores();
 
 void set_core(unsigned core);
 
+void set_cores(std::vector<unsigned> cores);
+
 unsigned get_num_gpus();
 
 // Returns which cores the specified GPU has affinity with

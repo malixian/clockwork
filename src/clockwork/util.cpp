@@ -70,6 +70,19 @@ void set_core(unsigned core) {
   }
 }
 
+void set_cores(std::vector<unsigned> cores) {
+  CHECK(cores.size() > 0) << "Trying to bind to empty core set";
+  cpu_set_t cpuset;
+  CPU_ZERO(&cpuset);
+  for (unsigned core : cores) {
+    CPU_SET(core, &cpuset);
+  }
+  int rc = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+  if (rc != 0) {
+    std::cerr << "Error calling pthread_setaffinity_np: " << rc << "\n";
+  }
+}
+
 unsigned get_num_gpus() {
   nvmlReturn_t status;
 
@@ -87,7 +100,6 @@ unsigned get_num_gpus() {
 }
 
 std::vector<unsigned> get_gpu_core_affinity(unsigned deviceId) {
-
   unsigned len = (get_num_cores() + 63) / 64;
 
   std::vector<uint64_t> bitmaps(len);
