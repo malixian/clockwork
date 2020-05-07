@@ -40,7 +40,7 @@ std::string LoadWeights::str() {
 	std::stringstream ss;
 	ss << "A" << id << ":LoadWeights"
 	   << " model=" << model_id
-	   // << " gpu=" << gpu_id
+	   << " gpu=" << gpu_id
 	   << " " << window(earliest, latest);
 	return ss.str();
 }
@@ -58,8 +58,8 @@ std::string Infer::str() {
 	std::stringstream ss;
 	ss << "A" << id << ":Infer"
 	   << " model=" << model_id
-	   // << " gpu=" << gpu_id
-	   // << " batch=" << gpu_id
+	   << " gpu=" << gpu_id
+	   << " batch=" << gpu_id
 	   << " " << window(earliest, latest);
 	return ss.str();
 }

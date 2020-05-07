@@ -7,6 +7,8 @@ namespace worker {
 
 using asio::ip::tcp;
 
+bool verbose = false;
+
 
 class infer_action_rx_using_io_pool : public infer_action_rx {
 private:
@@ -169,7 +171,8 @@ void Connection::completed_receive(message_connection *tcp_conn, message_rx *req
 		load_model->get(*action);
 		actions.push_back(action);
 
-		std::cout << "Received " << actions[0]->str() << std::endl;
+		if (!verbose) std::cout << "Received " << actions[0]->str() << std::endl;
+
 	} else if (auto load_weights = dynamic_cast<load_weights_action_rx*>(req)) {
 		auto action = std::make_shared<workerapi::LoadWeights>();
 		load_weights->get(*action);
@@ -197,10 +200,12 @@ void Connection::completed_receive(message_connection *tcp_conn, message_rx *req
 		get_worker_state->get(*action);
 		actions.push_back(action);
 
-		std::cout << "Received " << actions[0]->str() << std::endl;
+		if (!verbose) std::cout << "Received " << actions[0]->str() << std::endl;
+
 	} else {
 		CHECK(false) << "Received an unsupported message_rx type";
 	}
+	if (verbose) std::cout << "Received " << actions[0]->str() << std::endl;
 
 	stats.total_pending++;
 
@@ -217,13 +222,14 @@ void Connection::aborted_transmit(message_connection *tcp_conn, message_tx *req)
 }
 
 void Connection::sendResult(std::shared_ptr<workerapi::Result> result) {
+	if (verbose) std::cout << "Sending " << result->str() << std::endl;
 	using namespace workerapi;
 	if (auto load_model = std::dynamic_pointer_cast<LoadModelFromDiskResult>(result)) {
 		auto tx = new load_model_from_disk_result_tx();
 		tx->set(*load_model);
 		msg_tx_.send_message(*tx);
 
-		std::cout << "Sending " << result->str() << std::endl;
+		if (!verbose) std::cout << "Sending " << result->str() << std::endl;
 	} else if (auto load_weights = std::dynamic_pointer_cast<LoadWeightsResult>(result)) {
 		auto tx = new load_weights_result_tx();
 		tx->set(*load_weights);
@@ -245,7 +251,7 @@ void Connection::sendResult(std::shared_ptr<workerapi::Result> result) {
 		tx->set(*get_worker_state);
 		msg_tx_.send_message(*tx);
 
-		std::cout << "Sending " << result->str() << std::endl;
+		if (!verbose) std::cout << "Sending " << result->str() << std::endl;
 	} else if (auto error = std::dynamic_pointer_cast<ErrorResult>(result)) {
 		auto tx = new error_result_tx();
 		tx->set(*error);
