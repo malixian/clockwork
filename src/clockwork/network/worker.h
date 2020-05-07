@@ -17,6 +17,15 @@ namespace worker {
 
 using asio::ip::tcp;
 
+class ConnectionStats {
+public:
+	std::atomic_uint64_t load;
+	std::atomic_uint64_t evict;
+	std::atomic_uint64_t infer;
+	std::atomic_uint64_t total_pending;
+	std::atomic_uint64_t errors;
+};
+
 /* Worker side of the Controller<>Worker API network impl.
 A connection to the Clockwork Controller */
 class Connection : public message_connection, public message_handler, public workerapi::Controller  {
@@ -24,11 +33,18 @@ private:
 	ClockworkWorker* worker;
 	message_sender msg_tx_;
 	std::function<void(void)> on_close;
+	std::atomic_bool alive;
+	ConnectionStats stats;
+	std::thread printer;
 
 public:
 	Connection(asio::io_service &io_service, ClockworkWorker* worker, std::function<void(void)> on_close);
 
+private:
+	void print();
+
 protected:
+
 	virtual message_rx *new_rx_message(message_connection *tcp_conn, uint64_t header_len,
 			uint64_t body_len, uint64_t msg_type, uint64_t msg_id);
 
@@ -40,6 +56,7 @@ protected:
 
 	virtual void aborted_transmit(message_connection *tcp_conn, message_tx *req);
 
+	virtual void ready();
 	virtual void closed();
 
 public:

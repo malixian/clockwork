@@ -46,7 +46,7 @@ public:
 
 	virtual void sendActions(std::vector<std::shared_ptr<workerapi::Action>> &actions);
 
-	void sendAction(std::shared_ptr<workerapi::Action> &action);
+	void sendAction(std::shared_ptr<workerapi::Action> action);
 
 };
 

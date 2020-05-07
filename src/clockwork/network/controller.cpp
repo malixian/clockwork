@@ -125,7 +125,7 @@ void WorkerConnection::sendActions(std::vector<std::shared_ptr<workerapi::Action
 	}
 }
 
-void WorkerConnection::sendAction(std::shared_ptr<workerapi::Action> &action) {
+void WorkerConnection::sendAction(std::shared_ptr<workerapi::Action> action) {
 	if (auto load_model = std::dynamic_pointer_cast<workerapi::LoadModelFromDisk>(action)) {
 		auto tx = new load_model_from_disk_action_tx();
 		tx->set(*load_model);

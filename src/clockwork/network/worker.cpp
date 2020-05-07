@@ -1,4 +1,5 @@
 #include "clockwork/network/worker.h"
+#include <sstream>
 
 namespace clockwork {
 namespace network {
@@ -69,8 +70,56 @@ Connection::Connection(asio::io_service &io_service, ClockworkWorker* worker, st
 		message_connection(io_service, *this),
 		msg_tx_(this, *this),
 		worker(worker),
-		on_close(on_close) {
+		on_close(on_close),
+		stats(),
+		alive(true) {
+}
 
+class StatTracker {
+public:
+	uint64_t previous_value = 0;
+	uint64_t update(std::atomic_uint64_t &counter) {
+		uint64_t current_value = counter.load();
+		uint64_t delta = current_value - previous_value;
+		previous_value = current_value;
+		return delta;
+	}
+};
+
+void Connection::print() {
+	uint64_t print_every = 10000000000UL; // 10s
+	uint64_t last_print = util::now();
+
+	StatTracker load;
+	StatTracker evict;
+	StatTracker infer;
+	StatTracker errors;
+
+	while (alive) {
+		uint64_t now = util::now();
+		if (last_print + print_every > now) {
+			usleep(200000); // 200ms sleep
+			continue;
+		}
+
+		uint64_t dload = load.update(stats.load);
+		uint64_t dinfer = infer.update(stats.infer);
+		uint64_t devict = evict.update(stats.evict);
+
+		uint64_t pending = stats.total_pending;
+		uint64_t derrors = errors.update(stats.errors);
+
+		std::stringstream s;
+		s << "LdWts=" << dload
+		  << "  Inf=" << dinfer
+		  << "  Evct=" << devict
+		  << "  || Total Pending=" << pending
+		  << "  Errors=" << derrors
+		  << std::endl;
+
+		std::cout << s.str();
+		last_print = now;
+	}
 }
 
 message_rx* Connection::new_rx_message(message_connection *tcp_conn, uint64_t header_len,
@@ -119,18 +168,26 @@ void Connection::completed_receive(message_connection *tcp_conn, message_rx *req
 		auto action = std::make_shared<workerapi::LoadModelFromDisk>();
 		load_model->get(*action);
 		actions.push_back(action);
+
+		std::cout << "Received " << actions[0]->str() << std::endl;
 	} else if (auto load_weights = dynamic_cast<load_weights_action_rx*>(req)) {
 		auto action = std::make_shared<workerapi::LoadWeights>();
 		load_weights->get(*action);
 		actions.push_back(action);
+
+		stats.load++;
 	} else if (auto infer = dynamic_cast<infer_action_rx_using_io_pool*>(req)) {
 		auto action = std::make_shared<InferUsingIOPool>(worker->runtime->manager->host_io_pool);
 		infer->get(*action);
 		actions.push_back(action);
+
+		stats.infer++;
 	} else if (auto evict = dynamic_cast<evict_weights_action_rx*>(req)) {
 		auto action = std::make_shared<workerapi::EvictWeights>();
 		evict->get(*action);
 		actions.push_back(action);
+
+		stats.evict++;
 	} else if (auto clear_cache = dynamic_cast<clear_cache_action_rx*>(req)) {
 		auto action = std::make_shared<workerapi::ClearCache>();
 		clear_cache->get(*action);
@@ -139,11 +196,13 @@ void Connection::completed_receive(message_connection *tcp_conn, message_rx *req
 		auto action = std::make_shared<workerapi::GetWorkerState>();
 		get_worker_state->get(*action);
 		actions.push_back(action);
+
+		std::cout << "Received " << actions[0]->str() << std::endl;
 	} else {
 		CHECK(false) << "Received an unsupported message_rx type";
 	}
 
-	std::cout << "Received " << actions[0]->str() << std::endl;
+	stats.total_pending++;
 
 	delete req;
 	worker->sendActions(actions);
@@ -158,13 +217,13 @@ void Connection::aborted_transmit(message_connection *tcp_conn, message_tx *req)
 }
 
 void Connection::sendResult(std::shared_ptr<workerapi::Result> result) {
-	std::cout << "Sending " << result->str() << std::endl;
-
 	using namespace workerapi;
 	if (auto load_model = std::dynamic_pointer_cast<LoadModelFromDiskResult>(result)) {
 		auto tx = new load_model_from_disk_result_tx();
 		tx->set(*load_model);
 		msg_tx_.send_message(*tx);
+
+		std::cout << "Sending " << result->str() << std::endl;
 	} else if (auto load_weights = std::dynamic_pointer_cast<LoadWeightsResult>(result)) {
 		auto tx = new load_weights_result_tx();
 		tx->set(*load_weights);
@@ -185,16 +244,27 @@ void Connection::sendResult(std::shared_ptr<workerapi::Result> result) {
 		auto tx = new get_worker_state_result_tx();
 		tx->set(*get_worker_state);
 		msg_tx_.send_message(*tx);
+
+		std::cout << "Sending " << result->str() << std::endl;
 	} else if (auto error = std::dynamic_pointer_cast<ErrorResult>(result)) {
 		auto tx = new error_result_tx();
 		tx->set(*error);
 		msg_tx_.send_message(*tx);
+
+		stats.errors++;
 	} else {
 		CHECK(false) << "Sending an unsupported result type";
 	}
+
+	stats.total_pending--;
+}
+
+void Connection::ready() {
+	this->printer = std::thread(&Connection::print, this);
 }
 
 void Connection::closed() {
+	alive = false;
 	this->on_close();
 }
 
