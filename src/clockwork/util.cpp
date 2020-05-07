@@ -226,6 +226,10 @@ void initializeCudaStream(unsigned gpu_id, int priority) {
   cudaStream_t stream;  
   CUDA_CALL(cudaStreamCreateWithPriority(&stream, cudaStreamNonBlocking, priority));
   SetStream(stream);
+
+  // int least, greatest;
+  // CUDA_CALL(cudaDeviceGetStreamPriorityRange(&least, &greatest));
+  // std::cout << "Priority range: " << least << " to " << greatest << std::endl;
 }
 
 void SetStream(cudaStream_t stream) {

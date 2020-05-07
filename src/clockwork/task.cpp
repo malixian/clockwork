@@ -182,10 +182,14 @@ void LoadWeightsTask::run(cudaStream_t stream) {
 	if (this->new_weights == nullptr) {
 		throw TaskError(actionErrorRuntimeError, "LoadWeightsTask failed to allocate pages from cache");
 	}
+	
+	// This is here because when the load weights executor is completely saturated, CUDA has a strange starvation issue with the CopyInput executor
+	CUDA_CALL(cudaStreamSynchronize(stream));
 
 	this->record_async_begin(stream);
 	rm->model->transfer_weights_to_device(new_weights->page_pointers, stream);
 	this->record_async_end(stream);
+
 }
 
 void LoadWeightsTask::process_completion() {
@@ -368,7 +372,6 @@ void ExecTask::run(cudaStream_t stream) {
 	this->workspace_memory = manager->workspace_pools[gpu_id]->alloc(workspace_size);
 
 	if (this->workspace_memory == nullptr) {
-		std::cout << "Trying to alloc " << workspace_size << " from " << manager->workspace_pools[0]->size << std::endl;
 		throw TaskError(actionErrorRuntimeError, "ExecTask failed to allocate memory from workspace_pool");
 	}
 

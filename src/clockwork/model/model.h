@@ -10,10 +10,6 @@
 #include "clockwork/util.h"
 #include "clockwork/cuda_common.h"
 
-#define MAX_OUTSTANDING_EVENTS 16
-#define MAX_OUTSTANDING_EXEC_EVENTS 16
-#define MAX_OUTSTANDING_MEMCPY_EVENTS 2
-
 namespace clockwork{
 namespace model {
 
@@ -39,7 +35,7 @@ public:
 	}
 
 	void limit(cudaStream_t stream) {
-		if (count++ == skip) {
+		if (count++ >= skip) {
 			CUDA_CALL(cudaEventSynchronize(events[position]));
 			CUDA_CALL(cudaEventRecord(events[position], stream));
 

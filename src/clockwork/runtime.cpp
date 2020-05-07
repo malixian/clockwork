@@ -29,7 +29,7 @@ CPUExecutor::CPUExecutor(TaskType type, std::vector<unsigned> cores) : BaseExecu
 
 void CPUExecutor::executorMain(unsigned executor_id, unsigned core) {
 	std::cout << TaskTypeName(type) << "-" << executor_id << " binding to core " << core << std::endl;
-	// util::set_core(core);
+	util::set_core(core);
 	// util::setCurrentThreadMaxPriority();
 
 	while (alive.load()) {
@@ -63,11 +63,15 @@ GPUExecutorShared::GPUExecutorShared(TaskType type, std::vector<unsigned> cores,
 }
 
 void GPUExecutorShared::executorMain(unsigned executor_id, unsigned core) {
-	std::cout << TaskTypeName(type) << "-" << executor_id << " binding to core " << core << std::endl;
+	int priority = 0;
+	if (type==TaskType::PCIe_H2D_Inputs || type==TaskType::PCIe_D2H_Output) {
+		priority = -1;
+	}
+
+	std::cout << TaskTypeName(type) << "-" << executor_id << " binding to core " << core << " with GPU priority " << priority << std::endl;
 	// util::set_core(core);
 	// util::setCurrentThreadMaxPriority();
 
-	unsigned priority = 0;
 	std::vector<cudaStream_t> streams;
 	for (unsigned gpu_id = 0; gpu_id < num_gpus; gpu_id++) {
 		cudaStream_t stream;
@@ -119,7 +123,7 @@ GPUExecutorExclusive::GPUExecutorExclusive(TaskType type, std::vector<unsigned> 
 
 void GPUExecutorExclusive::executorMain(unsigned executor_id, unsigned core) {
 	std::cout << TaskTypeName(type) << "-" << executor_id << " binding to core " << core << std::endl;
-	// util::set_core(core);
+	util::set_core(core);
 	// util::setCurrentThreadMaxPriority();
 	util::initializeCudaStream(gpu_id);
 	cudaStream_t stream = util::Stream();
@@ -170,7 +174,7 @@ void AsyncTaskChecker::join() {
 
 void AsyncTaskChecker::executorMain(unsigned executor_id, unsigned core) {
 	std::cout << "Checker-" << executor_id << " binding to core " << core << std::endl;
-	// util::set_core(core);
+	util::set_core(core);
 	// util::setCurrentThreadMaxPriority();
 	//util::initializeCudaStream(GPU_ID_0); // TODO Is this call necessary?
 
