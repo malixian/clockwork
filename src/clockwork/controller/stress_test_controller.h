@@ -44,8 +44,8 @@ public:
 class StressTestController : public Controller {
 public:
 	std::string model_path = "/home/jcmace/clockwork-modelzoo-volta/resnet50_v2/model";
-	unsigned duplicates = 100;
-	unsigned max_models_on_gpu = 50;
+	unsigned duplicates = 2000;
+	unsigned max_models_on_gpu = 200;
 	size_t input_size = 602112;
 	char* input;
 

@@ -26,8 +26,8 @@ std::string nowString();
 unsigned get_num_cores();
 
 void set_core(unsigned core);
-
 void set_cores(std::vector<unsigned> cores);
+void set_all_cores();
 
 unsigned get_num_gpus();
 
@@ -41,6 +41,10 @@ std::string getGPUmodel(int deviceNumber);
 extern "C" char* getGPUModelToBuffer(int deviceNumber, char* buf);
 
 void setCurrentThreadMaxPriority();
+void unsetCurrentThreadMaxPriority();
+bool isCurrentThreadMaxPriority();
+
+void printCudaVersion();
 
 
 void readFileAsString(const std::string &filename, std::string &dst);

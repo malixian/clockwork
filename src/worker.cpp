@@ -7,6 +7,7 @@
 
 int main(int argc, char *argv[]) {
 	util::setCudaFlags();
+	util::printCudaVersion();
 
 	std::cout << "Starting Clockwork Worker" << std::endl;
 

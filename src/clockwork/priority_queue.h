@@ -6,6 +6,7 @@
 #include <condition_variable>
 #include <queue>
 #include "tbb/concurrent_queue.h"
+#include <thread>
 
 namespace clockwork {
 
@@ -69,7 +70,7 @@ public:
 
 	T* dequeue() {
 		T* element = nullptr;
-		while (alive && !try_dequeue(element));
+		while (alive && !try_dequeue(element)) usleep(1);
 		return element;
 	}
 

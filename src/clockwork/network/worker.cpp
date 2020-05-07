@@ -1,4 +1,5 @@
 #include "clockwork/network/worker.h"
+#include "clockwork/util.h"
 #include <sstream>
 
 namespace clockwork {
@@ -89,6 +90,7 @@ public:
 };
 
 void Connection::print() {
+	util::unsetCurrentThreadMaxPriority();
 	uint64_t print_every = 10000000000UL; // 10s
 	uint64_t last_print = util::now();
 
@@ -296,6 +298,7 @@ void Server::join() {
 }
 
 void Server::run(int port) {
+	util::setCurrentThreadMaxPriority();
 	try {
 		auto endpoint = tcp::endpoint(tcp::v4(), port);
 		is_started.store(true);

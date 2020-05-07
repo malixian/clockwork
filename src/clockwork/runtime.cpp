@@ -29,7 +29,7 @@ CPUExecutor::CPUExecutor(TaskType type, std::vector<unsigned> cores) : BaseExecu
 
 void CPUExecutor::executorMain(unsigned executor_id, unsigned core) {
 	std::cout << TaskTypeName(type) << "-" << executor_id << " binding to core " << core << std::endl;
-	util::set_core(core);
+	// util::set_core(core);
 	// util::setCurrentThreadMaxPriority();
 
 	while (alive.load()) {
@@ -69,7 +69,7 @@ void GPUExecutorShared::executorMain(unsigned executor_id, unsigned core) {
 	}
 
 	std::cout << TaskTypeName(type) << "-" << executor_id << " binding to core " << core << " with GPU priority " << priority << std::endl;
-	util::set_core(core);
+	// util::set_core(core);
 	util::setCurrentThreadMaxPriority();
 
 	std::vector<cudaStream_t> streams;
@@ -122,11 +122,13 @@ GPUExecutorExclusive::GPUExecutorExclusive(TaskType type, std::vector<unsigned> 
 }
 
 void GPUExecutorExclusive::executorMain(unsigned executor_id, unsigned core) {
-	std::cout << TaskTypeName(type) << "-" << executor_id << " binding to core " << core << std::endl;
-	util::set_core(core);
+	std::cout << TaskTypeName(type) << "-" << executor_id << "(GPU " << gpu_id << ") binding to core " << core << std::endl;
+	// util::set_core(core);
 	util::setCurrentThreadMaxPriority();
 	util::initializeCudaStream(gpu_id);
 	cudaStream_t stream = util::Stream();
+
+
 
 	while (alive.load()) {
 		// TODO: possibility off too many outstanding asyc tasks
@@ -137,6 +139,7 @@ void GPUExecutorExclusive::executorMain(unsigned executor_id, unsigned core) {
 		Task* next = queue.dequeue();
 
 		if (next != nullptr) {
+			// util::setCurrentThreadMaxPriority();
 			auto telemetry = next->telemetry;
 
 			telemetry->dequeued = util::hrt();
@@ -174,8 +177,8 @@ void AsyncTaskChecker::join() {
 
 void AsyncTaskChecker::executorMain(unsigned executor_id, unsigned core) {
 	std::cout << "Checker-" << executor_id << " binding to core " << core << std::endl;
-	util::set_core(core);
-	// util::setCurrentThreadMaxPriority();
+	// util::set_core(core);
+	util::setCurrentThreadMaxPriority();
 	//util::initializeCudaStream(GPU_ID_0); // TODO Is this call necessary?
 
 	std::vector<AsyncTask*> pending_tasks;
@@ -198,6 +201,7 @@ void AsyncTaskChecker::executorMain(unsigned executor_id, unsigned core) {
 		while (queue.try_pop(next)) {
 			pending_tasks.push_back(next);
 		}
+		usleep(1);
 	}
 }
 
@@ -207,11 +211,11 @@ void ClockworkRuntime::shutdown(bool await_completion) {
 	new tasks, and cancel tasks that haven't been started yet
 	*/
 	load_model_executor->shutdown();
-	weights_executor->shutdown();
-	inputs_executor->shutdown();
-	outputs_executor->shutdown();
 	for (unsigned gpu_id = 0; gpu_id < num_gpus; gpu_id++) {
 		gpu_executors[gpu_id]->shutdown();
+		weights_executors[gpu_id]->shutdown();
+		inputs_executors[gpu_id]->shutdown();
+		outputs_executors[gpu_id]->shutdown();
 	}
 
 	if (await_completion) {
@@ -224,11 +228,11 @@ void ClockworkRuntime::join() {
 	Wait for executors to be finished
 	*/
 	load_model_executor->join();
-	weights_executor->join();
-	inputs_executor->join();
-	outputs_executor->join();
 	for (unsigned gpu_id = 0; gpu_id < num_gpus; gpu_id++) {
 		gpu_executors[gpu_id]->join();
+		weights_executors[gpu_id]->join();
+		inputs_executors[gpu_id]->join();
+		outputs_executors[gpu_id]->join();
 	}
 
 	/*

@@ -34,7 +34,7 @@ public:
 	const TaskType type;
 	std::atomic_bool alive;
 	std::vector<std::thread> threads;
-	time_release_priority_queue<Task> queue;
+	single_reader_priority_queue<Task> queue;
 
 	BaseExecutor(TaskType type) : type(type), alive(true) {}
 
@@ -98,9 +98,9 @@ public:
 
 	CPUExecutor* load_model_executor;	// Type 0
 
-	GPUExecutorShared* weights_executor;	// Type 1
-	GPUExecutorShared* inputs_executor;		// Type 2
-	GPUExecutorShared* outputs_executor;	// Type 4
+	std::vector<GPUExecutorExclusive*> weights_executors;	// Type 1
+	std::vector<GPUExecutorExclusive*> inputs_executors;		// Type 2
+	std::vector<GPUExecutorExclusive*> outputs_executors;	// Type 4
 
 	AsyncTaskChecker* checker;
 
@@ -121,9 +121,6 @@ public:
 	virtual ~ClockworkRuntime() {
 		delete manager;
 		delete load_model_executor;
-		delete weights_executor;
-		delete inputs_executor;
-		delete outputs_executor;
 		delete checker;
 
 		task_telemetry_logger->shutdown(true);
@@ -131,6 +128,9 @@ public:
 
 		for (unsigned gpu_id = 0; gpu_id < num_gpus; gpu_id++) {
 			delete gpu_executors[gpu_id];
+			delete weights_executors[gpu_id];
+			delete inputs_executors[gpu_id];
+			delete outputs_executors[gpu_id];
 		}
 	}
 
@@ -186,12 +186,12 @@ protected:
 			event_pools.push_back(new CudaEventPool(gpu_id));
 			
 			gpu_executors.push_back(new GPUExecutorExclusive(GPU, {cores.acquire(gpu_id)}, gpu_id)); // Type 3
+			weights_executors.push_back(new GPUExecutorExclusive(PCIe_H2D_Weights, {cores.acquire(gpu_id)}, gpu_id)); // Type 1
+			inputs_executors.push_back(new GPUExecutorExclusive(PCIe_H2D_Inputs, {cores.acquire(gpu_id)}, gpu_id)); // Type 2
+			outputs_executors.push_back(new GPUExecutorExclusive(PCIe_D2H_Output, {cores.acquire(gpu_id)}, gpu_id)); // Type 4
 
 			if (gpu_id == 0) {
 				load_model_executor = new CPUExecutor(CPU, {cores.acquire(gpu_id)}); // Type 0
-				weights_executor = new GPUExecutorShared(PCIe_H2D_Weights, {cores.acquire(gpu_id)}, num_gpus);	// Type 1
-				inputs_executor = new GPUExecutorShared(PCIe_H2D_Inputs, {cores.acquire(gpu_id)}, num_gpus);	// Type 2
-				outputs_executor = new GPUExecutorShared(PCIe_D2H_Output, {cores.acquire(gpu_id)}, num_gpus);	// Type 4
 				checker = new AsyncTaskChecker({cores.acquire(gpu_id)});
 			}
 		}

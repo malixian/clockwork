@@ -61,13 +61,13 @@ unsigned get_num_cores() {
 }
 
 void set_core(unsigned core) {
-  cpu_set_t cpuset;
-  CPU_ZERO(&cpuset);
-  CPU_SET(core, &cpuset);
-  int rc = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
-  if (rc != 0) {
-    std::cerr << "Error calling pthread_setaffinity_np: " << rc << "\n";
-  }
+  // cpu_set_t cpuset;
+  // CPU_ZERO(&cpuset);
+  // CPU_SET(core, &cpuset);
+  // int rc = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+  // if (rc != 0) {
+  //   std::cerr << "Error calling pthread_setaffinity_np: " << rc << "\n";
+  // }
 }
 
 void set_cores(std::vector<unsigned> cores) {
@@ -81,6 +81,19 @@ void set_cores(std::vector<unsigned> cores) {
   if (rc != 0) {
     std::cerr << "Error calling pthread_setaffinity_np: " << rc << "\n";
   }
+}
+
+void set_all_cores() {
+  cpu_set_t cpuset;
+  CPU_ZERO(&cpuset);
+  unsigned core_count = get_num_cores();
+  for (unsigned i = 0; i < core_count; i++) {
+    CPU_SET(i, &cpuset);
+  }
+  int rc = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+  if (rc != 0) {
+    std::cerr << "Error calling pthread_setaffinity_np: " << rc << "\n";
+  }  
 }
 
 unsigned get_num_gpus() {
@@ -169,8 +182,8 @@ void setCurrentThreadMaxPriority() {
   pthread_t thId = pthread_self();
   
   struct sched_param params;
-  params.sched_priority = sched_get_priority_max(SCHED_RR);
-  int ret = pthread_setschedparam(thId, SCHED_RR, &params);
+  params.sched_priority = sched_get_priority_max(SCHED_FIFO);
+  int ret = pthread_setschedparam(thId, SCHED_FIFO, &params);
   if (ret != 0) {
     std::cout << "Warning!  Cannot set thread priority.  Don't forget to set rtprio unlimited in limits.conf.  See README for details." << std::endl;
     return;
@@ -179,7 +192,35 @@ void setCurrentThreadMaxPriority() {
   int policy = 0;
   ret = pthread_getschedparam(thId, &policy, &params);
   CHECK(ret == 0) << "Could not retrieve thread scheduler parameters for setting thread priority";
-  CHECK(policy == SCHED_RR) << "Inconsistent thread scheduler parameters encountered";
+  CHECK(policy == SCHED_FIFO) << "Inconsistent thread scheduler parameters encountered";
+}
+
+void unsetCurrentThreadMaxPriority() {
+  pthread_t thId = pthread_self();
+  
+  struct sched_param params;
+  params.sched_priority = 0;
+  int ret = pthread_setschedparam(thId, SCHED_OTHER, &params);
+  if (ret != 0) {
+    std::cout << "Warning!  Cannot set thread priority.  Don't forget to set rtprio unlimited in limits.conf.  See README for details." << std::endl;
+    return;
+  }
+
+  int policy = 0;
+  ret = pthread_getschedparam(thId, &policy, &params);
+  CHECK(ret == 0) << "Could not retrieve thread scheduler parameters for setting thread priority";
+  CHECK(policy == SCHED_OTHER) << "Inconsistent thread scheduler parameters encountered";
+
+}
+
+bool isCurrentThreadMaxPriority() {
+  pthread_t thId = pthread_self();
+  struct sched_param params;
+  int policy;
+
+  int ret = pthread_getschedparam(thId, &policy, &params);
+  CHECK(ret == 0) << "Could not retrieve thread scheduler parameters for setting thread priority";
+  return policy == SCHED_FIFO && params.sched_priority == sched_get_priority_max(SCHED_FIFO);
 }
 
 
@@ -256,6 +297,14 @@ std::string get_example_model_path(std::string model_name)
 
 std::string get_example_model_path(std::string clockwork_directory, std::string model_name) {
   return clockwork_directory + "/resources/" + model_name + "/model";
+}
+
+void printCudaVersion() {
+  int driverVersion;
+  cudaDriverGetVersion(&driverVersion);
+  int runtimeVersion;
+  cudaRuntimeGetVersion(&runtimeVersion);
+  std::cout << "Using CUDA Driver " << driverVersion << " Runtime " << runtimeVersion << std::endl;
 }
 
 }
