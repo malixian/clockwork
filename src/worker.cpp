@@ -2,9 +2,12 @@
 #include "clockwork/network/worker.h"
 #include "clockwork/runtime.h"
 #include "clockwork/config.h"
+#include "clockwork/worker.h"
 
 
 int main(int argc, char *argv[]) {
+	util::setCudaFlags();
+
 	std::cout << "Starting Clockwork Worker" << std::endl;
 
 	std::string config_file_path;
