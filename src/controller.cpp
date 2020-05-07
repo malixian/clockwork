@@ -1,6 +1,7 @@
 #include "clockwork/network/controller.h"
 #include "clockwork/controller/direct_controller.h"
 #include "clockwork/controller/closed_loop_controller.h"
+#include "clockwork/controller/stress_test_controller.h"
 
 
 using namespace clockwork;
@@ -9,7 +10,7 @@ int main(int argc, char *argv[]) {
 	std::cout << "Starting Clockwork Controller" << std::endl;
 
 	if ( argc < 4) {
-		std::cerr << "USAGE ./controller [CLOSED_LOOP/DIRECT] MAX_BATCH_SIZE worker1:port1 worker2:port2 ..." << std::endl;
+		std::cerr << "USAGE ./controller [CLOSED_LOOP/DIRECT/STRESS/ECHO] MAX_BATCH_SIZE worker1:port1 worker2:port2 ..." << std::endl;
 		return 1;
 	}
 	
@@ -34,6 +35,9 @@ int main(int argc, char *argv[]) {
 		controller->join();
 	} else if (controller_type == "DIRECT") {
 		DirectControllerImpl* controller = new DirectControllerImpl(client_requests_listen_port, worker_host_port_pairs);
+		controller->join();
+	} else if (controller_type == "STRESS") {
+		StressTestController* controller = new StressTestController(client_requests_listen_port, worker_host_port_pairs);
 		controller->join();
 	} else if (controller_type == "ECHO") {
 		Scheduler* scheduler = new EchoScheduler();
