@@ -29,6 +29,7 @@ include_directories(
 	/usr/local/cuda/include
 	${Boost_INCLUDE_DIR}
 	${CMAKE_CURRENT_BINARY_DIR}
+	$ENV{GUROBI_HOME}/include
 )
 
 link_directories(
@@ -36,6 +37,7 @@ link_directories(
 	$ENV{TVM_HOME}/3rdparty/dmlc-core/build
 	/usr/local/cuda/lib64
 	/usr/lib/x86_64-linux-gnu/nvidia/current
+	$ENV{GUROBI_HOME}/lib
 )
 
 
@@ -94,6 +96,8 @@ target_link_libraries( clockwork PUBLIC
 	nvidia-ml
 	config++
 	rt
+	gurobi_c++
+	gurobi90
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
@@ -261,6 +265,8 @@ target_link_libraries(
     cuda
     cudart
     tvm_runtime
+	gurobi_c++
+	gurobi90
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
