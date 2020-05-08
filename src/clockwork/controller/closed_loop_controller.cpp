@@ -120,6 +120,7 @@ void ClosedLoopControllerImpl::load_example_model() {
 		int model_id = ClosedLoopControllerImpl::model_id_seed++;
 		auto load_model = std::make_shared<workerapi::LoadModelFromDisk>();
 		load_model->model_id = model_id;
+		load_model->no_of_copies = 1;
 		load_model->model_path = util::get_example_model_path();
 		load_model->earliest = 0;
 		load_model->latest = util::now() + 100000000000UL;
@@ -171,6 +172,7 @@ void ClosedLoopControllerImpl::loadRemoteModel(clientapi::LoadModelFromRemoteDis
 		load_model->id = action_id;
 		load_model->model_id = model_id;
 		load_model->model_path = util::get_example_model_path();
+		load_model->no_of_copies = 1;
 		load_model->earliest = 0;
 		load_model->latest = util::now() + 10000000000UL;
 
