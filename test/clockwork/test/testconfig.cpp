@@ -78,6 +78,8 @@ TEST_CASE("Missing default config file", "[config]") {
 	}
 
 	REQUIRE(exceptions == 1);
+
+	restore_default_config();
 }
 
 
@@ -136,6 +138,8 @@ TEST_CASE("Malformed user config file", "[config]") {
 	if(exceptions == 0)
 		delete worker_config;
 
+	restore_default_config();
+
 }
 
 
@@ -172,6 +176,6 @@ TEST_CASE("Overriding a default value", "[config]") {
 	REQUIRE(worker_config->weights_cache_size == 12345L);
 
 	delete worker_config;
-	
+
 	restore_default_config();
 }
