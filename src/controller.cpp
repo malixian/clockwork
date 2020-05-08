@@ -84,8 +84,8 @@ public:
   RequestOnWorker(Request* req, Worker* worker, std::string name) : req(req), worker(worker), name(name) {
   }
   void addToModel(GRBModel &model, float size) {
-    var = model.addVar(0.0, 1.0, 1.0, GRB_BINARY);
-    if (ran) var.set(GRB_DoubleAttr_Start, 1.0);
+    var = model.addVar(0.0, 1.0, 0, GRB_BINARY);
+    // if (ran) var.set(GRB_DoubleAttr_Start, 1.0);
   }
   void printIfAssigned(float size) {
     if (var.get(GRB_DoubleAttr_X) == 1.0) {
@@ -126,7 +126,7 @@ public:
       }
       std::stringstream s;
       s << "Execute Request " << queue[i]->req->id << " on Worker " << id;
-      model.addConstr(expr <= (queue[i]->req->deadline + queue[i]->req->size), s.str());
+      model.addConstr(expr <= queue[i]->req->deadline, s.str());
     }
   }
 };
@@ -189,7 +189,7 @@ public:
     GRBLinExpr obj = 0;
     for (RequestOnWorker* rw : instances) {
       rw->addToModel(model, rw->req->size);
-      obj += rw->var;
+      obj += rw->var * rw->req->size;
     }
     for (Request* r : requests) {
       r->addToModel(model);
@@ -197,7 +197,7 @@ public:
     for (Worker* w : workers) {
       w->addToModel(model);
     }
-    // model.setObjective(obj, GRB_MAXIMIZE);
+    model.setObjective(obj, GRB_MAXIMIZE);
   }
 
   void printAssignments() {
@@ -248,7 +248,7 @@ main(int   argc,
     float size_min = 1;
     float size_max = 9;
     int num_workers = 24;
-    int num_requests = 100;
+    int num_requests = 1000;
 
     float load = (num_requests * ((size_max - size_min) / 2.0)) / ((deadline_max - deadline_min) * num_workers);
 
@@ -260,9 +260,6 @@ main(int   argc,
       clockwork.addWorker();
     }
 
-    for (unsigned i = 0; i < num_workers; i++) {
-      clockwork.enqueue(80, 81, {i});
-    }
     for (unsigned i = 0; i < num_requests; i++) {
       std::vector<unsigned> workerids = assign(clockwork.workers.size());
       float deadline = deadline_min + i * (deadline_max - deadline_min) / num_requests;
@@ -284,8 +281,8 @@ main(int   argc,
     // model.set(GRB_IntParam_Presolve, 0);
     // model.set(GRB_DoubleParam_Heuristics, 0.5);
     // model.set(GRB_IntParam_StartNodeLimit, 2000000000);
-    model.set(GRB_IntAttr_ModelSense, GRB_MAXIMIZE);
-    model.set(GRB_DoubleParam_TimeLimit, 0.1);
+    // model.set(GRB_IntAttr_ModelSense, GRB_MAXIMIZE);
+    model.set(GRB_DoubleParam_TimeLimit, 1.0);
     // model.set(GRB_IntParam_MIPFocus, 3);
     // model.set(GRB_IntParam_SubMIPNodes, 10000);
     // model.set(GRB_DoubleAttr_Start, GRB_UNDEFINED);
