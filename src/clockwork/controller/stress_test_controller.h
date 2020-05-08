@@ -43,6 +43,9 @@ public:
 // Simple controller implementation that send requests to worker and wait for response
 class StressTestController : public Controller {
 public:
+	bool stress_infer = true;
+	bool stress_loadweights = true;
+
 	std::string model_path = "/home/jcmace/clockwork-modelzoo-volta/resnet50_v2/model";
 	unsigned duplicates = 2000;
 	unsigned max_models_on_gpu = 200;
@@ -338,9 +341,13 @@ public:
 		if (pending_workers > 0) return;
 
 		for (unsigned i = 0; i < gpus.size(); i++) {
-			while (evictNext(i));
+			if (stress_loadweights) {
+				while (evictNext(i));	
+			}
 			while (loadNext(i));
-			while (inferNext(i));
+			if (stress_infer) {
+				while (inferNext(i));
+			}
 		}
 	}
 
