@@ -380,6 +380,7 @@ std::map<unsigned, std::vector<BatchedModel*>> BatchedModel::loadMultipleFromDis
 					ptrs[i],
 					gpu_id
 				);
+				model->exec_measurement = d.exec_measurement;
 				models.push_back(std::make_pair(d.batch_size, model));
 			}
 
@@ -390,6 +391,7 @@ std::map<unsigned, std::vector<BatchedModel*>> BatchedModel::loadMultipleFromDis
 				gpu_id,
 				base_filename
 			);
+			batched->transfer_measurement = modeldata[0].weights_measurement;
 
 			gpuresults.push_back(batched);
 		}
