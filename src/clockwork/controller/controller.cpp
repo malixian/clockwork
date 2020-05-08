@@ -175,24 +175,26 @@ void LoadingStage::Pending::result_received(std::shared_ptr<workerapi::Result> r
 }
 
 void LoadingStage::Pending::add_to_state(ClockworkState &state, std::shared_ptr<workerapi::LoadModelFromDiskResult> result) {
-	BatchedModelState b;
-	b.id = model_id;
-	b.model_path = request->request.remote_path;
-	b.input_size = result->input_size;
-	b.output_size = result->output_size;
-	b.weights_size = result->weights_size_in_cache;
-	b.num_weights_pages = result->num_weights_pages;
-	b.weights_transfer_duration = result->weights_load_time_nanos;
-	b.supported_batch_sizes = result->supported_batch_sizes;
+	for (unsigned j = 0; j < result->copies_created; j++) {
+		BatchedModelState b;
+		b.id = model_id + j;
+		b.model_path = request->request.remote_path;
+		b.input_size = result->input_size;
+		b.output_size = result->output_size;
+		b.weights_size = result->weights_size_in_cache;
+		b.num_weights_pages = result->num_weights_pages;
+		b.weights_transfer_duration = result->weights_load_time_nanos;
+		b.supported_batch_sizes = result->supported_batch_sizes;
 
-	for (unsigned i = 0; i < result->supported_batch_sizes.size(); i++) {
-		auto batch_size = result->supported_batch_sizes[i];
-		auto duration = result->batch_size_exec_times_nanos[i];
-		b.exec_duration[batch_size] = duration;
+		for (unsigned i = 0; i < result->supported_batch_sizes.size(); i++) {
+			auto batch_size = result->supported_batch_sizes[i];
+			auto duration = result->batch_size_exec_times_nanos[i];
+			b.exec_duration[batch_size] = duration;
+		}
+
+		unsigned worker_id = action_worker_mapping[result->id];
+		state.workers[worker_id].models[model_id + j] = b;
 	}
-
-	unsigned worker_id = action_worker_mapping[result->id];
-	state.workers[worker_id].models[model_id] = b;
 }
 
 void LoadingStage::Pending::check_results(std::shared_ptr<workerapi::LoadModelFromDiskResult> a, std::shared_ptr<workerapi::LoadModelFromDiskResult> b) {
