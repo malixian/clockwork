@@ -281,3 +281,34 @@ target_link_libraries(
     ${Boost_FILESYSTEM_LIBRARY}
 )
 
+
+# Spams the client API
+add_executable (netclient src/network/netclient.cpp )
+target_link_libraries(
+    netclient
+	clockwork
+	clockwork_proto
+    Threads::Threads
+    dl
+    cuda
+    cudart
+    tvm_runtime
+    ${Boost_SYSTEM_LIBRARY}
+    ${Boost_FILESYSTEM_LIBRARY}
+)
+
+# Echo server for netclient
+add_executable (netcontroller src/network/netcontroller.cpp )
+target_link_libraries(
+    netcontroller
+	clockwork
+	clockwork_proto
+    Threads::Threads
+    dl
+    cuda
+    cudart
+    tvm_runtime
+    ${Boost_SYSTEM_LIBRARY}
+    ${Boost_FILESYSTEM_LIBRARY}
+)
+
