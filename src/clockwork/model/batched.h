@@ -2,6 +2,8 @@
 #define _CLOCKWORK_MODEL_BATCHED_H_
 
 #include "clockwork/model/model.h"
+#include <map>
+#include <vector>
 
 namespace clockwork {
 namespace model {
@@ -79,7 +81,7 @@ public:
 
 	static BatchedModel* loadFromDisk(std::string base_filename, unsigned gpu_id);
 	static std::vector<BatchedModel*> loadMultipleFromDisk(std::string base_filename, unsigned gpu_id, int num_copies);
-
+	static std::map<unsigned, std::vector<BatchedModel*>> loadMultipleFromDiskMultiGPU(std::string base_filename, std::vector<unsigned> gpu_ids, int num_copies);
 
 };
 

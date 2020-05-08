@@ -279,5 +279,124 @@ std::vector<BatchedModel*> BatchedModel::loadMultipleFromDisk(std::string base_f
 	return batched_models;
 }
 
+std::vector<char*> cudaMallocHostMultiple(std::string data, unsigned num_copies) {
+	size_t size = data.size();
+	std::vector<char*> ptrs(num_copies);
+	void* ptr;
+	size_t total_size = size * num_copies;
+	std::cout << "cudaMallocHost " << total_size << " (" << size << " x " << num_copies << ")" << std::endl;
+	CUDA_CALL(cudaMallocHost(&ptr, total_size));
+	for (unsigned i = 0; i < num_copies; i++) {
+		ptrs[i] = static_cast<char*>(ptr) + (size * i);
+		std::memcpy(ptrs[i], data.data(), size);
+	}
+	return ptrs;
+}
+
+struct ModelData {
+	unsigned batch_size;
+	std::string serialized_spec;
+	Memfile so_memfile;
+	uint64_t exec_measurement;
+	uint64_t weights_measurement;
+};
+
+std::vector<ModelData> loadModelData(std::string base_filename) {
+	std::vector<ModelData> modeldata;
+
+	for (unsigned batch_size = 1; ; batch_size *=2) {
+		std::stringstream batch_filename_base;
+		batch_filename_base << base_filename << "." << batch_size;
+
+		std::string so_filename = batch_filename_base.str() + ".so";
+		std::string clockwork_filename = batch_filename_base.str() + ".clockwork";
+
+		if (!util::exists(so_filename) || !util::exists(clockwork_filename)) {
+			break;
+		}
+
+		std::string serialized_spec;
+		util::readFileAsString(clockwork_filename, serialized_spec);
+
+		modeldata.push_back(ModelData{
+			batch_size,
+			serialized_spec,
+			Memfile::readFrom(so_filename),
+			0,
+			0
+		});
+	}
+
+	CHECK(modeldata.size() != 0) << "No valid batch sizes found for " << base_filename;
+
+	// Load measurements if they exist
+	try {
+		std::string measurements_file = base_filename + ".measurements";
+		libconfig::Config measurements;
+		measurements.readFile(measurements_file.c_str());
+
+		uint64_t weights_measurement;
+		lookupValue(measurements, "weights", weights_measurement);
+		for (auto &model : modeldata) {
+			std::stringstream key;
+			key << "b" << model.batch_size;
+			lookupValue(measurements, key.str(), model.exec_measurement);
+			model.weights_measurement = weights_measurement;
+		}
+	} catch (const libconfig::FileIOException& e) {
+		// No measurements file; just ignore and move on
+	}
+
+	return modeldata;
+}
+
+std::map<unsigned, std::vector<BatchedModel*>> BatchedModel::loadMultipleFromDiskMultiGPU(std::string base_filename, std::vector<unsigned> gpu_ids, int num_copies) {
+	std::string clockwork_weights_filename = base_filename + ".clockwork_params";
+
+	// Load shared weights
+	std::string weights;
+	util::readFileAsString(clockwork_weights_filename, weights);
+
+	// Load data for batch sizes
+	std::vector<ModelData> modeldata = loadModelData(base_filename);
+
+	// Malloc and duplicate the weights
+	std::vector<char*> ptrs = cudaMallocHostMultiple(weights, num_copies);
+
+	std::map<unsigned, std::vector<BatchedModel*>> results;
+
+
+	for (auto &gpu_id : gpu_ids) {
+		std::vector<BatchedModel*> &gpuresults = results[gpu_id];
+		for (unsigned i = 0; i < num_copies; i++) {
+
+			std::vector<std::pair<unsigned, model::Model*>> models;
+
+			for (ModelData &d : modeldata) {
+				auto model = new model::Model(
+					Memfile::readFrom(d.so_memfile.filename), 
+					d.serialized_spec,
+					weights.size(),
+					ptrs[i],
+					gpu_id
+				);
+				models.push_back(std::make_pair(d.batch_size, model));
+			}
+
+			auto batched = new model::BatchedModel(
+				weights.size(),
+				ptrs[i],
+				models,
+				gpu_id,
+				base_filename
+			);
+
+			gpuresults.push_back(batched);
+		}
+	}
+
+	return results;
+}
+
 }
 }

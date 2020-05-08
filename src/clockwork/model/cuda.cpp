@@ -84,7 +84,7 @@ LoadedCUDAModule* UnloadedCUDAModule::load() {
 
 LoadedCUDAModule::LoadedCUDAModule(
       const UnloadedCUDAModule* source, 
-      CUmodule module
+      CUmodule &module
     ) : source(source), module(module) {
   functions.reserve(source->functions.size());
 
@@ -120,7 +120,7 @@ tvm::runtime::PackedFunc* LoadedCUDAModule::getFunction(const std::string &name)
   return &f->source->packed;
 }
 
-LoadedCUDAFunc::LoadedCUDAFunc(UnloadedCUDAFunc* source, CUfunction f) : source(source), f(f) {
+LoadedCUDAFunc::LoadedCUDAFunc(UnloadedCUDAFunc* source, CUfunction &f) : source(source), f(f) {
   // packed = tvm::runtime::PackFuncVoidAddr(*this, source->info.arg_types);
 }
 

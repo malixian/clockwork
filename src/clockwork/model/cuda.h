@@ -32,7 +32,7 @@ public:
   CUmodule module;
   std::unordered_map<std::string, LoadedCUDAFunc*> functions;
 
-  LoadedCUDAModule(const UnloadedCUDAModule* source, CUmodule module);
+  LoadedCUDAModule(const UnloadedCUDAModule* source, CUmodule &module);
   ~LoadedCUDAModule();
 
   void unload();
@@ -47,7 +47,7 @@ public:
   UnloadedCUDAFunc* source;
   CUfunction f;
 
-  LoadedCUDAFunc(UnloadedCUDAFunc* source, CUfunction f);
+  LoadedCUDAFunc(UnloadedCUDAFunc* source, CUfunction &f);
 
   void operator()(tvm::runtime::TVMArgs args,
                   tvm::runtime::TVMRetValue* rv,

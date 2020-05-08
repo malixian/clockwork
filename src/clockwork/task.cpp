@@ -4,6 +4,7 @@
 #include "clockwork/cuda_common.h"
 #include "clockwork/api/worker_api.h"
 #include "clockwork/action.h"
+#include "clockwork/model/batched.h"
 
 namespace clockwork {
 
@@ -80,54 +81,39 @@ void LoadModelFromDiskTask::run(cudaStream_t stream) {
 		throw TaskError(actionErrorCouldNotStartInTime, "LoadModelFromDiskTask could not start in time");
 	}
 
-	std::vector<model::BatchedModel*> batched_models;
-	std::vector<RuntimeModel*> runtime_models;
+	std::vector<unsigned> gpu_ids;
+	for (unsigned gpu_id = 0; gpu_id < manager->num_gpus; gpu_id++) {
+		gpu_ids.push_back(gpu_id);
 
-	try {
-		for (unsigned gpu_id = 0; gpu_id < manager->num_gpus; gpu_id++) {
-			if (manager->models->contains(model_id, gpu_id)) {
+		for (unsigned i = 0; i < no_of_copies; i++) {
+			if (manager->models->contains(model_id+i, gpu_id)) {
 				throw TaskError(actionErrorInvalidModelID, "LoadModelFromDiskTask specified ID that already exists");
 			}
-
-			// TODO: loadFromDisk will call cudaMallocHost; in future don't use this, and manage host memory manually
-			// TODO: for now just wrap dmlc error for failing to load model, since the existence of this task is a
-			//       giant hack anyway
-			std::vector<model::BatchedModel*> duplicate_batched_models;
-			try {
-				duplicate_batched_models = model::BatchedModel::loadMultipleFromDisk(model_path, gpu_id, no_of_copies);
-				for (auto batched_model : duplicate_batched_models) {
-					batched_models.push_back(batched_model);
-					batched_model->instantiate_models_on_host();
-					batched_model->instantiate_models_on_device();
-				}
-			} catch (dmlc::Error &error) {
-				throw TaskError(actionErrorInvalidModelPath, error.what());
-			}
-
-			for (int i = 0; i < no_of_copies; i++) {
-				RuntimeModel* runtime_model = new RuntimeModel(duplicate_batched_models[i], gpu_id);
-				runtime_models.push_back(runtime_model);
-				if (!manager->models->put_if_absent(model_id + i, gpu_id, runtime_model)) {
-					throw TaskError(actionErrorInvalidModelID, "LoadModelFromDiskTask specified ID that already exists");
-				}
-			}
 		}
-	} catch (TaskError e) {
-		for (unsigned i = 0; i < batched_models.size(); i++) { delete batched_models[i]; }
-		for (unsigned i = 0; i < runtime_models.size(); i++) { delete runtime_models[i]; }
-		throw e;
 	}
 
-	// TODO Verify the following!
-	// Vector runtime_models contains a separate runtime_model for each GPU ID.
-	// Thus, the batched_model associated with each runtime_model is also GPU-specific.
-	// For each batched_model, the parameters that are returned back to the controller,
-	// i.e., input_size(1), output_size(1), implemented_batch_sizes() are identical.
-	// Hence, it suffices to consider only one batched_model, ...
-	// i.e., runtime_models[0]->model, when filling the LoadModelFromDiskResult object.
-	// Therefore, I return only the first runtime_model to function ...
-	// LoadModelFromDiskAction::LoadModelFromDiskTaskImpl::success
-	this->success(runtime_models[0]);
+	try {
+		auto duplicates = model::BatchedModel::loadMultipleFromDiskMultiGPU(model_path, gpu_ids, no_of_copies);
+
+		for (auto &gpu_id : gpu_ids) {
+			auto &models = duplicates[gpu_id];
+
+			for (unsigned i = 0; i < models.size(); i++) {
+				models[i]->instantiate_models_on_host();
+				models[i]->instantiate_models_on_device();
+				bool success = manager->models->put_if_absent(
+					this->model_id + i, 
+					gpu_id, 
+					new RuntimeModel(models[i], gpu_id)
+				);
+				CHECK(success) << "Loaded models changed while loading from disk";
+			}
+		}
+	} catch (dmlc::Error &error) {
+		throw TaskError(actionErrorInvalidModelPath, error.what());
+	}
+
+	this->success(manager->models->get(model_id, 0));
 }
 
 
