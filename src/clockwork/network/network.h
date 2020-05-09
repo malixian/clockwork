@@ -29,6 +29,27 @@ public:
       message_tx *req) = 0;
   virtual void completed_transmit(message_connection *tcp_conn,
       message_tx *req) = 0;
+
+  // time synchronization
+  void synchronize(int64_t local_delta, int64_t remote_delta) {
+    if (local_delta < local_delta_) local_delta_ = local_delta;
+    if (remote_delta < remote_delta_) remote_delta_ = remote_delta;
+  }
+
+  int64_t estimate_clock_delta() {
+    if (remote_delta_ == INT64_MAX) return 0;
+    return (local_delta_ - remote_delta_) / 2;
+  }
+
+  int64_t estimate_rtt() {
+    if (remote_delta_ == INT64_MAX) return 0;
+    return (local_delta_ + remote_delta_) / 2;
+  }
+
+  int64_t local_delta_ = INT64_MAX;
+  int64_t remote_delta_ = INT64_MAX;
+
+
 };
 
 
@@ -60,8 +81,8 @@ private:
   asio::ip::tcp::socket &socket_;
 
   char header_buf[max_header_len];
-  /* header length,  body length, message type, message id */
-  uint64_t pre_header[4];
+  /* header length,  body length, message type, message id, timestamp, clock_delta */
+  uint64_t pre_header[6];
 
   message_connection *conn_;
   message_tx *req_;
@@ -102,13 +123,15 @@ private:
   asio::ip::tcp::socket &socket_;
 
   char header_buf[max_header_len];
-  /* header length,  body length, message type, message id */
-  uint64_t pre_header[4];
+  /* header length,  body length, message type, message id, timestamp, clock_delta */
+  uint64_t pre_header[6];
 
   message_connection *conn_;
   message_handler &handler_;
   message_rx *req_;
   size_t body_left;
+
+  uint64_t rx_begin_;
 };
 
 

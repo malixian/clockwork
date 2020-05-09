@@ -114,7 +114,9 @@ void Connection::print() {
 		uint64_t derrors = errors.update(stats.errors);
 
 		std::stringstream s;
-		s << "LdWts=" << dload
+		s << "Clock Skew=" << estimate_clock_delta()
+		  << "  RTT=" << estimate_rtt()
+		  << "  LdWts=" << dload
 		  << "  Inf=" << dinfer
 		  << "  Evct=" << devict
 		  << "  || Total Pending=" << pending
@@ -208,6 +210,8 @@ void Connection::completed_receive(message_connection *tcp_conn, message_rx *req
 		CHECK(false) << "Received an unsupported message_rx type";
 	}
 	if (verbose) std::cout << "Received " << actions[0]->str() << std::endl;
+
+	actions[0]->clock_delta = estimate_clock_delta();	
 
 	stats.total_pending++;
 

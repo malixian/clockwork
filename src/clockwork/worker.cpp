@@ -64,9 +64,18 @@ void ClockworkWorker::invalidAction(std::shared_ptr<workerapi::Action> action) {
 	controller->sendResult(result);
 }
 
+uint64_t adjust_timestamp(uint64_t timestamp, int64_t clock_delta) {
+	if (clock_delta < 0) return timestamp - clock_delta;
+	return clock_delta > timestamp ? 0 : (timestamp - clock_delta);
+}
+
 void ClockworkWorker::loadModel(std::shared_ptr<workerapi::Action> action) {
 	auto load_model = std::static_pointer_cast<workerapi::LoadModelFromDisk>(action);
 	if (load_model != nullptr) {
+		// It is a hack to do this here, but easiest / safest place to do it for now
+		load_model->earliest = adjust_timestamp(load_model->earliest, load_model->clock_delta);
+		load_model->latest = adjust_timestamp(load_model->latest, load_model->clock_delta);
+
 		LoadModelFromDisk* action = new LoadModelFromDisk(this, load_model);
 		action->submit();
 	} else {
@@ -77,6 +86,10 @@ void ClockworkWorker::loadModel(std::shared_ptr<workerapi::Action> action) {
 void ClockworkWorker::loadWeights(std::shared_ptr<workerapi::Action> action) {
 	auto load_weights = std::static_pointer_cast<workerapi::LoadWeights>(action);
 	if (load_weights != nullptr) {
+		// It is a hack to do this here, but easiest / safest place to do it for now
+		load_weights->earliest = adjust_timestamp(load_weights->earliest, load_weights->clock_delta);
+		load_weights->latest = adjust_timestamp(load_weights->latest, load_weights->clock_delta);
+
 		LoadWeights* action = new LoadWeights(this, load_weights);
 		action->submit();
 	} else {
@@ -87,6 +100,10 @@ void ClockworkWorker::loadWeights(std::shared_ptr<workerapi::Action> action) {
 void ClockworkWorker::evictWeights(std::shared_ptr<workerapi::Action> action) {
 	auto evict_weights = std::static_pointer_cast<workerapi::EvictWeights>(action);
 	if (evict_weights != nullptr) {
+		// It is a hack to do this here, but easiest / safest place to do it for now
+		evict_weights->earliest = adjust_timestamp(evict_weights->earliest, evict_weights->clock_delta);
+		evict_weights->latest = adjust_timestamp(evict_weights->latest, evict_weights->clock_delta);
+
 		EvictWeights* action = new EvictWeights(this, evict_weights);
 		action->submit();
 	} else {
@@ -97,6 +114,10 @@ void ClockworkWorker::evictWeights(std::shared_ptr<workerapi::Action> action) {
 void ClockworkWorker::infer(std::shared_ptr<workerapi::Action> action) {
 	auto infer = std::static_pointer_cast<workerapi::Infer>(action);
 	if (infer != nullptr) {
+		// It is a hack to do this here, but easiest / safest place to do it for now
+		infer->earliest = adjust_timestamp(infer->earliest, infer->clock_delta);
+		infer->latest = adjust_timestamp(infer->latest, infer->clock_delta);
+
 		Infer* action = new Infer(this, infer);
 		action->submit();
 	} else {
@@ -143,6 +164,11 @@ LoadModelFromDisk::LoadModelFromDisk(ClockworkWorker* worker, std::shared_ptr<wo
 
 void LoadModelFromDisk::success(std::shared_ptr<workerapi::LoadModelFromDiskResult> result) {
 	set_and_log_actionTelemetry(response_telemetry, runtime, 1, result->id, workerapi::loadModelFromDiskAction, actionSuccess, util::hrt());
+
+	// It is a hack to do this here, but easiest / safest place to do it for now
+	result->begin = adjust_timestamp(result->begin, -action->clock_delta);
+	result->end = adjust_timestamp(result->end, -action->clock_delta);
+
 	worker->controller->sendResult(result);
 	delete this;
 }
@@ -163,6 +189,11 @@ LoadWeights::LoadWeights(ClockworkWorker* worker, std::shared_ptr<workerapi::Loa
 
 void LoadWeights::success(std::shared_ptr<workerapi::LoadWeightsResult> result) {
 	set_and_log_actionTelemetry(response_telemetry, runtime, 1, result->id, workerapi::loadWeightsAction, actionSuccess, util::hrt());
+	
+	// It is a hack to do this here, but easiest / safest place to do it for now
+	result->begin = adjust_timestamp(result->begin, -action->clock_delta);
+	result->end = adjust_timestamp(result->end, -action->clock_delta);
+
 	worker->controller->sendResult(result);
 	delete this;
 }
@@ -182,6 +213,12 @@ EvictWeights::EvictWeights(ClockworkWorker* worker, std::shared_ptr<workerapi::E
 
 void EvictWeights::success(std::shared_ptr<workerapi::EvictWeightsResult> result) {
 	set_and_log_actionTelemetry(response_telemetry, runtime, 1, result->id, workerapi::evictWeightsAction, actionSuccess, util::hrt());
+	
+	// It is a hack to do this here, but easiest / safest place to do it for now
+	result->begin = adjust_timestamp(result->begin, -action->clock_delta);
+	result->end = adjust_timestamp(result->end, -action->clock_delta);
+
+
 	worker->controller->sendResult(result);
 	delete this;
 }
@@ -201,6 +238,16 @@ Infer::Infer(ClockworkWorker* worker, std::shared_ptr<workerapi::Infer> action) 
 
 void Infer::success(std::shared_ptr<workerapi::InferResult> result) {
 	set_and_log_actionTelemetry(response_telemetry, runtime, 1, result->id, workerapi::inferAction, actionSuccess, util::hrt());
+	
+	// It is a hack to do this here, but easiest / safest place to do it for now
+	result->copy_input.begin = adjust_timestamp(result->copy_input.begin, -action->clock_delta);
+	result->copy_input.end = adjust_timestamp(result->copy_input.end, -action->clock_delta);
+	result->exec.begin = adjust_timestamp(result->exec.begin, -action->clock_delta);
+	result->exec.end = adjust_timestamp(result->exec.end, -action->clock_delta);
+	result->copy_output.begin = adjust_timestamp(result->copy_output.begin, -action->clock_delta);
+	result->copy_output.end = adjust_timestamp(result->copy_output.end, -action->clock_delta);
+
+
 	worker->controller->sendResult(result);
 	delete this;
 }

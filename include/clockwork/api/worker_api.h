@@ -52,6 +52,8 @@ public:
 	int id;
 	int action_type;
 
+	int64_t clock_delta = 0; // Estimated clock delta between controller and this worker
+
 	virtual std::string str() = 0;
 };
 
@@ -119,6 +121,8 @@ public:
 	int id;
 	int action_type;
 	int status;
+
+	int64_t clock_delta = 0; // Estimated clock delta between controller and this worker
 	
 	virtual std::string str() = 0;
 };

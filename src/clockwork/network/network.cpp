@@ -2,6 +2,7 @@
 #include "clockwork/network/network.h"
 #include <iostream>
 #include <boost/bind.hpp>
+#include "clockwork/util.h"
 
 namespace clockwork {
 namespace network {
@@ -41,6 +42,9 @@ void message_sender::start_send(message_tx &req)
 
   req.serialize_tx_header(header_buf);
 
+  pre_header[4] = util::now();
+  pre_header[5] = handler_.local_delta_;
+
   req_ = &req;
   asio::async_write(socket_, asio::buffer(pre_header),
       boost::bind(&message_sender::handle_prehdr_sent, this,
@@ -53,7 +57,7 @@ void message_sender::handle_prehdr_sent(const asio::error_code& error, size_t by
     abort_connection(error.message());
     return;
   }
-  if (bytes_transferred != 32) {
+  if (bytes_transferred != 48) {
     abort_connection("Invalid number of bytes sent for header lengths");
     return;
   }
@@ -155,7 +159,7 @@ void message_receiver::handle_pre_read(const asio::error_code& error,
     return;
   }
 
-  if (bytes_transferred != 32) {
+  if (bytes_transferred != 48) {
     abort_connection("Invalid number of bytes read for header lengths");
     return;
   }
@@ -164,6 +168,8 @@ void message_receiver::handle_pre_read(const asio::error_code& error,
     abort_connection("Specified header length larger than supported maximum");
     return;
   }
+
+  rx_begin_ = util::now();
 
   asio::async_read(socket_, asio::buffer(header_buf, pre_header[0]),
       boost::bind(&message_receiver::handle_header_read, this,
@@ -184,6 +190,9 @@ void message_receiver::handle_header_read(const asio::error_code& error,
     abort_connection("Header incomplete");
     return;
   }
+
+  int64_t delta = rx_begin_ - pre_header[4];
+  handler_.synchronize(delta, pre_header[5]);
 
   req_ = handler_.new_rx_message(conn_, pre_header[0], pre_header[1],
       pre_header[2], pre_header[3]);
