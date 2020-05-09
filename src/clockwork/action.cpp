@@ -286,7 +286,7 @@ void EvictWeightsAction::handle_error(TaskError &error) {
 
 const uint64_t copy_input_lead_in = 1000000; // Copy inputs up to 1 ms before exec
 uint64_t InferAction::copy_input_earliest() {
-	return copy_input_lead_in > action->earliest ? 0 : action->earliest - copy_input_lead_in;
+	return copy_input_lead_in > action->earliest ? 0 : (action->earliest - copy_input_lead_in);
 }
 
 InferAction::CopyInputTaskImpl::CopyInputTaskImpl(InferAction* infer):

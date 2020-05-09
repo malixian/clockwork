@@ -17,8 +17,8 @@ BatchedModel* create_model_for_action() {
 }
 
 bool telemetry_in_range(
-				std::chrono::high_resolution_clock::time_point start,
-				std::chrono::high_resolution_clock::time_point end, bool evict) {
+				clockwork::time_point start,
+				clockwork::time_point end, bool evict) {
 	bool in_range = true;
 	std::shared_ptr<TaskTelemetry> srcTelemetry;
 
@@ -43,14 +43,14 @@ TEST_CASE("Task Telemetry", "[task_telemetry]"){
 
     runtime->manager->models->put(0, GPU_ID_0, new RuntimeModel(model, GPU_ID_0));
 
-	std::chrono::high_resolution_clock::time_point start = util::hrt();
+	auto start = util::hrt();
 
     TestLoadWeightsAction load_weights(runtime.get(), load_weights_action());
     load_weights.submit();
     load_weights.await();
 	load_weights.check_success(true);
 
-	std::chrono::high_resolution_clock::time_point end = util::hrt();
+	auto end = util::hrt();
 
 	assert(tasks_logged == 1);
 	assert(action_id == 0 && model_id == 0);

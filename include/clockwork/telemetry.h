@@ -11,7 +11,7 @@ namespace clockwork {
 
 struct TaskTelemetry {
 	int action_type, task_type, executor_id, gpu_id, model_id, action_id, batch_size, status;
-	std::chrono::high_resolution_clock::time_point enqueued, 
+	clockwork::time_point enqueued, 
 		 dequeued, exec_complete, async_complete;
 	uint64_t eligible_for_dequeue;
 	float async_wait, async_duration;
@@ -22,19 +22,19 @@ struct ActionTelemetry {
 	int telemetry_type;
 	int action_id, action_type;
 	int status;
-	std::chrono::high_resolution_clock::time_point timestamp;
+	clockwork::time_point timestamp;
 };
 
 
 struct ExecutorTelemetry {
 	int task_type, executor_id;
-	std::chrono::high_resolution_clock::time_point next_task_begin, slot_available, task_dequeued, task_complete;
+	clockwork::time_point next_task_begin, slot_available, task_dequeued, task_complete;
 	float async_wait, async_duration;
 };
 
 struct RequestTelemetry {
 	int model_id, request_id;
-	std::chrono::high_resolution_clock::time_point arrived, submitted, complete;
+	clockwork::time_point arrived, submitted, complete;
 	std::vector<TaskTelemetry*> tasks;
 };
 

@@ -12,14 +12,17 @@
 #define GPU_ID_0 0
 
 namespace clockwork {
+
+typedef std::chrono::steady_clock::time_point time_point;
+
 namespace util {
 
 // High-resolution timer, current time in nanoseconds
 std::uint64_t now();
 
-std::chrono::high_resolution_clock::time_point hrt();
+time_point hrt();
 
-std::uint64_t nanos(std::chrono::high_resolution_clock::time_point t);
+std::uint64_t nanos(time_point t);
 
 std::string nowString();
 

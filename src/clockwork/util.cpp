@@ -24,18 +24,29 @@
 
 
 namespace clockwork {
-namespace util {	
+namespace util {
+
+uint64_t calculate_steady_clock_delta() {
+  auto t1 = std::chrono::steady_clock::now();
+  auto t2 = std::chrono::system_clock::now();
+  uint64_t nanos_t1 = std::chrono::duration_cast<std::chrono::nanoseconds>(t1.time_since_epoch()).count();
+  uint64_t nanos_t2 = std::chrono::duration_cast<std::chrono::nanoseconds>(t2.time_since_epoch()).count();
+  CHECK(nanos_t2 > nanos_t1) << "Assumptions about steady clock aren't true";
+  return nanos_t2 - nanos_t1;
+}
+
+uint64_t steady_clock_offset = calculate_steady_clock_delta();
 
 std::uint64_t now() {
   return nanos(hrt());
 }
 
-std::chrono::high_resolution_clock::time_point hrt() {
-  return std::chrono::high_resolution_clock::now();
+clockwork::time_point hrt() {
+  return std::chrono::steady_clock::now();
 }
 
-std::uint64_t nanos(std::chrono::high_resolution_clock::time_point t) {
-  return std::chrono::duration_cast<std::chrono::nanoseconds>(t.time_since_epoch()).count();
+std::uint64_t nanos(clockwork::time_point t) {
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(t.time_since_epoch()).count() + steady_clock_offset;
 }
 
 std::string nowString() {

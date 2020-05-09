@@ -60,7 +60,7 @@ public:
 struct Measurement {
     std::vector<float> cuda;
     std::vector<uint64_t> host;
-    Measurement(std::vector<cudaEvent_t> &events, std::vector<std::chrono::high_resolution_clock::time_point> &timestamps) : cuda(events.size()/2), host(timestamps.size()/2) {
+    Measurement(std::vector<cudaEvent_t> &events, std::vector<clockwork::time_point> &timestamps) : cuda(events.size()/2), host(timestamps.size()/2) {
         cudaError_t status;
         for (int i = 1; i < events.size(); i += 1) {
             float duration;
@@ -154,7 +154,7 @@ public:
         while (alive) {
             model::Model* model = models[rand() % models.size()];
 
-            std::vector<std::chrono::high_resolution_clock::time_point> timestamps;
+            std::vector<clockwork::time_point> timestamps;
             timestamps.reserve(12);
 
             experiment->shared.lock();
@@ -285,7 +285,7 @@ public:
         while (alive) {
             model::Model* model = models[rand() % models.size()];
 
-            std::vector<std::chrono::high_resolution_clock::time_point> timestamps;
+            std::vector<clockwork::time_point> timestamps;
             timestamps.reserve(8);
 
             std::shared_ptr<Allocation> weights = weights_cache->alloc(model->num_weights_pages(weights_cache->page_size), []{});

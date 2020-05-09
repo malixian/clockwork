@@ -5,7 +5,7 @@ namespace clockwork {
 void set_and_log_actionTelemetry(
 		std::shared_ptr<ActionTelemetry> telemetry, ClockworkRuntime* runtime,
 		int telemetry_type, int action_id, int action_type, int status,
-		std::chrono::high_resolution_clock::time_point timestamp){
+		clockwork::time_point timestamp){
 	telemetry->telemetry_type = telemetry_type;
 	telemetry->action_id = action_id;
 	telemetry->action_type = action_type;
