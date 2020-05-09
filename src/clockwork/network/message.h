@@ -3,6 +3,7 @@
 
 #include <clockwork.pb.h>
 #include <dmlc/logging.h>
+#include <clockwork/util.h>
 
 namespace clockwork {
 namespace network {
@@ -10,6 +11,7 @@ namespace network {
 class message_tx {
 public:
   virtual ~message_tx() {}
+  virtual void tx_begin() = 0;
   virtual uint64_t get_tx_msg_type() const = 0;
   virtual uint64_t get_tx_req_id() const = 0;
   virtual uint64_t get_tx_header_len() const = 0;
@@ -22,6 +24,7 @@ public:
 
 class message_rx {
 public:
+  uint64_t rx_begin_;
   virtual ~message_rx() {}
   virtual uint64_t get_msg_id() const = 0;
   virtual void header_received(const void *hdr, size_t hdr_len) = 0;
@@ -42,6 +45,8 @@ public:
   void set_msg_id(uint64_t msg_id) { req_id_ = msg_id; }
 
   virtual void set(TReq &request) = 0;
+
+  virtual void tx_begin() {}
 
   virtual uint64_t get_tx_msg_type() const { return TMsgType; }
   virtual uint64_t get_tx_req_id() const { return req_id_; }

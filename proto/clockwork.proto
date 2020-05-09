@@ -186,6 +186,9 @@ message InferActionProto {
   required uint64 latest = 5;
   required uint64 expected_duration = 6;
   required uint32 batch_size = 7;
+
+  // Network timing
+  required uint64 action_send = 8;
 }
 
 message InferResultProto {
@@ -194,6 +197,11 @@ message InferResultProto {
   required TimingProto exec_timing = 3;
   required TimingProto copy_output_timing = 4;
   required uint32 gpu_id = 5;
+
+  // Network timing
+  required uint64 action_send = 6;
+  required uint64 action_receive = 7;
+  required uint64 result_send = 8;
 }
 
 message ClearCacheActionProto {

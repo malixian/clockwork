@@ -109,6 +109,7 @@ private:
   message_handler &handler_;
   message_rx *req_;
   size_t body_left;
+  uint64_t rx_begin_;
 };
 
 

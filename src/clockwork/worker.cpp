@@ -201,6 +201,8 @@ Infer::Infer(ClockworkWorker* worker, std::shared_ptr<workerapi::Infer> action) 
 
 void Infer::success(std::shared_ptr<workerapi::InferResult> result) {
 	set_and_log_actionTelemetry(response_telemetry, runtime, 1, result->id, workerapi::inferAction, actionSuccess, util::hrt());
+	result->network.action_send = action->network.action_send;
+	result->network.action_receive = action->network.action_receive;
 	worker->controller->sendResult(result);
 	delete this;
 }

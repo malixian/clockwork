@@ -203,6 +203,10 @@ public:
   	body_len_ = action.input_size;
   	body_ = action.input;
   }
+
+  virtual void tx_begin() {
+    msg.set_action_send(util::now());
+  }
 };
 
 class infer_action_rx : public msg_protobuf_rx_with_body<ACT_INFER, InferActionProto, workerapi::Infer> {
@@ -215,6 +219,8 @@ public:
   	action.earliest = msg.earliest();
   	action.latest = msg.latest();
   	action.expected_duration = msg.expected_duration();
+    action.network.action_send = msg.action_send();
+    action.network.action_receive = rx_begin_;
   	action.batch_size = msg.batch_size();
   	action.input_size = body_len_;
   	action.input = static_cast<char*>(body_);
@@ -225,7 +231,7 @@ class infer_result_tx : public msg_protobuf_tx_with_body<RES_INFER, InferResultP
 public:
   virtual void set(workerapi::InferResult &result) {
   	msg.set_action_id(result.id);
-	msg.set_gpu_id(result.gpu_id);
+    msg.set_gpu_id(result.gpu_id);
   	msg.mutable_copy_input_timing()->set_begin(result.copy_input.begin);
   	msg.mutable_copy_input_timing()->set_end(result.copy_input.end);
   	msg.mutable_copy_input_timing()->set_duration(result.copy_input.duration);
@@ -235,8 +241,14 @@ public:
   	msg.mutable_copy_output_timing()->set_begin(result.copy_output.begin);
   	msg.mutable_copy_output_timing()->set_end(result.copy_output.end);
   	msg.mutable_copy_output_timing()->set_duration(result.copy_output.duration);
+    msg.set_action_send(result.network.action_send);
+    msg.set_action_receive(result.network.action_receive);
   	body_len_ = result.output_size;
   	body_ = result.output;
+  }
+
+  virtual void tx_begin() {
+    msg.set_result_send(util::now());
   }
 };
 
@@ -246,7 +258,7 @@ public:
   	result.id = msg.action_id();
   	result.action_type = workerapi::inferAction;
   	result.status = actionSuccess;
-	result.gpu_id = msg.gpu_id();
+    result.gpu_id = msg.gpu_id();
   	result.copy_input.begin = msg.copy_input_timing().begin();
   	result.copy_input.end = msg.copy_input_timing().end();
   	result.copy_input.duration = msg.copy_input_timing().duration();
@@ -256,6 +268,10 @@ public:
   	result.copy_output.begin = msg.copy_output_timing().begin();
   	result.copy_output.end = msg.copy_output_timing().end();
   	result.copy_output.duration = msg.copy_output_timing().duration();
+    result.network.action_send = msg.action_send();
+    result.network.action_receive = msg.action_receive();
+    result.network.result_send = msg.result_send();
+    result.network.result_receive = rx_begin_;
   	result.output_size = body_len_;
   	result.output = static_cast<char*>(body_);
   }

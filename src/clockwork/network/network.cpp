@@ -2,6 +2,7 @@
 #include "clockwork/network/network.h"
 #include <iostream>
 #include <boost/bind.hpp>
+#include "clockwork/util.h"
 
 namespace clockwork {
 namespace network {
@@ -33,6 +34,8 @@ void message_sender::send_next_message()
 
 void message_sender::start_send(message_tx &req)
 {
+  req.tx_begin();
+
   /* header length,  body length, message type, message id */
   pre_header[0] = req.get_tx_header_len();
   pre_header[1] = req.get_tx_body_len();
@@ -165,6 +168,7 @@ void message_receiver::handle_pre_read(const asio::error_code& error,
     return;
   }
 
+  rx_begin_ = util::now();
   asio::async_read(socket_, asio::buffer(header_buf, pre_header[0]),
       boost::bind(&message_receiver::handle_header_read, this,
       asio::placeholders::error,
@@ -172,7 +176,8 @@ void message_receiver::handle_pre_read(const asio::error_code& error,
 }
 
 /* header received */
-void message_receiver::handle_header_read(const asio::error_code& error,
+void message_receiver::handle_header_read(
+    const asio::error_code& error,
     size_t bytes_transferred)
 {
   if (error) {
@@ -187,6 +192,7 @@ void message_receiver::handle_header_read(const asio::error_code& error,
 
   req_ = handler_.new_rx_message(conn_, pre_header[0], pre_header[1],
       pre_header[2], pre_header[3]);
+  req_->rx_begin_ = rx_begin_;
   req_->header_received(header_buf, pre_header[0]);
 
   body_left = pre_header[1];

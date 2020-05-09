@@ -47,6 +47,13 @@ const int evictWeightsAction = 3;
 const int clearCacheAction = 4;
 const int getWorkerStateAction = 5;
 
+// Network timing is set automatically by the networking code
+class ActionNetworkTiming {
+public:
+	uint64_t action_send;
+	uint64_t action_receive;
+};
+
 class Action {
 public:
 	int id;
@@ -100,6 +107,8 @@ public:
 	int batch_size;
 	int input_size;
 	char* input;
+
+	ActionNetworkTiming network;
 	
 	virtual std::string str();
 };
@@ -112,6 +121,15 @@ public:
 class GetWorkerState : public Action {
 public:
 	virtual std::string str();
+};
+
+// Network timing is set automatically by the networking code
+class ResultNetworkTiming {
+public:
+	uint64_t action_send;
+	uint64_t action_receive;
+	uint64_t result_send;
+	uint64_t result_receive;
 };
 
 class Result {
@@ -192,6 +210,8 @@ public:
 	int output_size;
 	char* output;
 	unsigned gpu_id;
+
+	ResultNetworkTiming network;
 	
 	virtual std::string str();
 };

@@ -47,8 +47,8 @@ public:
 	bool stress_loadweights = true;
 
 	std::string model_path = "/home/jcmace/clockwork-modelzoo-volta/resnet50_v2/model";
-	unsigned duplicates = 2000;
-	unsigned max_models_on_gpu = 200;
+	unsigned duplicates = 40;
+	unsigned max_models_on_gpu = 20;
 	size_t input_size = 602112;
 	char* input;
 
@@ -305,7 +305,11 @@ public:
 		infer->earliest = util::now() - 10000000UL; // 10 ms ago
 		infer->latest = infer->earliest + 10000000000UL; // 10s
 
-		save_callback(action_id, std::bind(&StressTestController::onInferComplete, this, model_id, gpu_id, std::placeholders::_1));
+		save_callback(action_id, std::bind(&StressTestController::onInferComplete, this, model_id, gpu_id, 
+			util::now(),
+			infer->earliest,
+			infer->latest,
+			std::placeholders::_1));
 
 
 		if (log_actions) std::cout << "S: " << infer->str() << std::endl;
@@ -316,7 +320,12 @@ public:
 		return true;
 	}
 
-	void onInferComplete(unsigned model_id, unsigned gpu_id, std::shared_ptr<workerapi::Result> result) {
+	void onInferComplete(unsigned model_id, unsigned gpu_id, 
+			uint64_t submission,
+			uint64_t earliest,
+			uint64_t latest,
+			std::shared_ptr<workerapi::Result> result) {
+		uint64_t now = util::now();
 		std::lock_guard<std::recursive_mutex> lock(mutex);
 
 		auto &gpu = gpus[gpu_id];
@@ -324,6 +333,17 @@ public:
 			std::cout << "Infer error " << result->str() << std::endl;
 			gpu.infer_errors++;
 		} else if (auto infer = std::dynamic_pointer_cast<workerapi::InferResult>(result)) {
+
+			std::cout << "R" << infer->id << " window=[" << 0 << "," << (latest-earliest) << "]" << std::endl;
+			std::cout << "       input=" << (infer->copy_input.begin - earliest) << " +" << infer->copy_input.duration << std::endl;
+			std::cout << "        exec=" << (infer->exec.begin - earliest) << " +" << infer->exec.duration << std::endl;
+			std::cout << "      output=" << (infer->copy_output.begin - earliest) << " +" << infer->copy_output.duration << std::endl;
+			std::cout << "  controller=" << (submission - earliest) << " +" << (now - submission) << std::endl;
+			std::cout << "action.snd=" << infer->network.action_send << std::endl;
+			std::cout << "action.rcv=" << infer->network.action_receive << std::endl;
+			std::cout << "result.snd=" << infer->network.result_send << std::endl;
+			std::cout << "result.rcv=" << infer->network.result_receive << std::endl;
+
 			gpu.infer_measurements.push_back(infer->exec.duration);
 		} else {
 			CHECK(false) << "Unexpected response to LoadWeights action";
