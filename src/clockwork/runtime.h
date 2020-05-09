@@ -65,9 +65,10 @@ public:
 class GPUExecutorExclusive : public BaseExecutor {
 private:
 	unsigned gpu_id;
+	unsigned priority;
 
 public:
-	GPUExecutorExclusive(TaskType type, std::vector<unsigned> cores, unsigned gpu_id);
+	GPUExecutorExclusive(TaskType type, std::vector<unsigned> cores, unsigned gpu_id, int priority = 0);
 
 	void executorMain(unsigned executor_id, unsigned core);
 };
@@ -98,11 +99,18 @@ public:
 
 	CPUExecutor* load_model_executor;	// Type 0
 
+
 	std::vector<GPUExecutorExclusive*> weights_executors;	// Type 1
 	std::vector<GPUExecutorExclusive*> inputs_executors;		// Type 2
 	std::vector<GPUExecutorExclusive*> outputs_executors;	// Type 4
 
-	AsyncTaskChecker* checker;
+
+	std::vector<AsyncTaskChecker*> all_checkers; // all checker instances
+
+	std::vector<AsyncTaskChecker*> gpu_checkers;
+	std::vector<AsyncTaskChecker*> weights_checkers;
+	std::vector<AsyncTaskChecker*> input_checkers;
+	std::vector<AsyncTaskChecker*> output_checkers;
 
 	std::vector<CudaEventPool *> event_pools;
 
@@ -121,7 +129,6 @@ public:
 	virtual ~ClockworkRuntime() {
 		delete manager;
 		delete load_model_executor;
-		delete checker;
 
 		task_telemetry_logger->shutdown(true);
 		action_telemetry_logger->shutdown(true);
@@ -131,6 +138,9 @@ public:
 			delete weights_executors[gpu_id];
 			delete inputs_executors[gpu_id];
 			delete outputs_executors[gpu_id];
+		}
+		for (AsyncTaskChecker* checker : all_checkers) {
+			delete checker;
 		}
 	}
 
@@ -187,14 +197,21 @@ protected:
 			
 			gpu_executors.push_back(new GPUExecutorExclusive(GPU, {cores.acquire(gpu_id)}, gpu_id)); // Type 3
 			weights_executors.push_back(new GPUExecutorExclusive(PCIe_H2D_Weights, {cores.acquire(gpu_id)}, gpu_id)); // Type 1
-			inputs_executors.push_back(new GPUExecutorExclusive(PCIe_H2D_Inputs, {cores.acquire(gpu_id)}, gpu_id)); // Type 2
-			outputs_executors.push_back(new GPUExecutorExclusive(PCIe_D2H_Output, {cores.acquire(gpu_id)}, gpu_id)); // Type 4
+			inputs_executors.push_back(new GPUExecutorExclusive(PCIe_H2D_Inputs, {cores.acquire(gpu_id)}, gpu_id, -1)); // Type 2
+			outputs_executors.push_back(new GPUExecutorExclusive(PCIe_D2H_Output, {cores.acquire(gpu_id)}, gpu_id, -1)); // Type 4
 
-			if (gpu_id == 0) {
-				load_model_executor = new CPUExecutor(CPU, {cores.acquire(gpu_id)}); // Type 0
-				checker = new AsyncTaskChecker({cores.acquire(gpu_id)});
-			}
+			AsyncTaskChecker* c1 = new AsyncTaskChecker({cores.acquire(gpu_id)});
+
+			gpu_checkers.push_back(c1);
+			weights_checkers.push_back(c1);
+			input_checkers.push_back(c1);
+			output_checkers.push_back(c1);
+
+			all_checkers.push_back(c1);
 		}
+
+		load_model_executor = new CPUExecutor(CPU, {cores.acquire(0)}); // Type 0
+
 		std::string task_file_path = config.telemetry_log_dir + "/" + config.task_telemetry_log_file;
 		std::string action_file_path = config.telemetry_log_dir + "/" + config.action_telemetry_log_file;
 

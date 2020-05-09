@@ -52,6 +52,16 @@ bool CudaAsyncTask::is_complete() {
 	return true;
 }
 
+void CudaAsyncTask::await_completion() {
+	CUDA_CALL(cudaSetDevice(gpu_id));
+
+	// Same semantics as cuda event: unused event is complete
+	while (!async_begin_submitted.load());
+	while (!async_end_submitted.load());
+
+	CUDA_CALL(cudaEventSynchronize(async_end_event));
+}
+
 float CudaAsyncTask::async_duration() {
 	float async_duration;
 	CUDA_CALL(cudaSetDevice(gpu_id));
@@ -168,9 +178,6 @@ void LoadWeightsTask::run(cudaStream_t stream) {
 	if (this->new_weights == nullptr) {
 		throw TaskError(actionErrorRuntimeError, "LoadWeightsTask failed to allocate pages from cache");
 	}
-	
-	// This is here because when the load weights executor is completely saturated, CUDA has a strange starvation issue with the CopyInput executor
-	CUDA_CALL(cudaStreamSynchronize(stream));
 
 	this->record_async_begin(stream);
 	rm->model->transfer_weights_to_device(new_weights->page_pointers, stream);

@@ -127,7 +127,7 @@ LoadWeightsAction::LoadWeightsTaskImpl::LoadWeightsTaskImpl(LoadWeightsAction* l
 void LoadWeightsAction::LoadWeightsTaskImpl::run(cudaStream_t stream) {
 	try {
 		LoadWeightsTask::run(stream);
-		load_weights->runtime->checker->enqueue(this);
+		load_weights->runtime->weights_checkers[gpu_id]->enqueue(this);
 	} catch (TaskError &error) {
 		load_weights->handle_error(error);
 	}
@@ -284,7 +284,7 @@ void EvictWeightsAction::handle_error(TaskError &error) {
 
 
 
-const uint64_t copy_input_lead_in = 1000000; // Copy inputs up to 1 ms before exec
+const uint64_t copy_input_lead_in = 5000000; // Copy inputs up to 5 ms before exec
 uint64_t InferAction::copy_input_earliest() {
 	return copy_input_lead_in > action->earliest ? 0 : (action->earliest - copy_input_lead_in);
 }
@@ -305,7 +305,11 @@ InferAction::CopyInputTaskImpl::CopyInputTaskImpl(InferAction* infer):
 void InferAction::CopyInputTaskImpl::run(cudaStream_t stream) {
 	try {
 		CopyInputTask::run(stream);
-		infer->runtime->checker->enqueue(this);
+		// infer->runtime->input_checkers[gpu_id]->enqueue(this);
+
+		// Making this synchronous
+		CUDA_CALL(cudaStreamSynchronize(stream));
+		CopyInputTask::process_completion();
 	} catch (TaskError &error) {
 		infer->handle_error(error);
 	}
@@ -346,7 +350,7 @@ InferAction::ExecTaskImpl::ExecTaskImpl(InferAction* infer):
 void InferAction::ExecTaskImpl::run(cudaStream_t stream) {
 	try {
 		ExecTask::run(stream);
-		infer->runtime->checker->enqueue(this);
+		infer->runtime->gpu_checkers[gpu_id]->enqueue(this);
 	} catch (TaskError &error) {
 		infer->handle_error(error);
 	}
@@ -385,7 +389,11 @@ InferAction::CopyOutputTaskImpl::CopyOutputTaskImpl(InferAction* infer):
 void InferAction::CopyOutputTaskImpl::run(cudaStream_t stream) {
 	try {
 		CopyOutputTask::run(stream);
-		infer->runtime->checker->enqueue(this);
+		// infer->runtime->output_checkers[gpu_id]->enqueue(this);
+
+		// Making this synchronous
+		CUDA_CALL(cudaStreamSynchronize(stream));
+		CopyOutputTask::process_completion();
 	} catch (TaskError &error) {
 		infer->handle_error(error);
 	}

@@ -30,12 +30,16 @@ public:
 	unsigned load_weights_errors = 0;
 	unsigned infer_errors = 0;
 	std::vector<uint64_t> load_weights_measurements;
+	std::vector<uint64_t> load_weights_e2e;
 	std::vector<uint64_t> infer_measurements;
+	std::vector<uint64_t> infer_e2e;
 	StressTestGPU(): 
 		models_on_gpu(), 
 		models_not_on_gpu(), 
 		load_weights_measurements(), 
-		infer_measurements(),
+		load_weights_e2e(),
+		infer_measurements(), 
+		infer_e2e(),
 		outstanding_loadweights(0),
 		outstanding_infer(0) {}
 };
@@ -52,8 +56,8 @@ public:
 	size_t input_size = 602112;
 	char* input;
 
-	int max_outstanding_loadweights = 4;
-	int max_outstanding_infer = 4;
+	int max_outstanding_loadweights = 2;
+	int max_outstanding_infer = 2;
 
 	unsigned num_gpus = 2;
 
@@ -82,7 +86,7 @@ public:
 		init();
 	}
 
-	std::string stats(std::vector<uint64_t> v, uint64_t profiled, uint64_t duration) {
+	std::string stats(std::vector<uint64_t> v, std::vector<uint64_t> e2e, uint64_t profiled, uint64_t duration) {
 		if (v.size() == 0) {
 			return "throughput=0";
 		}
@@ -90,11 +94,12 @@ public:
 		const auto [min, max] = std::minmax_element(v.begin(), v.end());
 		int count = v.size();
 		double sum = std::accumulate(v.begin(), v.end(), 0.0);
+		double sume2e = std::accumulate(e2e.begin(), e2e.end(), 0.0);
 		double throughput = count * 1000000000.0 / static_cast<double>(duration);
 
 		std::stringstream s;
 		s << std::fixed << std::setprecision(2);
-		s << "profiled=" << profiled << " min=" << *min << " max=" << *max << " mean=" << (sum/count) << " throughput=" << throughput << " efficiency=" << (sum/((float) duration));
+		s << "profiled=" << profiled << " min=" << *min << " max=" << *max << " mean=" << (sum/count) << " e2e=" << (sume2e/count) << " throughput=" << throughput << " efficiency=" << (sum/((float) duration));
 		return s.str();
 	}
 
@@ -118,7 +123,9 @@ public:
 				for (StressTestGPU &gpu : this->gpus) {
 					gpu_copies.push_back(gpu);
 					gpu.load_weights_measurements.clear();
+					gpu.load_weights_e2e.clear();
 					gpu.infer_measurements.clear();
+					gpu.infer_e2e.clear();
 					gpu.infer_errors = 0;
 					gpu.load_weights_errors = 0;
 				}
@@ -128,10 +135,14 @@ public:
 
 			std::stringstream report;
 			for (auto &gpu : gpu_copies) {
-				report << "LoadWeights W" << gpu.worker_id << " GPU" << gpu.worker_gpu_id << " errors=" << gpu.load_weights_errors << " " << stats(gpu.load_weights_measurements, profiled_load_weights, duration) << std::endl;
+				report << "LoadWeights W" << gpu.worker_id << " GPU" << gpu.worker_gpu_id
+				       << " errors=" << gpu.load_weights_errors 
+				       << " " << stats(gpu.load_weights_measurements, gpu.load_weights_e2e, profiled_load_weights, duration) << std::endl;
 			}
 			for (auto &gpu : gpu_copies) {
-				report << "Infer W" << gpu.worker_id << " GPU" << gpu.worker_gpu_id << " errors=" << gpu.infer_errors << " " << stats(gpu.infer_measurements, profiled_exec, duration) << std::endl;
+				report << "Infer W" << gpu.worker_id << " GPU" << gpu.worker_gpu_id 
+					   << " errors=" << gpu.infer_errors 
+					   << " " << stats(gpu.infer_measurements, gpu.infer_e2e, profiled_exec, duration) << std::endl;
 			}
 
 			std::cout << report.str();
@@ -165,7 +176,7 @@ public:
 			load_model->model_id = 0;
 			load_model->model_path = model_path;
 			load_model->earliest = 0;
-			load_model->latest = util::now() + 100000000000UL;
+			load_model->latest = util::now() + 600000000000UL;
 			load_model->no_of_copies = duplicates;
 
 			save_callback(action_id, std::bind(&StressTestController::onLoadModelsComplete, this, worker_id, std::placeholders::_1));
@@ -213,8 +224,8 @@ public:
 		evict->id = action_id;
 		evict->model_id = model_id;
 		evict->gpu_id = gpu.worker_gpu_id;
-		evict->earliest = util::now() - 10000000UL; // 10 ms ago
-		evict->latest = evict->earliest + 10000000000UL; // 10s
+		evict->earliest = util::now();
+		evict->latest = util::now() + 10000000000UL; // 10s
 
 		save_callback(action_id, std::bind(&StressTestController::onEvictWeightsComplete, this, model_id, gpu_id, std::placeholders::_1));
 
@@ -253,10 +264,10 @@ public:
 		load->id = action_id;
 		load->gpu_id = gpu.worker_gpu_id;
 		load->model_id = model_id;
-		load->earliest = 0; // 10 ms ago
-		load->latest = util::now() + 100000000000UL; // 10s
+		load->earliest = util::now();
+		load->latest = util::now() + 10000000000UL; // 10s
 
-		save_callback(action_id, std::bind(&StressTestController::onLoadWeightsComplete, this, model_id, gpu_id, std::placeholders::_1));
+		save_callback(action_id, std::bind(&StressTestController::onLoadWeightsComplete, this, model_id, gpu_id, util::now(), std::placeholders::_1));
 
 		if (log_actions) std::cout << "S: " << load->str() << std::endl;
 		this->workers[gpu.worker_id]->sendAction(load);
@@ -266,7 +277,7 @@ public:
 		return true;
 	}
 
-	void onLoadWeightsComplete(unsigned model_id, unsigned gpu_id, std::shared_ptr<workerapi::Result> result) {
+	void onLoadWeightsComplete(unsigned model_id, unsigned gpu_id, uint64_t submitted_at, std::shared_ptr<workerapi::Result> result) {
 		std::lock_guard<std::recursive_mutex> lock(mutex);
 
 		auto &gpu = gpus[gpu_id];
@@ -277,6 +288,7 @@ public:
 		} else if (auto load = std::dynamic_pointer_cast<workerapi::LoadWeightsResult>(result)) {
 			gpu.models_on_gpu.push_back(model_id);
 			gpu.load_weights_measurements.push_back(load->duration);
+			gpu.load_weights_e2e.push_back(util::now() - submitted_at);
 		} else {
 			CHECK(false) << "Unexpected response to LoadWeights action";
 		}
@@ -302,10 +314,10 @@ public:
 		infer->batch_size = 1;
 		infer->input = input;
 		infer->input_size = input_size;
-		infer->earliest = util::now() - 10000000UL; // 10 ms ago
-		infer->latest = infer->earliest + 10000000000UL; // 10s
+		infer->earliest = util::now();
+		infer->latest = util::now() + 10000000000UL; // 10s
 
-		save_callback(action_id, std::bind(&StressTestController::onInferComplete, this, model_id, gpu_id, std::placeholders::_1));
+		save_callback(action_id, std::bind(&StressTestController::onInferComplete, this, model_id, gpu_id, util::now(), std::placeholders::_1));
 
 
 		if (log_actions) std::cout << "S: " << infer->str() << std::endl;
@@ -316,7 +328,7 @@ public:
 		return true;
 	}
 
-	void onInferComplete(unsigned model_id, unsigned gpu_id, std::shared_ptr<workerapi::Result> result) {
+	void onInferComplete(unsigned model_id, unsigned gpu_id, uint64_t submitted_at, std::shared_ptr<workerapi::Result> result) {
 		std::lock_guard<std::recursive_mutex> lock(mutex);
 
 		auto &gpu = gpus[gpu_id];
@@ -325,6 +337,7 @@ public:
 			gpu.infer_errors++;
 		} else if (auto infer = std::dynamic_pointer_cast<workerapi::InferResult>(result)) {
 			gpu.infer_measurements.push_back(infer->exec.duration);
+			gpu.infer_e2e.push_back(util::now() - submitted_at);
 		} else {
 			CHECK(false) << "Unexpected response to LoadWeights action";
 		}

@@ -3,6 +3,7 @@
 #include "clockwork/util.h"
 #include "clockwork/model/model.h"
 #include <unistd.h>
+#include <thread>
 
 using namespace clockwork::model;
 
@@ -135,16 +136,22 @@ void Model::transfer_weights_to_device(std::vector<char*> &weights_pages, cudaSt
 	CUDA_CALL(cudaSetDevice(gpu_id));
 	for (unsigned i = 0; i < weights_pages_count; i++) {
 		PageDef &def = spec->weights_pages[i];
-		CUDA_CALL(
-			cudaMemcpyAsync(
-				weights_pages[i], // dstptr
-				weights_pinned_host_memory + def.base_offset, // srcptr
-				def.size, // size 
-				cudaMemcpyHostToDevice,
-				stream
+		size_t current_offset = 0;
+		size_t increment = 16 * 1024*1024;
+		while (current_offset < def.size) {
+			size_t transfer_size = current_offset + increment <= def.size ? increment : (def.size - current_offset);
+			CUDA_CALL(
+				cudaMemcpyAsync(
+					weights_pages[i] + current_offset, // dstptr
+					weights_pinned_host_memory + def.base_offset + current_offset, // srcptr
+					transfer_size,
+					cudaMemcpyHostToDevice,
+					stream
+				)
 			)
-		)
-		if (rate_limit) transfer_limiter->limit(stream);
+			current_offset += transfer_size;
+			if (rate_limit) cudaStreamSynchronize(stream); // Straight up synchronize for copy rate limiting
+		}
 	}
 }
 

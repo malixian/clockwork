@@ -114,8 +114,8 @@ void GPUExecutorShared::executorMain(unsigned executor_id, unsigned core) {
 	}
 }
 
-GPUExecutorExclusive::GPUExecutorExclusive(TaskType type, std::vector<unsigned> cores, unsigned gpu_id):
-	BaseExecutor(type), gpu_id(gpu_id) {
+GPUExecutorExclusive::GPUExecutorExclusive(TaskType type, std::vector<unsigned> cores, unsigned gpu_id, int priority):
+	BaseExecutor(type), gpu_id(gpu_id), priority(priority) {
 	for (unsigned i = 0; i < cores.size(); i++) {
 		threads.push_back(std::thread(&GPUExecutorExclusive::executorMain, this, i, cores[i]));
 	}
@@ -125,7 +125,7 @@ void GPUExecutorExclusive::executorMain(unsigned executor_id, unsigned core) {
 	std::cout << TaskTypeName(type) << "-" << executor_id << "(GPU " << gpu_id << ") binding to core " << core << std::endl;
 	// util::set_core(core);
 	util::setCurrentThreadMaxPriority();
-	util::initializeCudaStream(gpu_id);
+	util::initializeCudaStream(gpu_id, priority);
 	cudaStream_t stream = util::Stream();
 
 
@@ -188,8 +188,8 @@ void AsyncTaskChecker::executorMain(unsigned executor_id, unsigned core) {
 		for (AsyncTask* task : pending_tasks) {
 			if (task->is_complete()) {
 				auto telemetry = task->telemetry;
-				task->process_completion();
 				telemetry->async_complete = util::hrt();
+				task->process_completion();
 			} else {
 				still_pending.push_back(task);
 			}
@@ -239,8 +239,12 @@ void ClockworkRuntime::join() {
 	Only now do we stop the checker.  Async tasks might still be
 	outstanding, and we still want to wait for them to complete
 	*/
-	checker->shutdown();
-	checker->join();
+	for (AsyncTaskChecker* checker : all_checkers) {
+		checker->shutdown();
+	}
+	for (AsyncTaskChecker* checker : all_checkers) {
+		checker->join();
+	}
 }
 
 }

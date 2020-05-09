@@ -58,6 +58,7 @@ public:
 	AsyncTask(unsigned gpu_id) : Task(gpu_id) {}
 
 	virtual bool is_complete() = 0;
+	virtual void await_completion() = 0;
 	virtual void process_completion() = 0;
 };
 
@@ -78,6 +79,7 @@ public:
 
 	// AsyncTask
 	bool is_complete();
+	void await_completion();
 	virtual void process_completion() = 0;
 };
 
