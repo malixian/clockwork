@@ -43,7 +43,7 @@ public:
 
   int64_t estimate_rtt() {
     if (remote_delta_ == INT64_MAX) return 0;
-    return (local_delta_ + remote_delta_) / 2;
+    return (local_delta_ + remote_delta_);
   }
 
   int64_t local_delta_ = INT64_MAX;
