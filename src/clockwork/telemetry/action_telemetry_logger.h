@@ -1,3 +1,6 @@
+#ifndef _CLOCKWORK_TELEMETRY_ACTION_TELEMETRY_LOGGER_H_
+#define _CLOCKWORK_TELEMETRY_ACTION_TELEMETRY_LOGGER_H_
+
 #include <thread>
 #include <atomic>
 #include "tbb/concurrent_queue.h"
@@ -99,3 +102,4 @@ public:
 
 }
 
+#endif

@@ -275,7 +275,9 @@ int main(int argc, char *argv[])
 	}
 	std::cout << "Starting Clockwork Client" << std::endl;
 
-	clockwork::Client *client = clockwork::Connect(argv[1], argv[2]);
+	bool verbose = false; // Log every request and response?
+	bool summary = true;  // Log summary once per second?
+	clockwork::Client *client = clockwork::Connect(argv[1], argv[2], verbose, summary);
 
 	
 	clockwork::Model * model = client->load_remote_model(get_example_model());
@@ -291,6 +293,7 @@ int main(int argc, char *argv[])
 			break;
 		} catch (const clockwork_initializing& e1) {
 			std::cout << "Clockwork initializing, retrying " << e1.what() << std::endl;
+			usleep(1000000);
 		} catch (const std::runtime_error& e2) {
 			std::cout << "LS error: " << e2.what() << std::endl;
 			exit(1);
@@ -308,11 +311,12 @@ int main(int argc, char *argv[])
 				model->infer(input);
 			} catch (const clockwork_initializing& e1) {
 				std::cout << "Clockwork initializing, retrying " << e1.what() << std::endl;
+				usleep(1000000);
 			} catch (const std::runtime_error& e2) {
 				std::cout << "Infer error: " << e2.what() << std::endl;
 				exit(1);
 			}
-			usleep(1000000);
+			// usleep(1000000);
 		}
 	}
 

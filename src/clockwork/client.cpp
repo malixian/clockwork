@@ -5,6 +5,7 @@
 #include "clockwork/client.h"
 #include "clockwork/api/client_api.h"
 #include "clockwork/network/client.h"
+#include "clockwork/telemetry/client_telemetry_logger.h"
 
 namespace clockwork
 {
@@ -13,13 +14,14 @@ class NetworkClient : public Client
 {
 public:
 	bool print;
+	ClientTelemetryLogger* telemetry;
 	std::atomic_int request_id_seed;
 	int user_id;
 	network::client::ConnectionManager *manager;
 	network::client::Connection *connection;
 	ModelSet models;
 
-	NetworkClient(network::client::ConnectionManager *manager, network::client::Connection *connection, bool print);
+	NetworkClient(network::client::ConnectionManager *manager, network::client::Connection *connection, bool print, bool summarize);
 	virtual ~NetworkClient();
 
 	virtual Model *get_model(int model_id);
@@ -42,12 +44,14 @@ public:
 
 	const int model_id_;
 	const std::string source_;
-	const int input_size_;
+	const size_t input_size_;
+	const size_t output_size_;
 
-	ModelImpl(NetworkClient *client, int model_id, std::string source, int input_size, bool print);
+	ModelImpl(NetworkClient *client, int model_id, std::string source, size_t input_size_, size_t output_size, bool print);
 
 	virtual int id();
-	virtual int input_size();
+	virtual size_t input_size();
+	virtual size_t output_size();
 	virtual std::string source();
 
 	virtual std::vector<uint8_t> infer(std::vector<uint8_t> &input);
@@ -56,8 +60,16 @@ public:
 	virtual std::future<void> evict_async();
 };
 
-NetworkClient::NetworkClient(network::client::ConnectionManager *manager, network::client::Connection *connection, bool print) : manager(manager), connection(connection), user_id(0), request_id_seed(0), print(print)
+NetworkClient::NetworkClient(network::client::ConnectionManager *manager, 
+	network::client::Connection *connection, bool print, bool summarize) : 
+	manager(manager), connection(connection), user_id(0), request_id_seed(0), 
+	print(print)
 {
+	if (summarize) {
+		telemetry = new ClientTelemetrySummarizer();
+	} else {
+		telemetry = new NoOpClientTelemetryLogger();
+	}
 }
 
 NetworkClient::~NetworkClient()
@@ -137,7 +149,7 @@ std::future<std::vector<Model *>> NetworkClient::load_remote_models_async(std::s
 		{
 			std::vector<Model*> models = std::vector<Model*>();
 			for (int i = 0; i < response.copies_created; i++)
-				models.push_back(new ModelImpl(this, (response.model_id + i), model_path, response.input_size, print));
+				models.push_back(new ModelImpl(this, (response.model_id + i), model_path, response.input_size, response.output_size, print));
 			promise->set_value(models);
 		}
 		else if (response.header.status == clockworkInitializing)
@@ -173,7 +185,7 @@ std::future<ModelSet> NetworkClient::ls_async()
 		{
 			ModelSet models;
 			for (auto &model : response.models) {
-				auto impl = new ModelImpl(this, model.model_id, model.remote_path, model.input_size, print);
+				auto impl = new ModelImpl(this, model.model_id, model.remote_path, model.input_size, model.output_size, print);
 				models[model.model_id] = impl;
 			}
 			promise->set_value(models);
@@ -191,14 +203,15 @@ std::future<ModelSet> NetworkClient::ls_async()
 	return promise->get_future();
 }
 
-ModelImpl::ModelImpl(NetworkClient *client, int model_id, std::string source, int input_size, bool print) : 
-	client(client), model_id_(model_id), source_(source), input_size_(input_size), print(print)
+ModelImpl::ModelImpl(NetworkClient *client, int model_id, std::string source, size_t input_size, size_t output_size, bool print) : 
+	client(client), model_id_(model_id), source_(source), input_size_(input_size), output_size_(output_size), print(print)
 {
 }
 
 int ModelImpl::id() { return model_id_; }
 
-int ModelImpl::input_size() { return input_size_; }
+size_t ModelImpl::input_size() { return input_size_; }
+size_t ModelImpl::output_size() { return output_size_; }
 
 std::string ModelImpl::source() { return source_; }
 
@@ -227,12 +240,15 @@ std::future<std::vector<uint8_t>> ModelImpl::infer_async(std::vector<uint8_t> &i
 
 	if (print) std::cout << "<--  " << request.str() << std::endl;
 
-	client->connection->infer(request, [this, promise, input_data](clientapi::InferenceResponse &response) {
+	uint64_t t_send = util::now();
+	client->connection->infer(request, [this, promise, input_data, t_send](clientapi::InferenceResponse &response) {
+		uint64_t t_receive = util::now();
 		if (print) std::cout << " --> " << response.str() << std::endl;
 		if (response.header.status == clockworkSuccess)
 		{
 			uint8_t *output = static_cast<uint8_t *>(response.output);
 			promise->set_value(std::vector<uint8_t>(output, output + response.output_size));
+			client->telemetry->log(client->user_id, model_id_, 1, input_size_, output_size_, t_send, t_receive, true);
 		}
 		else if (response.header.status == clockworkInitializing)
 		{
@@ -241,6 +257,7 @@ std::future<std::vector<uint8_t>> ModelImpl::infer_async(std::vector<uint8_t> &i
 		else
 		{
 			promise->set_exception(std::make_exception_ptr(clockwork_error(response.header.message)));
+			client->telemetry->log(client->user_id, model_id_, 1, input_size_, output_size_, t_send, t_receive, false);
 		}
 		delete input_data;
 		free(response.output);
@@ -262,7 +279,7 @@ std::future<void> ModelImpl::evict_async()
 	return promise->get_future();
 }
 
-Client *Connect(const std::string &hostname, const std::string &port, bool print)
+Client *Connect(const std::string &hostname, const std::string &port, bool print, bool summarize)
 {
 	// ConnectionManager internally has a thread for doing IO.
 	// For now just have a separate thread per client
@@ -272,7 +289,7 @@ Client *Connect(const std::string &hostname, const std::string &port, bool print
 	// Connect to clockwork
 	network::client::Connection *clockwork_connection = manager->connect(hostname, port);
 
-	return new NetworkClient(manager, clockwork_connection, print);
+	return new NetworkClient(manager, clockwork_connection, print, summarize);
 }
 
 } // namespace clockwork

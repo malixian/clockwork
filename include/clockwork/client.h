@@ -27,7 +27,8 @@ class Model {
 public:
 	virtual int id() = 0;
 	virtual std::string source() = 0;
-	virtual int input_size() = 0;
+	virtual size_t input_size() = 0;
+	virtual size_t output_size() = 0;
 
 	/* 
 	Perform an inference with the provided input and return the output.
@@ -99,7 +100,7 @@ public:
 
 
 /* Connect to a Clockwork instance */
-extern "C" Client* Connect(const std::string &hostname, const std::string &port, bool print = true);
+extern "C" Client* Connect(const std::string &hostname, const std::string &port, bool verbose = false, bool summary = false);
 
 }
 
