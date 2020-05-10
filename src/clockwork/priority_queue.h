@@ -69,12 +69,12 @@ public:
 	}
 
 	T* dequeue() {
-		pull_new_elements(); 
+		// pull_new_elements(); 
 
-		auto now = util::now();
-		if (alive && !reader_queue.empty() && reader_queue.top().priority > now) {
-			std::cout << "Waiting " << (reader_queue.top().priority - now) << std::endl;
-		}
+		// auto now = util::now();
+		// if (alive && !reader_queue.empty() && reader_queue.top().priority > now) {
+		// 	std::cout << "Waiting " << (reader_queue.top().priority - now) << std::endl;
+		// }
 
 		T* element = nullptr;
 		while (alive && !try_dequeue(element)) usleep(1);
