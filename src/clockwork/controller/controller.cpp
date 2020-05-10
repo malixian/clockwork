@@ -508,14 +508,15 @@ ControllerWithStartupPhase::ControllerWithStartupPhase(
 			int client_port, 
 			std::vector<std::pair<std::string, std::string>> worker_host_port_pairs,
 			uint64_t load_stage_timeout,
-			unsigned profiling_iterations,
 			ControllerStartup* startup,
-			Scheduler* scheduler
+			Scheduler* scheduler,
+			RequestTelemetryLogger* request_telemetry
 		) : 
 		Controller(client_port, worker_host_port_pairs),
 		startup(startup),
 		scheduler(scheduler),
-		startup_thread(&ControllerWithStartupPhase::runStartup, this) {
+		startup_thread(&ControllerWithStartupPhase::runStartup, this),
+		request_telemetry(request_telemetry) {
 }
 
 void ControllerWithStartupPhase::runStartup() {
@@ -552,7 +553,24 @@ void ControllerWithStartupPhase::infer(clientapi::InferenceRequest &request, std
 			return;
 		}
 	}
-	scheduler->clientInfer(request, callback);
+	if (request_telemetry != nullptr) {
+		int user_id = request.header.user_id;
+		uint64_t arrival = util::now();
+		scheduler->clientInfer(request, [this, user_id, arrival, callback](clientapi::InferenceResponse &response) {
+			ControllerRequestTelemetry telemetry{
+				response.header.user_request_id,
+				user_id,
+				response.model_id,
+				arrival,
+				util::now(),
+				response.header.status
+			};
+			callback(response);
+			request_telemetry->log(telemetry);
+		});
+	} else {
+		scheduler->clientInfer(request, callback);
+	}
 }
 
 void ControllerWithStartupPhase::loadRemoteModel(clientapi::LoadModelFromRemoteDiskRequest &request, std::function<void(clientapi::LoadModelFromRemoteDiskResponse&)> callback) {

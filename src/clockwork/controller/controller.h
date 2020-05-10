@@ -4,6 +4,7 @@
 #include "clockwork/controller/scheduler.h"
 #include "clockwork/network/controller.h"
 #include "clockwork/api/worker_api.h"
+#include "clockwork/telemetry/controller_request_logger.h"
 #include <limits>
 #include <algorithm>
 
@@ -220,6 +221,7 @@ public:
 
 class ControllerWithStartupPhase : public Controller {
 private:
+	RequestTelemetryLogger* request_telemetry;
 	bool startup_phase = true;
 	ControllerStartup* startup;
 	std::thread startup_thread;
@@ -234,9 +236,9 @@ public:
 				int client_port, 
 				std::vector<std::pair<std::string, std::string>> worker_host_port_pairs,
 				uint64_t load_stage_timeout,
-				unsigned profiling_iterations,
 				ControllerStartup* startup,
-				Scheduler* scheduler
+				Scheduler* scheduler,
+				RequestTelemetryLogger* request_telemetry = nullptr
 			);
 
 	void runStartup();

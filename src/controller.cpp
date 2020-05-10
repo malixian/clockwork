@@ -3,11 +3,13 @@
 #include "clockwork/controller/closed_loop_controller.h"
 #include "clockwork/controller/stress_test_controller.h"
 #include "clockwork/controller/infer_only_scheduler.h"
+#include "clockwork/telemetry/controller_request_logger.h"
 
 
 using namespace clockwork;
 
 int main(int argc, char *argv[]) {
+	util::setCurrentThreadMaxPriority();
 	std::cout << "Starting Clockwork Controller" << std::endl;
 
 	if ( argc < 4) {
@@ -46,9 +48,9 @@ int main(int argc, char *argv[]) {
 			client_requests_listen_port,
 			worker_host_port_pairs,
 			10000000000UL, // 10s load stage timeout
-			10, // 10 profiling iterations
 			new controller::ControllerStartup(), // in future the startup type might be customizable
-			scheduler
+			scheduler,
+			RequestTelemetryPrinter::async_request_printer(10000000000UL) // print request summary every 10s
 		);
 		controller->join();
 	} else if (controller_type == "ECHO") {
@@ -57,9 +59,9 @@ int main(int argc, char *argv[]) {
 			client_requests_listen_port,
 			worker_host_port_pairs,
 			10000000000UL, // 10s load stage timeout
-			10, // 10 profiling iterations
 			new controller::ControllerStartup(), // in future the startup type might be customizable
-			scheduler
+			scheduler,
+			RequestTelemetryPrinter::async_request_printer(10000000000UL) // print request summary every 10s
 		);
 		controller->join();
 	}

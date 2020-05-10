@@ -52,8 +52,8 @@ public:
 	bool send_inputs = true;
 
 	std::string model_path = "/home/jcmace/clockwork-modelzoo-volta/resnet50_v2/model";
-	unsigned duplicates = 2000;
-	unsigned max_models_on_gpu = 200;
+	unsigned duplicates = 40;
+	unsigned max_models_on_gpu = 20;
 	size_t input_size = send_inputs ? 602112 : 0;
 	char* input;
 
@@ -93,6 +93,7 @@ public:
 		}
 
 		const auto [min, max] = std::minmax_element(v.begin(), v.end());
+		const auto [e2emin, e2emax] = std::minmax_element(e2e.begin(), e2e.end());
 		int count = v.size();
 		double sum = std::accumulate(v.begin(), v.end(), 0.0);
 		double sume2e = std::accumulate(e2e.begin(), e2e.end(), 0.0);
@@ -100,7 +101,7 @@ public:
 
 		std::stringstream s;
 		s << std::fixed << std::setprecision(2);
-		s << "profiled=" << profiled << " min=" << *min << " max=" << *max << " mean=" << (sum/count) << " e2e=" << (sume2e/count) << " throughput=" << throughput << " efficiency=" << (sum/((float) duration));
+		s << "profiled=" << profiled << " min=" << *min << " max=" << *max << " mean=" << (sum/count) << " e2e=" << (sume2e/count) << " e2emax=" << *e2emax << " throughput=" << throughput << " efficiency=" << (sum/((float) duration));
 		return s.str();
 	}
 
