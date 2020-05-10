@@ -138,6 +138,7 @@ void MemoryManager::initialize(ClockworkWorkerConfig &config) {
 		workspace_pools.push_back(CUDAMemoryPool::create(config.workspace_pool_size, gpu_id));
 		io_pools.push_back(CUDAMemoryPool::create(config.io_pool_size, gpu_id));
 	}
+	allow_zero_size_inputs = config.allow_zero_size_inputs;
 }
 
 MemoryManager::MemoryManager(ClockworkWorkerConfig &config) :
@@ -188,6 +189,9 @@ MemoryPool::~MemoryPool() {}
 
 // Allocate `amount` of memory; returns nullptr if out of memory
 char* MemoryPool::alloc(size_t amount) {
+	// We actually allocate a minimum of 256 bytes
+	if (amount <= 256) amount = 256;
+
 	std::lock_guard<std::mutex> lock(mutex);
 
 	// Simple case when there are no outstanding allocations
@@ -251,7 +255,7 @@ void MemoryPool::free(char* ptr) {
 	std::lock_guard<std::mutex> lock(mutex);
 
 	auto it = ptr_allocations.find(ptr);
-	if (it == ptr_allocations.end()) return;
+	CHECK(it != ptr_allocations.end()) << "Freeing invalid ptr";
 
 	auto allocation = it->second;
 

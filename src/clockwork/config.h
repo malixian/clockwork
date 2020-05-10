@@ -29,12 +29,13 @@ public:
 
 	unsigned num_gpus = util::get_num_gpus();
 
-	// TODO: currently we've hard-coded a whole bunch of defaults -- 10GB cache, 16MB pages
 	size_t weights_cache_size;
 	size_t weights_cache_page_size;
 	size_t io_pool_size;
 	size_t workspace_pool_size;
 	size_t host_io_pool_size;
+
+	bool allow_zero_size_inputs = false;
 
 	ClockworkWorkerConfig(std::string config_file_path = "");
 

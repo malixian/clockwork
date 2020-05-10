@@ -49,11 +49,12 @@ class StressTestController : public Controller {
 public:
 	bool stress_infer = true;
 	bool stress_loadweights = true;
+	bool send_inputs = true;
 
 	std::string model_path = "/home/jcmace/clockwork-modelzoo-volta/resnet50_v2/model";
 	unsigned duplicates = 2000;
 	unsigned max_models_on_gpu = 200;
-	size_t input_size = 602112;
+	size_t input_size = send_inputs ? 602112 : 0;
 	char* input;
 
 	int max_outstanding_loadweights = 2;

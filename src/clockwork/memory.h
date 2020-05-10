@@ -90,6 +90,9 @@ public:
 
 class MemoryManager {
 public:
+	// Used for testing; Clockwork can be configured to generate model inputs server-side
+	bool allow_zero_size_inputs = false;
+
 	const size_t page_size;
 
 	// Device-side GPU-specific page cache for model weights

@@ -256,7 +256,7 @@ void EvictWeightsTask::run(cudaStream_t stream) {
 
 CopyInputTask::CopyInputTask(MemoryManager* manager, int model_id,
 	uint64_t earliest, uint64_t latest, unsigned batch_size, size_t input_size,
-	char* input, unsigned gpu_id, CudaEventPool* event_pool):
+	char* &input, unsigned gpu_id, CudaEventPool* event_pool):
 		CudaAsyncTask(gpu_id, event_pool), manager(manager), model_id(model_id),
 		earliest(earliest), latest(latest), batch_size(batch_size),
 		input_size(input_size), input(input), rm(nullptr), io_memory(nullptr) {
@@ -291,13 +291,22 @@ void CopyInputTask::run(cudaStream_t stream) {
 		throw TaskError(actionErrorInvalidBatchSize, err.str());
 	}
 
-	if (rm->model->input_size(batch_size) != input_size) {
+	if (input_size == 0 && manager->allow_zero_size_inputs) {
+		// Used in testing; allow client to send zero-size inputs and generate worker-side
+		input_size = rm->model->input_size(batch_size);
+		manager->host_io_pool->free(input);
+		input = manager->host_io_pool->alloc(input_size);
+    	CHECK(input != nullptr) << "Unable to alloc from host_io_pool for infer action input";
+
+	} else if (rm->model->input_size(batch_size) != input_size) {
+		// Normal behavior requires correctly sized inputs
 		std::stringstream err;
 		err << "CopyInputTask received incorrectly sized input"
 		    << " (expected " << rm->model->input_size(batch_size) 
 		    << ", got " << input_size
 		    << " (batch_size=" << batch_size << ")";
-		throw TaskError(actionErrorInvalidInput, err.str());		
+		throw TaskError(actionErrorInvalidInput, err.str());	
+
 	}
 
 	size_t io_memory_size = rm->model->io_memory_size(batch_size);

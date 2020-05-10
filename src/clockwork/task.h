@@ -173,7 +173,7 @@ private:
 	uint64_t earliest, latest;
 	unsigned batch_size;
 	size_t input_size;
-	char* input;
+	char* &input;
 
 	RuntimeModel* rm;
 	char* io_memory;
@@ -181,7 +181,7 @@ private:
 public:
 
 	CopyInputTask(MemoryManager* manager, int model_id, uint64_t earliest,
-		uint64_t latest, unsigned batch_size, size_t input_size, char* input,
+		uint64_t latest, unsigned batch_size, size_t input_size, char* &input,
 		unsigned gpu_id, CudaEventPool* event_pool);
 	~CopyInputTask();
 

@@ -103,5 +103,12 @@ ClockworkWorkerConfig::ClockworkWorkerConfig(std::string config_file_path) {
 		std::cerr << e.what() << std::endl;
 		std::cout << "Config file should contain the setting \"log_dir\" with variable \"telemetry_log_dir\"" << std::endl;
 	}
+
+	try {
+		allow_zero_size_inputs = lookup<bool>("WorkerConfig.allow_zero_size_inputs");
+	} catch (const std::exception& e) {
+		std::cerr << e.what() << std::endl;
+		std::cout << "Config file should contain the setting \"allow_zero_size_inputs\"" << std::endl;
+	}
 }
 
