@@ -89,7 +89,7 @@ public:
 	void error(std::shared_ptr<workerapi::ErrorResult> result);
 };
 
-
+uint64_t adjust_timestamp(uint64_t timestamp, int64_t clock_delta);
 
 }
 

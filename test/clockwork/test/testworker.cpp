@@ -222,3 +222,79 @@ TEST_CASE("Test GetWorkerState", "[worker] [e2esimple]") {
 
 }
 
+TEST_CASE("Test Adjust Timestamp", "[adjust]") {
+    uint64_t timestamp;
+    int64_t delta;
+    uint64_t expect;
+
+    timestamp = 0;
+    delta = -1;
+    expect = 0;
+    CHECK(adjust_timestamp(timestamp, delta) == expect);
+
+    timestamp = 1;
+    delta = -1;
+    expect = 0;
+    CHECK(adjust_timestamp(timestamp, delta) == expect);
+
+    timestamp = 2;
+    delta = -1;
+    expect = 1;
+    CHECK(adjust_timestamp(timestamp, delta) == expect);
+
+    timestamp = 100;
+    delta = -20;
+    expect = 80;
+    CHECK(adjust_timestamp(timestamp, delta) == expect);
+
+    timestamp = 0;
+    delta = 1;
+    expect = 1;
+    CHECK(adjust_timestamp(timestamp, delta) == expect);
+
+    timestamp = 1;
+    delta = 1;
+    expect = 2;
+    CHECK(adjust_timestamp(timestamp, delta) == expect);
+
+    timestamp = 2;
+    delta = 1;
+    expect = 3;
+    CHECK(adjust_timestamp(timestamp, delta) == expect);
+
+    timestamp = 100;
+    delta = 20;
+    expect = 120;
+    CHECK(adjust_timestamp(timestamp, delta) == expect);
+
+    timestamp = UINT64_MAX;
+    delta = 0;
+    expect = UINT64_MAX;
+    CHECK(adjust_timestamp(timestamp, delta) == expect);
+
+    timestamp = UINT64_MAX;
+    delta = -1;
+    expect = UINT64_MAX-1;
+    CHECK(adjust_timestamp(timestamp, delta) == expect);
+
+    timestamp = UINT64_MAX;
+    delta = -100;
+    expect = UINT64_MAX-100;
+    CHECK(adjust_timestamp(timestamp, delta) == expect);
+
+    timestamp = UINT64_MAX;
+    delta = 1;
+    expect = UINT64_MAX;
+    CHECK(adjust_timestamp(timestamp, delta) == expect);
+
+    timestamp = UINT64_MAX;
+    delta = 10;
+    expect = UINT64_MAX;
+    CHECK(adjust_timestamp(timestamp, delta) == expect);
+
+    timestamp = UINT64_MAX;
+    delta = 100;
+    expect = UINT64_MAX;
+    CHECK(adjust_timestamp(timestamp, delta) == expect);
+}
+
