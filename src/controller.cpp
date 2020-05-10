@@ -2,6 +2,7 @@
 #include "clockwork/controller/direct_controller.h"
 #include "clockwork/controller/closed_loop_controller.h"
 #include "clockwork/controller/stress_test_controller.h"
+#include "clockwork/controller/infer_only_scheduler.h"
 
 
 using namespace clockwork;
@@ -38,6 +39,17 @@ int main(int argc, char *argv[]) {
 		controller->join();
 	} else if (controller_type == "STRESS") {
 		StressTestController* controller = new StressTestController(client_requests_listen_port, worker_host_port_pairs);
+		controller->join();
+	} else if (controller_type == "INFER") {
+		Scheduler* scheduler = new InferOnlyScheduler();
+		controller::ControllerWithStartupPhase* controller = new controller::ControllerWithStartupPhase(
+			client_requests_listen_port,
+			worker_host_port_pairs,
+			10000000000UL, // 10s load stage timeout
+			10, // 10 profiling iterations
+			new controller::ControllerStartup(), // in future the startup type might be customizable
+			scheduler
+		);
 		controller->join();
 	} else if (controller_type == "ECHO") {
 		Scheduler* scheduler = new EchoScheduler();
