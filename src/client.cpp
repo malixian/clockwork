@@ -267,7 +267,7 @@ public:
 int main(int argc, char *argv[])
 {
 	// model_id, workload_type, rate, burst_factor, burst_length, burst_gap
-
+	util::setCurrentThreadMaxPriority();
 	if (argc != 3)
 	{
 		std::cerr << "Usage: controller HOST PORT" << std::endl;

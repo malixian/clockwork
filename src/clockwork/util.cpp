@@ -72,13 +72,13 @@ unsigned get_num_cores() {
 }
 
 void set_core(unsigned core) {
-  // cpu_set_t cpuset;
-  // CPU_ZERO(&cpuset);
-  // CPU_SET(core, &cpuset);
-  // int rc = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
-  // if (rc != 0) {
-  //   std::cerr << "Error calling pthread_setaffinity_np: " << rc << "\n";
-  // }
+  cpu_set_t cpuset;
+  CPU_ZERO(&cpuset);
+  CPU_SET(core, &cpuset);
+  int rc = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+  if (rc != 0) {
+    std::cerr << "Error calling pthread_setaffinity_np: " << rc << "\n";
+  }
 }
 
 void set_cores(std::vector<unsigned> cores) {
@@ -191,6 +191,13 @@ char* getGPUModelToBuffer(int deviceNumber, char* buf) {
 
 void setCurrentThreadMaxPriority() {
   pthread_t thId = pthread_self();
+
+  // Don't let run on core 0 for safety
+  std::vector<unsigned> cores;
+  for (unsigned i = 1; i < get_num_cores(); i++) {
+    cores.push_back(i);
+  }
+  set_cores(cores);
   
   struct sched_param params;
   params.sched_priority = sched_get_priority_max(SCHED_FIFO);
