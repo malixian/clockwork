@@ -62,10 +62,14 @@ private:
 
 public:	
 
-	AsyncControllerActionTelemetryLogger() : thread(&AsyncControllerActionTelemetryLogger::run, this) {}
+	AsyncControllerActionTelemetryLogger() {}
 
 	void addLogger(ControllerActionTelemetryLogger* logger) {
 		loggers.push_back(logger);
+	}
+
+	void start() {
+		this->thread = std::thread(&AsyncControllerActionTelemetryLogger::run, this);
 	}
 
 	void run() {
@@ -127,6 +131,7 @@ public:
 	static AsyncControllerActionTelemetryLogger* create_async(uint64_t print_interval) {
 		auto result = new AsyncControllerActionTelemetryLogger();
 		result->addLogger(new SimpleActionPrinter(print_interval));
+		result->start();
 		return result;
 	}
 

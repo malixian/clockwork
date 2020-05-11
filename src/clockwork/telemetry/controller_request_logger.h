@@ -53,10 +53,14 @@ private:
 
 public:	
 
-	AsyncRequestTelemetryLogger() : thread(&AsyncRequestTelemetryLogger::run, this) {}
+	AsyncRequestTelemetryLogger() {}
 
 	void addLogger(RequestTelemetryLogger* logger) {
 		loggers.push_back(logger);
+	}
+
+	void start() {
+		thread = std::thread(&AsyncRequestTelemetryLogger::run, this);
 	}
 
 	void run() {
@@ -97,6 +101,7 @@ public:
 	static RequestTelemetryLogger* async_request_printer(uint64_t print_interval) {
 		auto result = new AsyncRequestTelemetryLogger();
 		result->addLogger(new RequestTelemetryPrinter(print_interval));
+		result->start();
 		return result;
 	}
 

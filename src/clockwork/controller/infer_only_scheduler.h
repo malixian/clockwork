@@ -12,7 +12,7 @@ uint64_t action_id_seed = 0;
 
 class InferOnlyScheduler : public Scheduler {
 public:
-	static const uint64_t print_interval = 1000000000UL; // 1 second
+	static const uint64_t print_interval = 10000000000UL; // 10 seconds
 	bool print_debug = false;
 	std::mutex mutex;
 	uint64_t outstanding_loads = 0;
