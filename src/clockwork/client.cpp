@@ -42,6 +42,7 @@ public:
 	bool print;
 	NetworkClient *client;
 
+	int user_id_;
 	const int model_id_;
 	const std::string source_;
 	const size_t input_size_;
@@ -53,8 +54,13 @@ public:
 	virtual size_t input_size();
 	virtual size_t output_size();
 	virtual std::string source();
+	virtual int user_id();
+	virtual void set_user_id(int user_id);
 
 	virtual std::vector<uint8_t> infer(std::vector<uint8_t> &input);
+	virtual void infer(std::vector<uint8_t> &input, 
+		std::function<void(std::vector<uint8_t>&)> onSuccess, 
+		std::function<void(int, std::string&)> onError);
 	virtual std::future<std::vector<uint8_t>> infer_async(std::vector<uint8_t> &input);
 	virtual void evict();
 	virtual std::future<void> evict_async();
@@ -204,7 +210,7 @@ std::future<ModelSet> NetworkClient::ls_async()
 }
 
 ModelImpl::ModelImpl(NetworkClient *client, int model_id, std::string source, size_t input_size, size_t output_size, bool print) : 
-	client(client), model_id_(model_id), source_(source), input_size_(input_size), output_size_(output_size), print(print)
+	client(client), user_id_(client->user_id), model_id_(model_id), source_(source), input_size_(input_size), output_size_(output_size), print(print)
 {
 }
 
@@ -215,6 +221,9 @@ size_t ModelImpl::output_size() { return output_size_; }
 
 std::string ModelImpl::source() { return source_; }
 
+int ModelImpl::user_id() { return user_id_; }
+void ModelImpl::set_user_id(int user_id) { user_id_ = user_id; }
+
 std::vector<uint8_t> ModelImpl::infer(std::vector<uint8_t> &input)
 {
 	auto future = infer_async(input);
@@ -223,15 +232,33 @@ std::vector<uint8_t> ModelImpl::infer(std::vector<uint8_t> &input)
 
 std::future<std::vector<uint8_t>> ModelImpl::infer_async(std::vector<uint8_t> &input)
 {
-	CHECK(input_size_ == input.size()) << "Infer called with incorrect input size";
-
 	auto promise = std::make_shared<std::promise<std::vector<uint8_t>>>();
+
+	auto onSuccess = [this, promise](std::vector<uint8_t>& result) {
+		promise->set_value(result);
+	};
+
+	auto onError = [this, promise](int status, std::string &message) {
+		if (status == clockworkInitializing) {
+			promise->set_exception(std::make_exception_ptr(clockwork_initializing(message)));
+		} else {
+			promise->set_exception(std::make_exception_ptr(clockwork_error(message)));
+		}
+	};
+
+	this->infer(input, onSuccess, onError);
+
+	return promise->get_future();
+}
+
+void ModelImpl::infer(std::vector<uint8_t> &input, std::function<void(std::vector<uint8_t>&)> onSuccess, std::function<void(int, std::string&)> onError) {
+	CHECK(input_size_ == input.size()) << "Infer called with incorrect input size";
 
 	auto input_data = new uint8_t[input.size()];
 	std::memcpy(input_data, input.data(), input.size());
 
 	clientapi::InferenceRequest request;
-	request.header.user_id = client->user_id;
+	request.header.user_id = user_id_;
 	request.header.user_request_id = client->request_id_seed++;
 	request.model_id = model_id_;
 	request.batch_size = 1; // TODO: support batched requests in client
@@ -241,29 +268,26 @@ std::future<std::vector<uint8_t>> ModelImpl::infer_async(std::vector<uint8_t> &i
 	if (print) std::cout << "<--  " << request.str() << std::endl;
 
 	uint64_t t_send = util::now();
-	client->connection->infer(request, [this, promise, input_data, t_send](clientapi::InferenceResponse &response) {
+	client->connection->infer(request, [this, input_data, t_send, onSuccess, onError](clientapi::InferenceResponse &response) {
 		uint64_t t_receive = util::now();
 		if (print) std::cout << " --> " << response.str() << std::endl;
 		if (response.header.status == clockworkSuccess)
 		{
 			uint8_t *output = static_cast<uint8_t *>(response.output);
-			promise->set_value(std::vector<uint8_t>(output, output + response.output_size));
-			client->telemetry->log(client->user_id, model_id_, 1, input_size_, output_size_, t_send, t_receive, true);
+			std::vector<uint8_t> result(output, output + response.output_size);
+			onSuccess(result);
+			client->telemetry->log(user_id_, model_id_, 1, input_size_, output_size_, t_send, t_receive, true);
 		}
-		else if (response.header.status == clockworkInitializing)
-		{
-			promise->set_exception(std::make_exception_ptr(clockwork_initializing(response.header.message)));
-		} 
 		else
 		{
-			promise->set_exception(std::make_exception_ptr(clockwork_error(response.header.message)));
-			client->telemetry->log(client->user_id, model_id_, 1, input_size_, output_size_, t_send, t_receive, false);
+			onError(response.header.status, response.header.message);
+			if (response.header.status == clockworkError) {
+				client->telemetry->log(user_id_, model_id_, 1, input_size_, output_size_, t_send, t_receive, false);
+			}
 		}
 		delete input_data;
 		free(response.output);
 	});
-
-	return promise->get_future();
 }
 
 void ModelImpl::evict()

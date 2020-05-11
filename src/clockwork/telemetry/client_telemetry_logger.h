@@ -96,23 +96,25 @@ struct Summary {
 
 class ClientTelemetrySummarizer : public ClientTelemetryLogger {
 public:
-
+	uint64_t print_interval;
 	std::atomic_bool alive = true;
 	tbb::concurrent_queue<Sample> samples;
 	std::thread thread;
 	std::atomic_int errors = 0;
 
-	ClientTelemetrySummarizer() : thread(&ClientTelemetrySummarizer::run, this) {}
+	ClientTelemetrySummarizer(uint64_t print_interval = 10000000000UL) : 
+		thread(&ClientTelemetrySummarizer::run, this), print_interval(print_interval) {}
 
 	void run() {
 		uint64_t last_print = util::now();
-		uint64_t print_interval = 1000000000UL; // 1s
+		bool begun = false;
 
 		std::queue<Sample> newSamples;
 		while (alive) {
 			Sample sample;
 			while (samples.try_pop(sample)) {
 				newSamples.push(sample);
+				begun = true;
 			}
 
 			uint64_t now = util::now();
@@ -123,15 +125,20 @@ public:
 
 			std::map<unsigned, std::vector<Sample>> samples_by_user;
 			while (!newSamples.empty()) {
-				samples_by_user[sample.user_id].push_back(newSamples.front());
+				sample = newSamples.front();
+				samples_by_user[sample.user_id].push_back(sample);
 				newSamples.pop();
 			}
 
 			std::stringstream report;
-			for (auto &p : samples_by_user) {
-				report << "User " << p.first << " " 
-				       << Summary(now - last_print, p.second).str() 
-				       << std::endl;
+			if (begun && samples_by_user.size() == 0) {
+				report << "throughput=0" << std::endl;
+			} else {
+				for (auto &p : samples_by_user) {
+					report << "User " << p.first << " " 
+					       << Summary(now - last_print, p.second).str() 
+					       << std::endl;
+				}
 			}
 			std::cout << report.str();
 

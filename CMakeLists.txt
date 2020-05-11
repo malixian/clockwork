@@ -74,6 +74,7 @@ add_library( clockwork
 	src/clockwork/controller/direct_controller.cpp
 	src/clockwork/config.cpp
 	src/clockwork/network/client.cpp
+	src/clockwork/workload/workload.cpp
 
 	$ENV{TVM_HOME}/src/runtime/meta_data.h
 
@@ -94,6 +95,7 @@ target_link_libraries( clockwork PUBLIC
 	nvidia-ml
 	config++
 	rt
+	stdc++fs
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
@@ -117,6 +119,7 @@ target_link_libraries( convert
 	tvm_runtime
 	tbb
 	nvidia-ml
+	stdc++fs
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
@@ -133,6 +136,7 @@ target_link_libraries( cudafatbin
 	tvm_runtime
 	tbb
 	nvidia-ml
+	stdc++fs
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
@@ -151,6 +155,7 @@ target_link_libraries( check_model
 	tvm_runtime
 	tbb
 	nvidia-ml
+	stdc++fs
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
@@ -168,6 +173,7 @@ target_link_libraries( inflate
 	tvm_runtime
 	tbb
 	nvidia-ml
+	stdc++fs
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
@@ -202,6 +208,7 @@ target_link_libraries( tests
 	tvm_runtime
 	tbb
 	nvidia-ml
+	stdc++fs
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
@@ -229,6 +236,7 @@ target_link_libraries( profile
 	tvm_runtime
 	tbb
 	nvidia-ml
+	stdc++fs
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
@@ -245,6 +253,7 @@ target_link_libraries(
     cuda
     cudart
     tvm_runtime
+    stdc++fs
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
@@ -261,6 +270,7 @@ target_link_libraries(
     cuda
     cudart
     tvm_runtime
+    stdc++fs
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
@@ -277,6 +287,7 @@ target_link_libraries(
     cuda
     cudart
     tvm_runtime
+    stdc++fs
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
@@ -293,6 +304,7 @@ target_link_libraries(
     cuda
     cudart
     tvm_runtime
+    stdc++fs
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
@@ -308,6 +320,7 @@ target_link_libraries(
     cuda
     cudart
     tvm_runtime
+    stdc++fs
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )

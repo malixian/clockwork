@@ -163,7 +163,7 @@ public:
 		double throughput(uint64_t interval) {
 			return (size() * 1000000000.0) / static_cast<double>(interval);
 		}
-		double efficiency(uint64_t interval) { 
+		double utilization(uint64_t interval) { 
 			return std::accumulate(v.begin(), v.end(), 0.0) / static_cast<double>(interval);
 		}
 	};
@@ -212,7 +212,7 @@ public:
 		  << " e2emean=" << e2e.mean() 
 		  << " e2emax=" << e2e.max() 
 		  << " throughput=" << w.throughput(interval) 
-		  << " efficiency=" << w.efficiency(interval)
+		  << " utilization=" << w.utilization(interval)
 		  << std::endl;
 		std::cout << s.str();
 	}

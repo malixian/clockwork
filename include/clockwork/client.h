@@ -29,6 +29,8 @@ public:
 	virtual std::string source() = 0;
 	virtual size_t input_size() = 0;
 	virtual size_t output_size() = 0;
+	virtual int user_id() = 0;
+	virtual void set_user_id(int user_id) = 0;
 
 	/* 
 	Perform an inference with the provided input and return the output.
@@ -44,6 +46,10 @@ public:
 	If an exception occurs, it will be thrown by calls to future.get().
 	*/
 	virtual std::future<std::vector<uint8_t>> infer_async(std::vector<uint8_t> &input) = 0;
+
+	virtual void infer(std::vector<uint8_t> &input, 
+		std::function<void(std::vector<uint8_t>&)> onSuccess, 
+		std::function<void(int, std::string&)> onError) = 0;
 
 	/*
 	This is a backdoor API call that's useful for testing.
