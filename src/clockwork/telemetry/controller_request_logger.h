@@ -142,14 +142,18 @@ public:
 
 		std::stringstream ss;
 		ss << std::fixed;
-		ss << "Client throughput=" << std::setprecision(1) << throughput;
-		ss << " success=" << std::setprecision(3) << success_rate << "%";
-		if (violations > 0) {
-			std::cout << "(" << violations << "/" << (count+violations) << " violations)";
+		if (count == 0) {
+			ss << "Client throughput=0 success=0% (" << violations << "/" << violations << " violations)";
+		} else {
+			ss << "Client throughput=" << std::setprecision(1) << throughput;
+			ss << " success=" << std::setprecision(2) << (100*success_rate) << "%";
+			if (violations > 0) {
+				ss << " (" << violations << "/" << (count+violations) << " violations)";
+			}
+			ss << " min=" << std::setprecision(1) << (min_latency / 1000000.0);
+			ss << " max=" << std::setprecision(1) << (max_latency / 1000000.0);
+			ss << " mean=" << std::setprecision(1) << ((duration_sum/count) / 1000000.0);
 		}
-		ss << " min=" << std::setprecision(1) << (min_latency / 1000000.0);
-		ss << " max=" << std::setprecision(1) << (max_latency / 1000000.0);
-		ss << " mean=" << std::setprecision(1) << ((duration_sum/count) / 1000000.0);
 		ss << std::endl;
 		std::cout << ss.str();
 	}

@@ -21,7 +21,8 @@
 #include <boost/filesystem.hpp>
 #include <sys/stat.h>
 #include <libgen.h>
-
+#include <filesystem>
+#include <cstdlib>
 
 namespace clockwork {
 namespace util {
@@ -315,6 +316,30 @@ std::string get_example_model_path(std::string model_name)
 
 std::string get_example_model_path(std::string clockwork_directory, std::string model_name) {
   return clockwork_directory + "/resources/" + model_name + "/model";
+}
+
+std::string get_modelzoo_dir() {
+  auto modelzoo = std::getenv("CLOCKWORK_MODEL_DIR");
+  if (modelzoo == nullptr) { return ""; }
+  return modelzoo == nullptr ? "" : std::string(modelzoo);
+}
+
+std::map<std::string, std::string> get_clockwork_modelzoo() {
+  std::string modelzoo = get_modelzoo_dir();
+  if (modelzoo == "") {
+    std::cout << "CLOCKWORK_MODEL_DIR variable not set, exiting" << std::endl;
+    exit(1);
+  }
+
+  std::map<std::string, std::string> result;
+  for (auto &p : std::filesystem::directory_iterator(modelzoo)) {
+    if (exists(p.path() / "model.clockwork_params")) {
+      result[p.path().filename()] = p.path() / "model";
+    }
+  }
+  std::cout << "Found " << result.size() << " models in " << modelzoo << std::endl;
+
+  return result;
 }
 
 void printCudaVersion() {

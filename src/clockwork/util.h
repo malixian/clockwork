@@ -6,6 +6,7 @@
 #include <cuda_runtime.h>
 #include <chrono>
 #include <vector>
+#include <map>
 
 #define NUM_GPUS_1 1
 #define NUM_GPUS_2 2
@@ -76,6 +77,10 @@ std::string get_clockwork_directory();
 std::string get_example_model_path(std::string model_name = "resnet18_tesla-m40");
 
 std::string get_example_model_path(std::string clockwork_directory, std::string model_name);
+
+std::string get_modelzoo_dir();
+
+std::map<std::string, std::string> get_clockwork_modelzoo();
 
 #define DEBUG_PRINT(msg) \
 	std::cout << __FILE__ << "::" << __LINE__ << "::" << __FUNCTION__ << " "; \
