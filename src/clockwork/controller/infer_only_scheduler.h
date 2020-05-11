@@ -2,6 +2,7 @@
 #define _CLOCKWORK_CONTROLLER_INFER_ONLY_SCHEDULER_H_
 
 #include "clockwork/controller/scheduler.h"
+#include "clockwork/telemetry/controller_action_logger.h"
 #include <atomic>
 
 
@@ -11,19 +12,25 @@ uint64_t action_id_seed = 0;
 
 class InferOnlyScheduler : public Scheduler {
 public:
+	static const uint64_t print_interval = 1000000000UL; // 1 second
 	bool print_debug = false;
 	std::mutex mutex;
 	uint64_t outstanding_loads = 0;
+	ControllerActionTelemetryLogger* printer;
+
+	InferOnlyScheduler() : printer(SimpleActionPrinter::create_async(print_interval)) {}
 
 	struct GPU;
 	struct PendingInfer {
 		clientapi::InferenceRequest request;
 		std::function<void(clientapi::InferenceResponse&)> callback;
 		GPU* assigned_gpu;
+		ControllerActionTelemetry telemetry;
 	};
 	struct GPU {
 		network::controller::WorkerConnection* worker;
 		unsigned gpu_id;
+		unsigned worker_id;
 		unsigned outstanding = 0;
 		std::queue<PendingInfer*> queue;
 	};
@@ -79,6 +86,7 @@ public:
 
 				GPU* gpu = new GPU();
 				gpu->worker = workers[worker.id];
+				gpu->worker_id = worker.id;
 				gpu->gpu_id = gpustate.id;
 				gpus.push(gpu);
 			}
@@ -146,6 +154,18 @@ public:
 		infer->earliest = util::now();
 		infer->latest = util::now() + 10000000000UL; // 10s
 
+		// Populate telemetry
+		auto &telemetry = next->telemetry;
+		telemetry.action_id = infer->id;
+		telemetry.worker_id = next->assigned_gpu->worker_id;
+		telemetry.gpu_id = infer->gpu_id;
+		telemetry.action_type = workerapi::inferAction;
+		telemetry.batch_size = infer->batch_size;
+		telemetry.model_id = infer->model_id;
+		telemetry.earliest = infer->earliest;
+		telemetry.latest = infer->latest;
+		telemetry.action_sent = util::now();
+
 		// Save it and send
 		outstanding_actions[infer->id] = next;
 		next->assigned_gpu->worker->sendAction(infer);
@@ -165,11 +185,18 @@ public:
 	void inferErrorFromWorker(std::shared_ptr<workerapi::ErrorResult> error) {
 		PendingInfer* pending = get_pending_action(error);
 
+		// Populate telemetry
+		pending->telemetry.result_received = util::now();
+		pending->telemetry.status = clockworkError;
+		pending->telemetry.worker_duration = 0;
+
 		pending->assigned_gpu->outstanding--;
 		check_gpu_queue(pending->assigned_gpu);
 
 		sendInferErrorToClient(error->status, error->message, 
 			pending->request, pending->callback);
+
+		printer->log(pending->telemetry);
 
 		delete pending;
 	}
@@ -177,11 +204,18 @@ public:
 	void inferSuccessFromWorker(std::shared_ptr<workerapi::InferResult> result) {
 		PendingInfer* pending = get_pending_action(result);
 
+		// Populate telemetry
+		pending->telemetry.result_received = util::now();
+		pending->telemetry.status = clockworkSuccess;
+		pending->telemetry.worker_duration = result->exec.duration;
+
 		pending->assigned_gpu->outstanding--;
 		check_gpu_queue(pending->assigned_gpu);
 
 		sendInferSuccessToClient(pending->request, 
 			pending->callback, result->output, result->output_size);
+
+		printer->log(pending->telemetry);
 
 		delete pending;
 	}
