@@ -106,6 +106,13 @@ public:
 	}
 
 	void print(uint64_t interval) {
+		if (buffered.size() == 0) {
+			std::stringstream ss;
+			ss << "Client throughput=0" << std::endl;
+			std::cout << ss.str();
+			return;
+		}
+
 		uint64_t duration_sum = 0;
 		unsigned count = 0;
 		unsigned violations = 0;

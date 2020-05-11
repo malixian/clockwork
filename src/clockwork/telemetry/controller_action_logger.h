@@ -178,6 +178,16 @@ public:
 		Stat e2e;
 		Stat w;
 
+		if (buffered.empty()) {
+			std::stringstream s;
+			s << std::fixed << std::setprecision(2);
+			s << "W" << worker_id
+			  << "-GPU" << gpu_id
+			  << " throughput=0" << std::endl;
+			std::cout << s.str();
+			return;
+		}
+
 		while (!buffered.empty()) {
 			auto &t = buffered.front();
 			e2e.v.push_back(t.result_received - t.action_sent);
