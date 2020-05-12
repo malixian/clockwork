@@ -23,10 +23,12 @@
 #include <tuple>
 #include "clockwork/api/worker_api.h"
 #include "clockwork/thread.h"
+#include <fstream>
 
 
 namespace clockwork {
 
+class AsyncControllerActionTelemetryLogger;
 struct ControllerActionTelemetry {
 	int action_id;
 	int worker_id;
@@ -40,6 +42,10 @@ struct ControllerActionTelemetry {
 	uint64_t result_received;
 	int status;
 	uint64_t worker_duration;
+
+	static AsyncControllerActionTelemetryLogger* summarize(uint64_t print_interval);
+
+	static AsyncControllerActionTelemetryLogger* log_and_summarize(std::string filename, uint64_t print_interval);
 };
 
 class ControllerActionTelemetryLogger {
@@ -52,6 +58,49 @@ class NoOpControllerActionTelemetryLogger : public ControllerActionTelemetryLogg
 public:
 	virtual void log(ControllerActionTelemetry &telemetry) {}
 	virtual void shutdown(bool awaitCompletion) {}
+};
+
+class ControllerActionTelemetryFileLogger : public ControllerActionTelemetryLogger {
+private:
+	uint64_t begin = util::now();
+	std::ofstream f;
+
+public:
+
+	ControllerActionTelemetryFileLogger(std::string filename) : f(filename) {
+		write_headers();
+	}
+
+	void write_headers() {
+		f << "t" << "\t";
+		f << "action_id" << "\t";
+		f << "action_type" << "\t";
+		f << "status" << "\t";
+		f << "worker_id" << "\t";
+		f << "gpu_id" << "\t";
+		f << "model_id" << "\t";
+		f << "batch_size" << "\t";
+		f << "controller_action_duration" << "\t";
+		f << "worker_exec_duration" << "\n";
+	}
+
+	void log(ControllerActionTelemetry &t) {
+		f << t.result_received << "\t";
+		f << t.action_id << "\t";
+		f << t.action_type << "\t";
+		f << t.status << "\t";
+		f << t.worker_id << "\t";
+		f << t.gpu_id << "\t";
+		f << t.model_id << "\t";
+		f << t.batch_size << "\t";
+		f << (t.result_received - t.action_sent) << "\t";
+		f << t.worker_duration << "\n";
+	}
+
+	void shutdown(bool awaitCompletion) {
+		f.close();
+	}
+
 };
 
 class AsyncControllerActionTelemetryLogger : public ControllerActionTelemetryLogger {
@@ -129,13 +178,6 @@ class SimpleActionPrinter : public ActionPrinter {
 public:
 
 	SimpleActionPrinter(uint64_t print_interval) : ActionPrinter(print_interval) {}
-
-	static AsyncControllerActionTelemetryLogger* create_async(uint64_t print_interval) {
-		auto result = new AsyncControllerActionTelemetryLogger();
-		result->addLogger(new SimpleActionPrinter(print_interval));
-		result->start();
-		return result;
-	}
 
 	typedef std::tuple<int,int,int> Group;
 
@@ -226,8 +268,24 @@ public:
 			print(interval, p.first, p.second);
 		}
 	}
-
 };
+
+
+AsyncControllerActionTelemetryLogger* ControllerActionTelemetry::summarize(uint64_t print_interval) {
+	auto result = new AsyncControllerActionTelemetryLogger();
+	result->addLogger(new SimpleActionPrinter(print_interval));
+	result->start();
+	return result;
+}
+
+AsyncControllerActionTelemetryLogger* ControllerActionTelemetry::log_and_summarize(std::string filename, uint64_t print_interval) {
+	auto result = new AsyncControllerActionTelemetryLogger();
+	result->addLogger(new SimpleActionPrinter(print_interval));
+	result->addLogger(new ControllerActionTelemetryFileLogger(filename));
+	result->start();
+	return result;
+}
+
 
 }
 

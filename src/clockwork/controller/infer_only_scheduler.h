@@ -18,7 +18,10 @@ public:
 	uint64_t outstanding_loads = 0;
 	ControllerActionTelemetryLogger* printer;
 
-	InferOnlyScheduler() : printer(SimpleActionPrinter::create_async(print_interval)) {}
+	InferOnlyScheduler(
+		std::string actions_filename = "/local/clockwork_action_log.tsv"
+	) : printer(ControllerActionTelemetry::log_and_summarize(actions_filename, print_interval)) {
+	}
 
 	struct GPU;
 	struct PendingInfer {

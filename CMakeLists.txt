@@ -76,6 +76,7 @@ add_library( clockwork
 	src/clockwork/config.cpp
 	src/clockwork/network/client.cpp
 	src/clockwork/workload/workload.cpp
+	src/clockwork/telemetry/telemetry.cpp
 
 	$ENV{TVM_HOME}/src/runtime/meta_data.h
 

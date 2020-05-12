@@ -106,7 +106,7 @@ Engine* azure(clockwork::Client* client) {
 
 	unsigned trace_id = 1;
 	std::string model = util::get_clockwork_model("resnet50_v2");
-	unsigned num_copies = 100;
+	unsigned num_copies = 200;
 
 	auto trace_data = azure::load_trace();
 

@@ -52,7 +52,10 @@ int main(int argc, char *argv[]) {
 			10000000000UL, // 10s load stage timeout
 			new controller::ControllerStartup(), // in future the startup type might be customizable
 			scheduler,
-			RequestTelemetryPrinter::async_request_printer(10000000000UL) // print request summary every 10s
+			ControllerRequestTelemetry::log_and_summarize(
+				"/local/clockwork_request_log.tsv",		// 
+				10000000000UL 		 	// print request summary every 10s
+			)
 		);
 		controller->join();
 	} else if (controller_type == "ECHO") {
@@ -63,7 +66,10 @@ int main(int argc, char *argv[]) {
 			10000000000UL, // 10s load stage timeout
 			new controller::ControllerStartup(), // in future the startup type might be customizable
 			scheduler,
-			RequestTelemetryPrinter::async_request_printer(10000000000UL) // print request summary every 10s
+			ControllerRequestTelemetry::log_and_summarize(
+				"/local/clockwork_request_log.tsv",		// 
+				10000000000UL 		 	// print request summary every 10s
+			)
 		);
 		controller->join();
 	}
