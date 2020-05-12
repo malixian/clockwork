@@ -342,6 +342,20 @@ std::map<std::string, std::string> get_clockwork_modelzoo() {
   return result;
 }
 
+std::string get_clockwork_model(std::string shortname) {
+  auto modelzoo = get_clockwork_modelzoo();
+  auto it = modelzoo.find(shortname);
+  if (it == modelzoo.end()) {
+    std::cerr << "Unknown model " << shortname << std::endl;
+    std::cerr << "Value models:" << std::endl;
+    for (auto &p : modelzoo) {
+      std::cerr << " " << p.second;
+    }
+    std::cerr << std::endl;
+  }
+  return it->second;
+}
+
 void printCudaVersion() {
   int driverVersion;
   cudaDriverGetVersion(&driverVersion);

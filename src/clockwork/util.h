@@ -79,6 +79,7 @@ std::string get_example_model_path(std::string model_name = "resnet18_tesla-m40"
 std::string get_example_model_path(std::string clockwork_directory, std::string model_name);
 
 std::string get_modelzoo_dir();
+std::string get_clockwork_model(std::string shortname);
 
 std::map<std::string, std::string> get_clockwork_modelzoo();
 

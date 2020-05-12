@@ -4,6 +4,7 @@
 #include "clockwork/workload/example.h"
 #include <string>
 #include <iostream>
+#include "clockwork/workload/azure.h"
 
 using namespace clockwork;
 
@@ -35,6 +36,7 @@ int main(int argc, char *argv[])
 
 	bool verbose = false; // Log every request and response?
 	bool summary = true;  // Log summary once per second?
+
 	clockwork::Client *client = clockwork::Connect(
 		address.first, address.second, 
 		verbose, summary);
@@ -42,8 +44,12 @@ int main(int argc, char *argv[])
 	workload::Engine* engine;
 	if (workload == "example") 
 		engine = workload::example(client);
+	if (workload == "spam") 
+		engine = workload::spam(client);
 	else if (workload == "simple")
 		engine = workload::simple(client);
+	else if (workload == "azure")
+		engine = workload::azure(client);
 	else {
 		std::cout << "Unknown workload " << workload << std::endl;
 		return 1;

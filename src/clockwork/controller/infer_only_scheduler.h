@@ -26,6 +26,7 @@ public:
 		std::function<void(clientapi::InferenceResponse&)> callback;
 		GPU* assigned_gpu;
 		ControllerActionTelemetry telemetry;
+		uint64_t deadline;
 	};
 	struct GPU {
 		network::controller::WorkerConnection* worker;
@@ -173,12 +174,29 @@ public:
 		if (print_debug) std::cout << "Worker <--  " << infer->str() << std::endl;
 	}
 
+	void inferTimeoutOnController(PendingInfer* pending) {
+		sendInferErrorToClient(clockworkTimeout, "", pending->request, pending->callback);
+
+		// Populate telemetry
+		pending->telemetry.result_received = util::now();
+		pending->telemetry.status = clockworkError; // TODO: use clockworkTimeout instead
+		pending->telemetry.worker_duration = 0;
+
+		printer->log(pending->telemetry);
+
+		delete pending;
+	}
+
 	void check_gpu_queue(GPU* gpu) {
 		while (gpu->outstanding < max_outstanding && gpu->queue.size() > 0) {
 			PendingInfer* next = gpu->queue.front();
 			gpu->queue.pop();
-			gpu->outstanding++;
-			sendInferActionToWorker(next);
+			if (next->deadline > util::now()) {
+				gpu->outstanding++;
+				sendInferActionToWorker(next);
+			} else {
+				inferTimeoutOnController(next);
+			}
 		}
 	}
 
@@ -271,6 +289,7 @@ public:
 		pending->request = request;
 		pending->callback = callback;
 		pending->assigned_gpu = gpu;
+		pending->deadline = util::now() + 100000000UL; // 100ms
 		gpu->queue.push(pending);
 
 		// Check if actions should be sent

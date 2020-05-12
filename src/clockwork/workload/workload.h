@@ -8,6 +8,7 @@
 #include "clockwork/client.h"
 #include "tbb/concurrent_queue.h"
 #include <random>
+#include "dmlc/logging.h"
 
 namespace clockwork {
 namespace workload {
@@ -293,6 +294,77 @@ public:
 			Poisson(1000000000.0 / rate),
 			Poisson(1000000000.0 * burstDurationSeconds),
 			Poisson(1000000000.0 * idleDurationSeconds)) {
+	}
+
+};
+
+template <typename TDISTRIBUTION> 
+class TraceReplay : public Workload {
+public:
+	bool randomise_start = false;
+	unsigned current_interval;
+	std::vector<unsigned> intervals;
+	uint64_t interval_duration;
+	std::minstd_rand rng;
+	TDISTRIBUTION distribution;
+
+	TraceReplay(int id, clockwork::Model* model, int rng_seed,
+		std::vector<unsigned> &intervals, // request rate for each interval, specified as requests per minute
+		double interval_duration_seconds,
+		int start_at, // which interval to start at.  if set to -1, will randomise
+		TDISTRIBUTION distribution) : Workload(id, model), 
+			rng(rng_seed),
+			intervals(intervals),
+			distribution(distribution), 
+			interval_duration(interval_duration_seconds * 1000000000.0)
+	{
+		CHECK(intervals.size() > 0) << "Cannot create TraceReplay without intervals";
+		if (start_at < 0) {
+			start_at = rng();
+			randomise_start = true;
+		}
+		current_interval = start_at % intervals.size();
+	}
+
+	void Submit(unsigned interval) {
+		if (interval == current_interval) {
+			Infer(0);
+			if (intervals[interval] > 0) {
+				uint64_t timeout = distribution(rng) / intervals[interval];
+				SetTimeout(timeout, [this, interval]() { Submit(interval); });
+			}
+		}
+	}
+
+	void Advance(uint64_t interval) {
+		current_interval = (interval % intervals.size());
+		SetTimeout(interval_duration, [this, interval]() { Advance(interval+1); });
+		if (intervals[interval] > 0) {
+			uint64_t timeout = rng() % (distribution(rng) / intervals[interval]);
+			SetTimeout(timeout, [this, interval]() { Submit(interval); });
+		}
+	}
+
+	void Start(uint64_t now) {
+		uint64_t start_at = randomise_start ? rng() % interval_duration : 0;
+		SetTimeout(start_at, [this]() { Advance(current_interval); });
+	}
+
+	void InferComplete(uint64_t now, unsigned model_index) {}
+	void InferError(uint64_t now, unsigned model_index, int status) {}
+
+};
+
+class PoissonTraceReplay : public TraceReplay<Poisson> {
+public:
+
+	PoissonTraceReplay(int id, clockwork::Model* model, int rng_seed,
+		std::vector<unsigned> &interval_rates, // request rate for each interval, specified as requests per minute
+		double scale_factor = 1.0,
+		double interval_duration_seconds = 60.0,
+		int start_at = 0 // which interval to start at.  if set to -1, will randomise
+	) : TraceReplay(id, model, rng_seed, interval_rates, interval_duration_seconds, start_at,
+			Poisson(60000000000.0 / scale_factor)) {
 	}
 
 };

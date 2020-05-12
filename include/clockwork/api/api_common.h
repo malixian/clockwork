@@ -7,7 +7,8 @@
 const int clockworkSuccess = 0;
 const int clockworkError = 1;
 const int clockworkInitializing = 2;
-const int clockworkInvalidRequest = 2;
+const int clockworkInvalidRequest = 3;
+const int clockworkTimeout = 4;
 
 namespace clockwork {
 
