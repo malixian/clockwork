@@ -3,10 +3,11 @@
 #include "clockwork/runtime.h"
 #include "clockwork/config.h"
 #include "clockwork/worker.h"
+#include "clockwork/thread.h"
 
 
 int main(int argc, char *argv[]) {
-	util::setCurrentThreadMaxPriority();
+	threading::initProcess();
 	util::setCudaFlags();
 	util::printCudaVersion();
 
@@ -23,6 +24,8 @@ int main(int argc, char *argv[]) {
 	clockwork::ClockworkWorker* clockwork = new clockwork::ClockworkWorker(config);
 	clockwork::network::worker::Server* server = new clockwork::network::worker::Server(clockwork);
 	clockwork->controller = server;
+
+	threading::setDefaultPriority(); // Revert thread priority
 	clockwork->join();
 
 	std::cout << "Clockwork Worker Exiting" << std::endl;

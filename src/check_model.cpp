@@ -5,6 +5,7 @@
 #include "clockwork/memory.h"
 #include "clockwork/cache.h"
 #include "clockwork/cuda_common.h"
+#include "clockwork/thread.h"
 
 using namespace clockwork;
 
@@ -33,7 +34,7 @@ void check_model(int page_size, int iterations, std::string model_path) {
 
 	util::setCudaFlags();
     util::initializeCudaStream();
-    util::setCurrentThreadMaxPriority();
+    threading::setMaxPriority();
 
 	clockwork::model::BatchedModel* model = load_model(model_path);
 

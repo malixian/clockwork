@@ -1,6 +1,7 @@
 #include "clockwork/api/worker_api.h"
 #include "clockwork/runtime.h"
 #include "clockwork/action.h"
+#include "clockwork/thread.h"
 
 namespace clockwork {
 
@@ -21,23 +22,15 @@ void BaseExecutor::join() {
 	}
 }
 
-CPUExecutor::CPUExecutor(TaskType type, std::vector<unsigned> cores) : BaseExecutor(type) {
-	for (unsigned i = 0; i < cores.size(); i++) {
-		threads.push_back(std::thread(&CPUExecutor::executorMain, this, i, cores[i]));
-	}
+CPUExecutor::CPUExecutor(TaskType type) : BaseExecutor(type) {
+	threads.push_back(std::thread(&CPUExecutor::executorMain, this, 0));
+	for (auto &thread : threads) threading::initGPUThread(0, thread);
 }
 
-void CPUExecutor::executorMain(unsigned executor_id, unsigned core) {
-	std::cout << TaskTypeName(type) << "-" << executor_id << " binding to core " << core << std::endl;
-	// util::set_core(core);
-	// util::setCurrentThreadMaxPriority();
+void CPUExecutor::executorMain(unsigned executor_id) {
+	std::cout << TaskTypeName(type) << "-" << executor_id << " started" << std::endl;
 
 	while (alive.load()) {
-		// TODO: possibility off too many outstanding asyc tasks
-
-		// TODO: queue should spin-wait rather than blocking
-		// TODO: shutdown queue or use try_dequeue
-
 		// Currently, CPUExecutor is only used for LoadModelTask
 		LoadModelFromDiskTask* next = dynamic_cast<LoadModelFromDiskTask*>(queue.dequeue());
 		
@@ -55,91 +48,29 @@ void CPUExecutor::executorMain(unsigned executor_id, unsigned core) {
 	}
 }
 
-GPUExecutorShared::GPUExecutorShared(TaskType type, std::vector<unsigned> cores, unsigned num_gpus):
-	BaseExecutor(type), num_gpus(num_gpus) {
-	for (unsigned i = 0; i < cores.size(); i++) {
-		threads.push_back(std::thread(&GPUExecutorShared::executorMain, this, i, cores[i]));
-	}
+GPUExecutorExclusive::GPUExecutorExclusive(TaskType type, unsigned gpu_id):
+	BaseExecutor(type), gpu_id(gpu_id) {
+	threads.push_back(std::thread(&GPUExecutorExclusive::executorMain, this, 0));
+	for (auto &thread : threads) threading::initGPUThread(gpu_id, thread);
 }
 
-void GPUExecutorShared::executorMain(unsigned executor_id, unsigned core) {
+void GPUExecutorExclusive::executorMain(unsigned executor_id) {
+	std::cout << "GPU" << gpu_id << "-" << TaskTypeName(type) << "-" << executor_id << " started" << std::endl;
+
 	int priority = 0;
 	if (type==TaskType::PCIe_H2D_Inputs || type==TaskType::PCIe_D2H_Output) {
 		priority = -1;
 	}
-
-	std::cout << TaskTypeName(type) << "-" << executor_id << " binding to core " << core << " with GPU priority " << priority << std::endl;
-	// util::set_core(core);
-	util::setCurrentThreadMaxPriority();
-
-	std::vector<cudaStream_t> streams;
-	for (unsigned gpu_id = 0; gpu_id < num_gpus; gpu_id++) {
-		cudaStream_t stream;
-		CUDA_CALL(cudaSetDevice(gpu_id));
-		CUDA_CALL(cudaStreamCreateWithPriority(&stream, cudaStreamNonBlocking, priority));
-		streams.push_back(stream);
-	}
-
-	int prev_gpu_id = -1;
-	while (alive.load()) {
-		// TODO: possibility off too many outstanding asyc tasks
-
-		// TODO: queue should spin-wait rather than blocking
-		// TODO: shutdown queue or use try_dequeue
-
-		Task* next = queue.dequeue();
-
-		if (next != nullptr) {
-
-			// For tasks of type PCIe_H2D_Weights, we do not want two streams
-			// to transfer weights in parallel; therefore, whenever there is a
-			// a change in the stream, we synchronize host until the previous
-			// stream has been entirely flushed out
-			if (type == PCIe_H2D_Weights and prev_gpu_id != -1 and prev_gpu_id != next->gpu_id) {
-				CUDA_CALL(cudaSetDevice(next->gpu_id));
-				CUDA_CALL(cudaStreamSynchronize(streams[prev_gpu_id]));
-				prev_gpu_id = next->gpu_id;
-			}
-
-			auto telemetry = next->telemetry;
-			telemetry->dequeued = util::hrt();
-			next->run(streams[next->gpu_id]);
-			telemetry->exec_complete = util::hrt();
-		}
-	}
-
-	std::vector<Task*> tasks = queue.drain();
-	for (Task* task : tasks) {
-		task->cancel();
-	}
-}
-
-GPUExecutorExclusive::GPUExecutorExclusive(TaskType type, std::vector<unsigned> cores, unsigned gpu_id, int priority):
-	BaseExecutor(type), gpu_id(gpu_id), priority(priority) {
-	for (unsigned i = 0; i < cores.size(); i++) {
-		threads.push_back(std::thread(&GPUExecutorExclusive::executorMain, this, i, cores[i]));
-	}
-}
-
-void GPUExecutorExclusive::executorMain(unsigned executor_id, unsigned core) {
-	std::cout << TaskTypeName(type) << "-" << executor_id << "(GPU " << gpu_id << ") binding to core " << core << std::endl;
-	// util::set_core(core);
-	util::setCurrentThreadMaxPriority();
 	util::initializeCudaStream(gpu_id, priority);
+
 	cudaStream_t stream = util::Stream();
 
 
 
 	while (alive.load()) {
-		// TODO: possibility off too many outstanding asyc tasks
-
-		// TODO: queue should spin-wait rather than blocking
-		// TODO: shutdown queue or use try_dequeue
-
 		Task* next = queue.dequeue();
 
 		if (next != nullptr) {
-			// util::setCurrentThreadMaxPriority();
 			auto telemetry = next->telemetry;
 
 			telemetry->dequeued = util::hrt();
@@ -155,10 +86,9 @@ void GPUExecutorExclusive::executorMain(unsigned executor_id, unsigned core) {
 }
 
 
-AsyncTaskChecker::AsyncTaskChecker(std::vector<unsigned> cores) : alive(true) {
-	for (unsigned i = 0; i < cores.size(); i++) {
-		threads.push_back(std::thread(&AsyncTaskChecker::executorMain, this, i, cores[i]));
-	}
+AsyncTaskChecker::AsyncTaskChecker() : alive(true) {
+	threads.push_back(std::thread(&AsyncTaskChecker::executorMain, this, 0));
+	for (auto &thread : threads) threading::initGPUThread(1, thread);
 }
 
 void AsyncTaskChecker::enqueue(AsyncTask* task) {
@@ -175,11 +105,8 @@ void AsyncTaskChecker::join() {
 	}
 }
 
-void AsyncTaskChecker::executorMain(unsigned executor_id, unsigned core) {
-	std::cout << "Checker-" << executor_id << " binding to core " << core << std::endl;
-	// util::set_core(core);
-	util::setCurrentThreadMaxPriority();
-	//util::initializeCudaStream(GPU_ID_0); // TODO Is this call necessary?
+void AsyncTaskChecker::executorMain(unsigned executor_id) {
+	std::cout << "AsyncTaskChecker-" << executor_id << " started" << std::endl;
 
 	std::vector<AsyncTask*> pending_tasks;
 	while (alive.load() || pending_tasks.size() > 0) {

@@ -19,6 +19,7 @@
 #include <tbb/concurrent_queue.h>
 #include <iomanip>
 #include "clockwork/api/api_common.h"
+#include "clockwork/thread.h"
 
 
 namespace clockwork {
@@ -61,6 +62,7 @@ public:
 
 	void start() {
 		thread = std::thread(&AsyncRequestTelemetryLogger::run, this);
+		threading::initLoggerThread(thread);
 	}
 
 	void run() {

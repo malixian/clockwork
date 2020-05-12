@@ -42,35 +42,24 @@ public:
 	void shutdown();
 	void join();
 
-	virtual void executorMain(unsigned executor_id, unsigned core) = 0;
+	virtual void executorMain(unsigned executor_id) = 0;
 };
 
 class CPUExecutor : public BaseExecutor {
 public:
-	CPUExecutor(TaskType type, std::vector<unsigned> cores);
+	CPUExecutor(TaskType type);
 
-	void executorMain(unsigned executor_id, unsigned core);
-};
-
-class GPUExecutorShared : public BaseExecutor {
-private:
-	unsigned num_gpus;
-
-public:
-	GPUExecutorShared(TaskType type, std::vector<unsigned> cores, unsigned num_gpus);
-
-	void executorMain(unsigned executor_id, unsigned core);
+	void executorMain(unsigned executor_id);
 };
 
 class GPUExecutorExclusive : public BaseExecutor {
 private:
 	unsigned gpu_id;
-	unsigned priority;
 
 public:
-	GPUExecutorExclusive(TaskType type, std::vector<unsigned> cores, unsigned gpu_id, int priority = 0);
+	GPUExecutorExclusive(TaskType type, unsigned gpu_id);
 
-	void executorMain(unsigned executor_id, unsigned core);
+	void executorMain(unsigned executor_id);
 };
 
 class AsyncTaskChecker {
@@ -81,12 +70,12 @@ private:
 
 public:
 
-	AsyncTaskChecker(std::vector<unsigned> cores);
+	AsyncTaskChecker();
 
 	void enqueue(AsyncTask* task);
 	void shutdown();
 	void join();
-	void executorMain(unsigned executor_id, unsigned core);
+	void executorMain(unsigned executor_id);
 };
 
 
@@ -150,39 +139,6 @@ public:
 
 protected:
 
-	// Utility class for allocating cores
-	class CoreAllocator {
-	public:
-		std::vector<unsigned> usage_count;
-		CoreAllocator() {
-			usage_count.resize(util::get_num_cores(), 0);
-		}
-
-		int try_acquire(unsigned gpu_id) {
-			std::vector<unsigned> preferred = util::get_gpu_core_affinity(gpu_id);
-			for (unsigned i = preferred.size()-1; i >= 0; i--) {
-				unsigned core = preferred[i];
-				if (usage_count[core] == 0) {
-					usage_count[core]++;
-					return core;
-				}
-			}
-			for (unsigned core = 0; core < usage_count.size(); core++) {
-				if (usage_count[core] == 0) {
-					usage_count[core]++;
-					return core;
-				}
-			}
-			return -1;
-		}
-
-		unsigned acquire(unsigned gpu_id) {
-			int core = try_acquire(gpu_id);
-			CHECK(core >= 0) << "Unable to acquire core for GPU " << gpu_id << "; all cores exhausted";
-			return static_cast<unsigned>(core);
-		}
-
-	};
 
 	void initialize(ClockworkWorkerConfig &config) {
 
@@ -190,17 +146,15 @@ protected:
 
 		manager = new MemoryManager(config);
 
-		CoreAllocator cores;
-
 		for (unsigned gpu_id = 0; gpu_id < num_gpus; gpu_id++) {
 			event_pools.push_back(new CudaEventPool(gpu_id));
 			
-			gpu_executors.push_back(new GPUExecutorExclusive(GPU, {cores.acquire(gpu_id)}, gpu_id)); // Type 3
-			weights_executors.push_back(new GPUExecutorExclusive(PCIe_H2D_Weights, {cores.acquire(gpu_id)}, gpu_id)); // Type 1
-			inputs_executors.push_back(new GPUExecutorExclusive(PCIe_H2D_Inputs, {cores.acquire(gpu_id)}, gpu_id, -1)); // Type 2
-			outputs_executors.push_back(new GPUExecutorExclusive(PCIe_D2H_Output, {cores.acquire(gpu_id)}, gpu_id, -1)); // Type 4
+			gpu_executors.push_back(new GPUExecutorExclusive(GPU, gpu_id)); // Type 3
+			weights_executors.push_back(new GPUExecutorExclusive(PCIe_H2D_Weights, gpu_id)); // Type 1
+			inputs_executors.push_back(new GPUExecutorExclusive(PCIe_H2D_Inputs, gpu_id)); // Type 2
+			outputs_executors.push_back(new GPUExecutorExclusive(PCIe_D2H_Output, gpu_id)); // Type 4
 
-			AsyncTaskChecker* c1 = new AsyncTaskChecker({cores.acquire(gpu_id)});
+			AsyncTaskChecker* c1 = new AsyncTaskChecker();
 
 			gpu_checkers.push_back(c1);
 			weights_checkers.push_back(c1);
@@ -210,7 +164,7 @@ protected:
 			all_checkers.push_back(c1);
 		}
 
-		load_model_executor = new CPUExecutor(CPU, {cores.acquire(0)}); // Type 0
+		load_model_executor = new CPUExecutor(CPU); // Type 0
 
 		std::string task_file_path = config.telemetry_log_dir + "/" + config.task_telemetry_log_file;
 		std::string action_file_path = config.telemetry_log_dir + "/" + config.action_telemetry_log_file;

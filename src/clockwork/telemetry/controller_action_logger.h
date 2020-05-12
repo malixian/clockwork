@@ -22,6 +22,7 @@
 #include "clockwork/api/api_common.h"
 #include <tuple>
 #include "clockwork/api/worker_api.h"
+#include "clockwork/thread.h"
 
 
 namespace clockwork {
@@ -70,6 +71,7 @@ public:
 
 	void start() {
 		this->thread = std::thread(&AsyncControllerActionTelemetryLogger::run, this);
+		threading::initLoggerThread(thread);
 	}
 
 	void run() {

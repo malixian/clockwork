@@ -27,26 +27,13 @@ std::uint64_t nanos(time_point t);
 
 std::string nowString();
 
-unsigned get_num_cores();
-
-void set_core(unsigned core);
-void set_cores(std::vector<unsigned> cores);
-void set_all_cores();
-
 unsigned get_num_gpus();
-
-// Returns which cores the specified GPU has affinity with
-std::vector<unsigned> get_gpu_core_affinity(unsigned deviceId);
 
 void setCudaFlags();
 
 std::string getGPUmodel(int deviceNumber);
 
 extern "C" char* getGPUModelToBuffer(int deviceNumber, char* buf);
-
-void setCurrentThreadMaxPriority();
-void unsetCurrentThreadMaxPriority();
-bool isCurrentThreadMaxPriority();
 
 void printCudaVersion();
 

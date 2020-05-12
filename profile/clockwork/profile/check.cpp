@@ -7,6 +7,7 @@
 #include "clockwork/test/util.h"
 #include "clockwork/model/so.h"
 #include "clockwork/model/cuda.h"
+#include "clockwork/thread.h"
 #include <nvml.h>
 
 using namespace clockwork;
@@ -113,7 +114,7 @@ void print_system_status() {
 
     std::cout << "GPU core affinity:" << std::endl;
     for (unsigned i = 0; i < num_gpus; i++) {
-        std::vector<unsigned> cores = util::get_gpu_core_affinity(i);
+        std::vector<unsigned> cores = threading::getGPUCoreAffinity(i);
         std::cout << "  GPU " << i << " =";
         for (unsigned &core : cores) {
             std::cout << " " << core;

@@ -49,7 +49,7 @@ class StressTestController : public Controller {
 public:
 	bool stress_infer = true;
 	bool stress_loadweights = true;
-	bool send_inputs = true;
+	bool send_inputs = false;
 
 	std::string model_path = "/home/jcmace/clockwork-modelzoo-volta/resnet50_v2/model";
 	unsigned duplicates = 40;
@@ -82,6 +82,7 @@ public:
 		pending_workers(workers.size()),
 		results(),
 		printer(&StressTestController::printerThread, this) {
+		threading::initLoggerThread(printer);
 		input = static_cast<char*>(malloc(input_size));
 
 		init();

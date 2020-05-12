@@ -58,6 +58,7 @@ add_library( clockwork
 	src/clockwork/runtime.cpp
 	src/clockwork/memory.cpp
 	src/clockwork/worker.cpp
+	src/clockwork/thread.cpp
 	src/clockwork/model/memfile.cpp
 	src/clockwork/model/model.cpp
 	src/clockwork/model/batched.cpp

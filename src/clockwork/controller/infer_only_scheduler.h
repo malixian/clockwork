@@ -174,19 +174,6 @@ public:
 		if (print_debug) std::cout << "Worker <--  " << infer->str() << std::endl;
 	}
 
-	void inferTimeoutOnController(PendingInfer* pending) {
-		sendInferErrorToClient(clockworkTimeout, "", pending->request, pending->callback);
-
-		// Populate telemetry
-		pending->telemetry.result_received = util::now();
-		pending->telemetry.status = clockworkError; // TODO: use clockworkTimeout instead
-		pending->telemetry.worker_duration = 0;
-
-		printer->log(pending->telemetry);
-
-		delete pending;
-	}
-
 	void check_gpu_queue(GPU* gpu) {
 		while (gpu->outstanding < max_outstanding && gpu->queue.size() > 0) {
 			PendingInfer* next = gpu->queue.front();
@@ -195,7 +182,12 @@ public:
 				gpu->outstanding++;
 				sendInferActionToWorker(next);
 			} else {
-				inferTimeoutOnController(next);
+				sendInferErrorToClient(
+					clockworkTimeout, "", 
+					next->request,
+					next->callback
+				);
+				delete next;
 			}
 		}
 	}

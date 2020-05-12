@@ -20,6 +20,7 @@
 #include <pods/streams.h>
 #include <tbb/concurrent_queue.h>
 #include <iomanip>
+#include "clockwork/thread.h"
 
 
 namespace clockwork {
@@ -103,7 +104,10 @@ public:
 	std::atomic_int errors = 0;
 
 	ClientTelemetrySummarizer(uint64_t print_interval = 10000000000UL) : 
-		thread(&ClientTelemetrySummarizer::run, this), print_interval(print_interval) {}
+		thread(&ClientTelemetrySummarizer::run, this), print_interval(print_interval) {
+		threading::initLoggerThread(thread);
+	}
+
 
 	void run() {
 		uint64_t last_print = util::now();

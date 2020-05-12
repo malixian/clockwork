@@ -1,6 +1,7 @@
 #include "clockwork/network/worker.h"
 #include "clockwork/util.h"
 #include <sstream>
+#include "clockwork/thread.h"
 
 namespace clockwork {
 namespace network {
@@ -90,7 +91,6 @@ public:
 };
 
 void Connection::print() {
-	util::unsetCurrentThreadMaxPriority();
 	uint64_t print_every = 10000000000UL; // 10s
 	uint64_t last_print = util::now();
 
@@ -273,6 +273,7 @@ void Connection::sendResult(std::shared_ptr<workerapi::Result> result) {
 
 void Connection::ready() {
 	this->printer = std::thread(&Connection::print, this);
+	threading::initLoggerThread(this->printer);
 }
 
 void Connection::closed() {
@@ -285,6 +286,7 @@ Server::Server(ClockworkWorker* worker, int port) :
 		worker(worker),
 		io_service(),
 		network_thread(&Server::run, this, port) {
+	threading::initNetworkThread(network_thread);
 }
 
 Server::~Server() {}
@@ -302,7 +304,6 @@ void Server::join() {
 }
 
 void Server::run(int port) {
-	util::setCurrentThreadMaxPriority();
 	try {
 		auto endpoint = tcp::endpoint(tcp::v4(), port);
 		is_started.store(true);
