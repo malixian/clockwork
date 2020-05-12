@@ -45,7 +45,7 @@ int main(int argc, char *argv[])
 	workload::Engine* engine;
 	if (workload == "example") 
 		engine = workload::example(client);
-	if (workload == "spam") 
+	else if (workload == "spam") 
 		engine = workload::spam(client);
 	else if (workload == "simple")
 		engine = workload::simple(client);
