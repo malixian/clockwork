@@ -17,8 +17,9 @@ Engine* simple(clockwork::Client* client) {
 	auto models = client->load_remote_models(modelpath, num_copies);
 
 	for (unsigned i = 0; i < models.size(); i++) {
+		models[i]->disable_inputs();
 		engine->AddWorkload(new ClosedLoop(
-			i, 			// client id
+			0, 			// client id, just use the same for this
 			models[i],	// model
 			1			// concurrency
 		));
@@ -89,10 +90,11 @@ Engine* spam(clockwork::Client* client) {
 	auto models = client->load_remote_models(modelpath, num_copies);
 
 	for (unsigned i = 0; i < models.size(); i++) {
+		models[i]->disable_inputs();
 		engine->AddWorkload(new ClosedLoop(
-			i, 			// client id
+			0, 			// client id, just use the same for this
 			models[i],	// model
-			100			// concurrency
+			10			// concurrency
 		));
 	}
 

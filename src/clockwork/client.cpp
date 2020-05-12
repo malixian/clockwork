@@ -42,6 +42,7 @@ public:
 	bool print;
 	NetworkClient *client;
 
+	bool inputs_enabled_ = true;
 	int user_id_;
 	const int model_id_;
 	const std::string source_;
@@ -56,6 +57,8 @@ public:
 	virtual std::string source();
 	virtual int user_id();
 	virtual void set_user_id(int user_id);
+
+	virtual void disable_inputs();
 
 	virtual std::vector<uint8_t> infer(std::vector<uint8_t> &input);
 	virtual void infer(std::vector<uint8_t> &input, 
@@ -223,6 +226,7 @@ std::string ModelImpl::source() { return source_; }
 
 int ModelImpl::user_id() { return user_id_; }
 void ModelImpl::set_user_id(int user_id) { user_id_ = user_id; }
+void ModelImpl::disable_inputs() { inputs_enabled_ = false; }
 
 std::vector<uint8_t> ModelImpl::infer(std::vector<uint8_t> &input)
 {
@@ -264,6 +268,11 @@ void ModelImpl::infer(std::vector<uint8_t> &input, std::function<void(std::vecto
 	request.batch_size = 1; // TODO: support batched requests in client
 	request.input_size = input.size();
 	request.input = input_data;
+
+	if (!inputs_enabled_) {
+		request.input_size = 0;
+		request.input = nullptr;
+	}
 
 	if (print) std::cout << "<--  " << request.str() << std::endl;
 
