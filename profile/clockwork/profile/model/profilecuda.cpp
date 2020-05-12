@@ -8,6 +8,7 @@
 #include <atomic>
 #include <thread>
 #include <unistd.h>
+#include "clockwork/thread.h"
 
 using namespace clockwork;
 
@@ -77,8 +78,6 @@ public:
     }
 
     void run(unsigned gpu_id, void* host, size_t host_size, std::vector<unsigned> cores) {
-        util::set_cores(cores);
-
         status = cudaSetDevice(gpu_id);
         if (!successful()) { countdown_begin--; countdown_end--; return; };
 
@@ -162,7 +161,7 @@ TEST_CASE("Profile concurrent transfers on single GPU", "[singlegpu]") {
     std::atomic_int countdown_end(1);
     std::atomic_bool alive(true);
 
-    auto cores0 = util::get_gpu_core_affinity(0);
+    auto cores0 = threading::getGPUCoreAffinity(0);
 
     TransferThread t0(0, cores0, countdown_begin, countdown_end, alive, host, host_size);
 
@@ -203,7 +202,7 @@ TEST_CASE("Profile concurrent transfers on same GPU", "[samegpu]") {
     std::atomic_int countdown_end(2);
     std::atomic_bool alive(true);
 
-    auto cores0 = util::get_gpu_core_affinity(0);
+    auto cores0 = threading::getGPUCoreAffinity(0);
 
     TransferThread t0(0, cores0, countdown_begin, countdown_end, alive, host, host_size);
     TransferThread t1(0, cores0, countdown_begin, countdown_end, alive, host, host_size);
@@ -246,8 +245,8 @@ TEST_CASE("Profile concurrent transfers on multiple GPUs", "[multigpu]") {
     std::atomic_int countdown_end(2);
     std::atomic_bool alive(true);
 
-    auto cores0 = util::get_gpu_core_affinity(0);
-    auto cores1 = util::get_gpu_core_affinity(1);
+    auto cores0 = threading::getGPUCoreAffinity(0);
+    auto cores1 = threading::getGPUCoreAffinity(1);
 
     TransferThread t0(0, cores0, countdown_begin, countdown_end, alive, host, host_size);
     TransferThread t1(1, cores1, countdown_begin, countdown_end, alive, host, host_size);

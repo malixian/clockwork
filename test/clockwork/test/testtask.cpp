@@ -842,7 +842,7 @@ TEST_CASE("Input Infer and Output", "[task]") {
     free(input);
 }
 
-TEST_CASE("Input Infer and Output Batched", "[task]") {
+TEST_CASE("Input Infer and Output Batched", "[task] [taskiobatched]") {
 	CudaEventPool* event_pool = new CudaEventPool(GPU_ID_0);
     auto stream = std::make_shared<Autostream>();
     auto manager = make_manager();
@@ -911,9 +911,7 @@ TEST_CASE("Input Infer and Output Batched", "[task]") {
         REQUIRE(copyoutput.is_success);
 
         manager->host_io_pool->free(copyoutput.output);
-		for (unsigned i = 0; i < manager->num_gpus; i++) {
-			manager->io_pools[i]->free(copyinput.io_memory);
-		}
+		manager->io_pools[GPU_ID_0]->free(copyinput.io_memory);
     }
 }
 

@@ -80,7 +80,9 @@ void Connection::ls(LSRequest &request, std::function<void(LSResponse&)> callbac
 	send_request(*rpc);	
 }
 
-ConnectionManager::ConnectionManager() : alive(true), network_thread(&ConnectionManager::run, this) {}
+ConnectionManager::ConnectionManager() : alive(true), network_thread(&ConnectionManager::run, this) {
+	threading::initNetworkThread(network_thread);
+}
 
 void ConnectionManager::run() {
 	while (alive) {

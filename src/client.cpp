@@ -5,6 +5,7 @@
 #include <string>
 #include <iostream>
 #include "clockwork/workload/azure.h"
+#include "clockwork/thread.h"
 
 using namespace clockwork;
 
@@ -17,7 +18,7 @@ std::pair<std::string, std::string> split(std::string addr) {
 
 int main(int argc, char *argv[])
 {
-	util::setCurrentThreadMaxPriority();
+	threading::initProcess();
 
 	if (argc != 3) {
 		std::cerr << "Usage: client [address] [workload]" << std::endl;

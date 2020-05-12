@@ -4,12 +4,14 @@
 #include "clockwork/controller/stress_test_controller.h"
 #include "clockwork/controller/infer_only_scheduler.h"
 #include "clockwork/telemetry/controller_request_logger.h"
+#include "clockwork/thread.h"
 
 
 using namespace clockwork;
 
 int main(int argc, char *argv[]) {
-	util::setCurrentThreadMaxPriority();
+	threading::initProcess();	
+
 	std::cout << "Starting Clockwork Controller" << std::endl;
 
 	if ( argc < 4) {

@@ -13,6 +13,7 @@
 #include "clockwork/memory.h"
 #include "clockwork/model/model.h"
 #include <sys/mman.h>
+#include "clockwork/thread.h"
 
 using namespace clockwork;
 
@@ -375,8 +376,7 @@ public:
     ModelExecWithModuleLoad(int i, Experiment* experiment, PageCache* weights_cache, MemoryPool* io_pool, MemoryPool* workspace_pool, std::vector<model::Model*> models, std::string input) :
             experiment(experiment), weights_cache(weights_cache), io_pool(io_pool), workspace_pool(workspace_pool), models(models), alive(true), input(input), iterations(0),
             ready(false), started(false) {
-        util::set_core((i+7) % util::get_num_cores());
-        util::setCurrentThreadMaxPriority();
+        threading::setMaxPriority();
     }
 
     void start(bool with_module_load) {

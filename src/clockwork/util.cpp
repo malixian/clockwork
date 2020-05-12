@@ -68,45 +68,7 @@ std::string nowString() {
   return ss.str();
 }
 
-unsigned get_num_cores() {
-  return std::thread::hardware_concurrency();
-}
 
-void set_core(unsigned core) {
-  cpu_set_t cpuset;
-  CPU_ZERO(&cpuset);
-  CPU_SET(core, &cpuset);
-  int rc = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
-  if (rc != 0) {
-    std::cerr << "Error calling pthread_setaffinity_np: " << rc << "\n";
-  }
-}
-
-void set_cores(std::vector<unsigned> cores) {
-  CHECK(cores.size() > 0) << "Trying to bind to empty core set";
-  cpu_set_t cpuset;
-  CPU_ZERO(&cpuset);
-  for (unsigned core : cores) {
-    CPU_SET(core, &cpuset);
-  }
-  int rc = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
-  if (rc != 0) {
-    std::cerr << "Error calling pthread_setaffinity_np: " << rc << "\n";
-  }
-}
-
-void set_all_cores() {
-  cpu_set_t cpuset;
-  CPU_ZERO(&cpuset);
-  unsigned core_count = get_num_cores();
-  for (unsigned i = 0; i < core_count; i++) {
-    CPU_SET(i, &cpuset);
-  }
-  int rc = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
-  if (rc != 0) {
-    std::cerr << "Error calling pthread_setaffinity_np: " << rc << "\n";
-  }  
-}
 
 unsigned get_num_gpus() {
   nvmlReturn_t status;
@@ -124,42 +86,6 @@ unsigned get_num_gpus() {
   return deviceCount;
 }
 
-std::vector<unsigned> get_gpu_core_affinity(unsigned deviceId) {
-  unsigned len = (get_num_cores() + 63) / 64;
-
-  std::vector<uint64_t> bitmaps(len);
-
-  nvmlReturn_t status;
-
-  status = nvmlInit();
-  CHECK(status == NVML_SUCCESS);
-
-  nvmlDevice_t device;
-  status = nvmlDeviceGetHandleByIndex(deviceId, &device);
-  CHECK(status == NVML_SUCCESS);
-
-  // Fill bitmaps with the ideal CPU affinity for the device
-  // (see https://helpmanual.io/man3/nvmlDeviceGetCpuAffinity/)
-  status = nvmlDeviceGetCpuAffinity(device, bitmaps.size(), bitmaps.data());
-  CHECK(status == NVML_SUCCESS);
-
-  std::vector<unsigned> cores;
-
-  unsigned core = 0;
-  for (unsigned i = 0; i < bitmaps.size(); i++) {
-    for (unsigned j = 0; j < 64; j++) {
-      if (((bitmaps[i] >> j) & 0x01) == 0x01) {
-        cores.push_back(core);
-      }
-      core++;
-    }
-  }
-
-  status = nvmlShutdown();
-  CHECK(status == NVML_SUCCESS);
-
-  return cores;
-}
 
 void setCudaFlags() {
   cudaError_t error = cudaSetDeviceFlags(cudaDeviceScheduleSpin);
@@ -188,58 +114,6 @@ std::string getGPUmodel(int deviceNumber) {
 char* getGPUModelToBuffer(int deviceNumber, char* buf) {
   strcpy(buf, getGPUmodel(deviceNumber).c_str());
   return buf;
-}
-
-void setCurrentThreadMaxPriority() {
-  pthread_t thId = pthread_self();
-
-  // Don't let run on core 0 for safety
-  std::vector<unsigned> cores;
-  for (unsigned i = 1; i < get_num_cores(); i++) {
-    cores.push_back(i);
-  }
-  set_cores(cores);
-  
-  struct sched_param params;
-  params.sched_priority = sched_get_priority_max(SCHED_FIFO);
-  int ret = pthread_setschedparam(thId, SCHED_FIFO, &params);
-  if (ret != 0) {
-    std::cout << "Warning!  Cannot set thread priority.  Don't forget to set rtprio unlimited in limits.conf.  See README for details." << std::endl;
-    return;
-  }
-
-  int policy = 0;
-  ret = pthread_getschedparam(thId, &policy, &params);
-  CHECK(ret == 0) << "Could not retrieve thread scheduler parameters for setting thread priority";
-  CHECK(policy == SCHED_FIFO) << "Inconsistent thread scheduler parameters encountered";
-}
-
-void unsetCurrentThreadMaxPriority() {
-  pthread_t thId = pthread_self();
-  
-  struct sched_param params;
-  params.sched_priority = 0;
-  int ret = pthread_setschedparam(thId, SCHED_OTHER, &params);
-  if (ret != 0) {
-    std::cout << "Warning!  Cannot set thread priority.  Don't forget to set rtprio unlimited in limits.conf.  See README for details." << std::endl;
-    return;
-  }
-
-  int policy = 0;
-  ret = pthread_getschedparam(thId, &policy, &params);
-  CHECK(ret == 0) << "Could not retrieve thread scheduler parameters for setting thread priority";
-  CHECK(policy == SCHED_OTHER) << "Inconsistent thread scheduler parameters encountered";
-
-}
-
-bool isCurrentThreadMaxPriority() {
-  pthread_t thId = pthread_self();
-  struct sched_param params;
-  int policy;
-
-  int ret = pthread_getschedparam(thId, &policy, &params);
-  CHECK(ret == 0) << "Could not retrieve thread scheduler parameters for setting thread priority";
-  return policy == SCHED_FIFO && params.sched_priority == sched_get_priority_max(SCHED_FIFO);
 }
 
 

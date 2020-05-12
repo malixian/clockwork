@@ -15,6 +15,7 @@
 #include <pods/binary.h>
 #include <pods/buffers.h>
 #include <pods/streams.h>
+#include "clockwork/thread.h"
 
 
 namespace clockwork {
@@ -43,6 +44,7 @@ private:
 public:	
 	TaskTelemetryFileLogger(std::string output_filename) : output_filename(output_filename), alive(true) {
 		thread = std::thread(&TaskTelemetryFileLogger::main, this);
+		threading::initLoggerThread(thread);
 	}
 
 	void shutdown(bool awaitCompletion) {

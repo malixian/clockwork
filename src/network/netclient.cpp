@@ -11,6 +11,7 @@
 #include <stdexcept>
 #include <vector>
 #include <functional>
+#include "clockwork/thread.h"
 
 using namespace clockwork;
 
@@ -31,6 +32,7 @@ public:
 		input = static_cast<char*>(malloc(input_size));
 		callback = std::bind(&SimpleConnection::inferComplete, this, std::placeholders::_1);
 		this->printer = std::thread(&SimpleConnection::printThread, this);
+		threading::initLoggerThread(printer);
 	}
 
 	void printThread() {

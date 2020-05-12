@@ -1,4 +1,5 @@
 #include "clockwork/network/controller.h"
+#include "clockwork/thread.h"
 
 namespace clockwork {
 namespace network {
@@ -161,7 +162,9 @@ void WorkerConnection::sendAction(std::shared_ptr<workerapi::Action> action) {
 	}
 }
 
-WorkerManager::WorkerManager() : alive(true), network_thread(&WorkerManager::run, this) {}
+WorkerManager::WorkerManager() : alive(true), network_thread(&WorkerManager::run, this) {
+	threading::initNetworkThread(network_thread);
+}
 
 void WorkerManager::run() {
 	while (alive) {
@@ -343,6 +346,7 @@ Server::Server(clientapi::ClientAPI* api, int port) :
 		io_service(),
 		alive(true),
 		network_thread(&Server::run, this, port) {
+	threading::initNetworkThread(network_thread);
 }
 
 void Server::shutdown(bool awaitShutdown) {

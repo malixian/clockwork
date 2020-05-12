@@ -1,5 +1,6 @@
 #include "clockwork/controller/controller.h"
 #include <sstream>
+#include "clockwork/thread.h"
 
 using namespace clockwork;
 using namespace clockwork::controller;
@@ -517,6 +518,7 @@ ControllerWithStartupPhase::ControllerWithStartupPhase(
 		scheduler(scheduler),
 		startup_thread(&ControllerWithStartupPhase::runStartup, this),
 		request_telemetry(request_telemetry) {
+	threading::initHighPriorityThread(startup_thread);
 }
 
 void ControllerWithStartupPhase::runStartup() {
