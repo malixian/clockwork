@@ -83,12 +83,22 @@ uint64_t LoadModelFromDiskTask::eligible() {
 
 void LoadModelFromDiskTask::run(cudaStream_t stream) {
 	uint64_t now = util::now(); // TODO: use chrono
+	std::cout << "LoadModelFromDiskTask latest: " << latest << "ns, "
+			  << util::millis(latest) << "ms" << std::endl;
 	if (now < earliest) {
-		throw TaskError(actionErrorRuntimeError, "LoadModelFromDiskTask ran before it was eligible");
+		std::stringstream err;
+		err << "LoadModelFromDiskTask ran before it was eligible"
+			<< " (now " << util::millis(now)
+			<< ", earliest " << util::millis(earliest) << ")";
+		throw TaskError(actionErrorRuntimeError, err.str());
 	}
 
 	if (now > latest) {
-		throw TaskError(actionErrorCouldNotStartInTime, "LoadModelFromDiskTask could not start in time");
+		std::stringstream err;
+		err << "LoadModelFromDiskTask could not start in time"
+			<< " (now " << util::millis(now)
+			<< ", latest " << util::millis(latest) << ")";
+		throw TaskError(actionErrorCouldNotStartInTime, err.str());
 	}
 
 	std::vector<unsigned> gpu_ids;
@@ -145,11 +155,19 @@ uint64_t LoadWeightsTask::eligible() {
 void LoadWeightsTask::run(cudaStream_t stream) {
 	uint64_t now = util::now(); // TODO: use chrono
 	if (now < earliest) {
-		throw TaskError(actionErrorRuntimeError, "LoadWeightsTask ran before it was eligible");
+		std::stringstream err;
+		err << "LoadWeightsTask ran before it was eligible"
+			<< " (now " << util::millis(now)
+			<< ", earliest " << util::millis(earliest) << ")";
+		throw TaskError(actionErrorRuntimeError, err.str());
 	}
 
 	if (now > latest) {
-		throw TaskError(actionErrorCouldNotStartInTime, "LoadWeightsTask could not start in time");
+		std::stringstream err;
+		err << "LoadWeightsTask could not start in time"
+			<< " (now " << util::millis(now)
+			<< ", latest " << util::millis(latest) << ")";
+		throw TaskError(actionErrorCouldNotStartInTime, err.str());
 	}
 
 	rm = manager->models->get(model_id, gpu_id);
@@ -273,11 +291,19 @@ uint64_t CopyInputTask::eligible() {
 void CopyInputTask::run(cudaStream_t stream) {
 	uint64_t now = util::now(); // TODO: use chrono
 	if (now < earliest) {
-		throw TaskError(actionErrorRuntimeError, "CopyInputTask ran before it was eligible");
+		std::stringstream err;
+		err << "CopyInputTask ran before it was eligible"
+			<< " (now " << util::millis(now)
+			<< ", earliest " << util::millis(earliest) << ")";
+		throw TaskError(actionErrorRuntimeError, err.str());
 	}
 
 	if (now > latest) {
-		throw TaskError(actionErrorCouldNotStartInTime, "CopyInputTask could not start in time");
+		std::stringstream err;
+		err << "CopyInputTask could not start in time"
+			<< " (now " << util::millis(now)
+			<< ", latest " << util::millis(latest) << ")";
+		throw TaskError(actionErrorCouldNotStartInTime, err.str());
 	}
 
 	rm = manager->models->get(model_id, gpu_id);
@@ -352,11 +378,19 @@ uint64_t ExecTask::eligible() {
 void ExecTask::run(cudaStream_t stream) {
 	uint64_t now = util::now(); // TODO: use chrono
 	if (now < earliest) {
-		throw TaskError(actionErrorRuntimeError, "ExecTask ran before it was eligible");
+		std::stringstream err;
+		err << "ExecTask could ran before it was eligible"
+			<< " (now " << util::millis(now)
+			<< ", earliest " << util::millis(earliest) << ")";
+		throw TaskError(actionErrorRuntimeError, err.str());
 	}
 
 	if (now > latest) {
-		throw TaskError(actionErrorCouldNotStartInTime, "ExecTask could not start in time");
+		std::stringstream err;
+		err << "ExecTask could not start in time"
+			<< " (now " << util::millis(now)
+			<< ", latest " << util::millis(latest) << ")";
+		throw TaskError(actionErrorCouldNotStartInTime, err.str());
 	}
 
 	rm->lock();

@@ -19,7 +19,7 @@ struct BatchedModelState {
 	unsigned num_weights_pages;
 	uint64_t weights_transfer_duration;
 	std::vector<unsigned> supported_batch_sizes;
-	std::map<unsigned, unsigned> exec_duration; // map of batch size to exec duration
+	std::map<unsigned, uint64_t> exec_duration; // map of batch size to exec duration
 
 	std::string str();
 };
@@ -101,33 +101,17 @@ public:
 TODO: implement
 
  */
-// class SimpleScheduler : public Scheduler {
-// public:
-	
-// 	void start(std::vector<network::controller::WorkerConnection*> workers,
-// 			   ClockworkState &state) {
-// 		// TODO: print all the info
-// 		std::cout << "EchoScheduler started" << std::endl;
-// 	}
 
-// 	void resultFromWorker(std::shared_ptr<workerapi::Result> result) {
-// 		std::cout << "Unexpectedly received a result from a worker: " << result->str() << std::endl;
-// 	}
+class SimpleScheduler : public Scheduler {
+public:
+ 	void start(std::vector<network::controller::WorkerConnection*> workers,
+		ClockworkState &state) {}
 
-// 	void clientInfer(clientapi::InferenceRequest &request, std::function<void(clientapi::InferenceResponse&)> callback) {
-// 		std::cout << "Received: " << request.str() << std::endl;
+ 	void clientInfer(clientapi::InferenceRequest &request,
+		std::function<void(clientapi::InferenceResponse&)> callback) {}
 
-// 		clientapi::InferenceResponse response;
-// 		response.header.user_request_id = request.header.user_request_id;
-// 		response.header.status = clockworkError;
-// 		response.header.message = "infer not implemented on EchoScheduler";
-// 		response.output_size = 0;
-// 		response.output = nullptr;
-
-// 		callback(response);
-// 	}
-// };
-
+ 	void resultFromWorker(std::shared_ptr<workerapi::Result> result) {}
+};
 
 
 }

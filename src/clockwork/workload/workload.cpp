@@ -51,8 +51,9 @@ void Engine::Run(clockwork::Client* client) {
 
 	for (auto &workload : workloads) {
 		workload->Start(now);
+		running++;
 	}
-	while (true) {
+	while (running > 0) {
 		// Process all pending results
 		now = util::now();
 		std::function<void(void)> callback;
@@ -123,9 +124,16 @@ void Workload::InferErrorInitializing(uint64_t now, unsigned model_index) {
 	InferError(now, model_index, clockworkInitializing);
 }
 
-ClosedLoop::ClosedLoop(int id, clockwork::Model* model, unsigned concurrency) : 
-	Workload(id, model), concurrency(concurrency) {
+ClosedLoop::ClosedLoop(int id, clockwork::Model* model, unsigned concurrency) :
+	Workload(id, model), concurrency(concurrency), num_requests(UINT_MAX) {
 	CHECK(concurrency != 0) << "ClosedLoop with concurrency 0 created";
+}
+
+ClosedLoop::ClosedLoop(int id, clockwork::Model* model, unsigned concurrency,
+	unsigned num_requests) :
+	Workload(id, model), concurrency(concurrency), num_requests(num_requests) {
+	CHECK(concurrency != 0) << "ClosedLoop with concurrency 0 created";
+	CHECK(num_requests != 0) << "ClosedLoop with num_requests 0 created";
 }
 
 void ClosedLoop::Start(uint64_t now) {
@@ -135,13 +143,13 @@ void ClosedLoop::Start(uint64_t now) {
 }
 
 void ClosedLoop::InferComplete(uint64_t now, unsigned model_index) {
-	Infer();
+	if ((num_requests--) > 0) { Infer(); } else { engine->running--; }
 }
 
 void ClosedLoop::InferError(uint64_t now, unsigned model_index, int status) {
-	Infer();
+	if ((num_requests--) > 0) { Infer(); } else { engine->running--; }
 }
 
 void ClosedLoop::InferErrorInitializing(uint64_t now, unsigned model_index) {
-	Infer();
+	if ((num_requests--) > 0) { Infer(); } else { engine->running--; }
 }

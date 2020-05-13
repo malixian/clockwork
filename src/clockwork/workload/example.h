@@ -28,6 +28,28 @@ Engine* simple(clockwork::Client* client) {
 	return engine;
 }
 
+Engine* simple_parametric(clockwork::Client* client, unsigned num_copies,
+	unsigned concurrency, unsigned num_requests) {
+	std::cout << "Simple Parametric Engine: " << num_copies << " "
+		<< concurrency << " " << num_requests << std::endl;
+	Engine* engine = new Engine();
+
+	std::string modelpath = util::get_clockwork_modelzoo()["resnet50_v2"];
+	auto models = client->load_remote_models(modelpath, num_copies);
+
+	for (unsigned i = 0; i < models.size(); i++) {
+		std::cout << "Adding a ClosedLoop Engine for Model " << i << std::endl;
+		engine->AddWorkload(new ClosedLoop(
+			i, 				// client id
+			models[i],		// model
+			concurrency,	// concurrency
+			num_requests	// max num requests
+		));
+	}
+
+	return engine;
+}
+
 Engine* example(clockwork::Client* client) {
 	Engine* engine = new Engine();
 

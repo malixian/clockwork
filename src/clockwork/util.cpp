@@ -42,6 +42,13 @@ std::uint64_t now() {
   return nanos(hrt());
 }
 
+std::string millis(uint64_t t) {
+	// Crude way of printing as ms
+	std::stringstream ss;
+	ss << (t / 1000000) << "." << ((t % 1000000) / 100000);
+	return ss.str();
+}
+
 clockwork::time_point hrt() {
   return std::chrono::steady_clock::now();
 }

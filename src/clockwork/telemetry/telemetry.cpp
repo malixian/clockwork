@@ -63,7 +63,8 @@ void AsyncRequestTelemetryLogger::shutdown(bool awaitCompletion) {
 	}
 }
 
-RequestTelemetryPrinter::RequestTelemetryPrinter(uint64_t print_interval) : print_interval(print_interval) {}
+RequestTelemetryPrinter::RequestTelemetryPrinter(uint64_t print_interval) :
+	print_interval(print_interval) {}
 
 void RequestTelemetryPrinter::print(uint64_t interval) {
 	if (buffered.size() == 0) {
@@ -128,7 +129,10 @@ void RequestTelemetryPrinter::log(ControllerRequestTelemetry &telemetry) {
 	}
 }
 
-void RequestTelemetryPrinter::shutdown(bool awaitCompletion) {}
+void RequestTelemetryPrinter::shutdown(bool awaitCompletion) {
+	std::cout << "RequestTelemetryPrinter shutting down" << std::endl;
+	std::cout << std::flush;
+}
 
 RequestTelemetryLogger* ControllerRequestTelemetry::summarize(uint64_t print_interval) {
 	auto result = new AsyncRequestTelemetryLogger();

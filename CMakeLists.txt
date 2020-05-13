@@ -73,6 +73,7 @@ add_library( clockwork
 	src/clockwork/controller/controller.cpp
 	src/clockwork/controller/closed_loop_controller.cpp
 	src/clockwork/controller/direct_controller.cpp
+	src/clockwork/controller/scheduler.cpp
 	src/clockwork/config.cpp
 	src/clockwork/network/client.cpp
 	src/clockwork/workload/workload.cpp
