@@ -19,6 +19,7 @@
 #include <tbb/concurrent_queue.h>
 #include <iomanip>
 #include "clockwork/api/api_common.h"
+#include <iostream>
 #include "clockwork/thread.h"
 
 

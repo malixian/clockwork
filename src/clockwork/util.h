@@ -20,6 +20,7 @@ namespace util {
 
 // High-resolution timer, current time in nanoseconds
 std::uint64_t now();
+std::string millis(uint64_t t);
 
 time_point hrt();
 

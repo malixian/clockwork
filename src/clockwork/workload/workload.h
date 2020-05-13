@@ -35,6 +35,7 @@ private:
 	std::vector<Workload*> workloads;
 
 public:
+	std::atomic_int running = 0;
 
 	void AddWorkload(Workload* workload);
 	void SetTimeout(uint64_t timeout, std::function<void(void)> callback);
@@ -48,10 +49,10 @@ public:
 class Workload {
 private:
 	std::vector<clockwork::Model*> models;
-	Engine* engine;
 
 public:
 	int user_id;
+	Engine* engine;
 
 	Workload(int id);
 	Workload(int id, clockwork::Model* model);
@@ -79,8 +80,12 @@ public:
 class ClosedLoop : public Workload {
 public:
 	const unsigned concurrency;
+	unsigned num_requests;
 
 	ClosedLoop(int id, clockwork::Model* model, unsigned concurrency);
+
+	ClosedLoop(int id, clockwork::Model* model, unsigned concurrency,
+		unsigned num_requests);
 
 	virtual void Start(uint64_t now);
 	virtual void InferComplete(uint64_t now, unsigned model_index);

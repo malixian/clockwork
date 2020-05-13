@@ -55,7 +55,7 @@ struct UploadModelResponse {
 	std::string str();
 };
 
-/* Make an inference request for a model.  Clients can sent in arbitrary
+/* Make an inference request for a model.  Clients can send in arbitrary
 batches of inputs.  For now, clockwork does not break down batches into 
 multiple smaller batches, but might combine multiple requests into one
 single batch. */
@@ -65,6 +65,7 @@ struct InferenceRequest {
 	int batch_size;
 	size_t input_size;
 	void* input;
+	uint64_t deadline;
 
 	std::string str();
 };

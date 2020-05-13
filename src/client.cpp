@@ -20,11 +20,14 @@ int main(int argc, char *argv[])
 {
 	threading::initProcess();
 
-	if (argc != 3) {
-		std::cerr << "Usage: client [address] [workload]" << std::endl;
-		std::cout << "Available workloads:" << std::endl;
+	if (argc < 3) {
+		std::cerr << "Usage: client [address] [workload] "
+				  << "[workload parameters (if required)]" << std::endl;
+		std::cout << "Available workloads with parameters:" << std::endl;
 		std::cout << "  simple" << std::endl;
 		std::cout << "  example" << std::endl;
+		std::cout << "  simple-parametric num_models concurrency requests_per_model"
+				  << std::endl;
 		return 1;
 	}
 	std::string workload = argv[2];
@@ -49,6 +52,9 @@ int main(int argc, char *argv[])
 		engine = workload::spam(client);
 	else if (workload == "simple")
 		engine = workload::simple(client);
+	else if (workload == "simple-parametric")
+		engine = workload::simple_parametric(client,
+			std::stoul(argv[3]), std::stoul(argv[4]), std::stoul(argv[5]));
 	else if (workload == "azure")
 		engine = workload::azure(client);
 	else {
