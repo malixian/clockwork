@@ -214,10 +214,21 @@ char* MemoryPool::alloc(size_t amount) {
 		if (offset + amount <= size) {
 			// Fits in pool
 
-			auto allocation = std::make_shared<MemoryAllocation>(base_ptr, offset, amount);
-			allocations.push_back(allocation);
-			ptr_allocations[base_ptr + offset] = allocation;
-			return base_ptr + offset;
+			if (amount * 2 > (size - offset)) {
+				// This allocation will use more than half the remaining space.
+				// Align it to the end of the pool
+				offset = size-amount;
+				auto allocation = std::make_shared<MemoryAllocation>(base_ptr, offset, amount);
+				allocations.push_back(allocation);
+				ptr_allocations[base_ptr + offset] = allocation;
+				return base_ptr + offset;
+			} else {
+
+				auto allocation = std::make_shared<MemoryAllocation>(base_ptr, offset, amount);
+				allocations.push_back(allocation);
+				ptr_allocations[base_ptr + offset] = allocation;
+				return base_ptr + offset;
+			}
 		}
 
 		if (amount <= front->offset) {
@@ -271,11 +282,33 @@ void MemoryPool::free(char* ptr) {
 
 // Get the  size of all allocations
 size_t MemoryPool::remaining() {
+	std::lock_guard<std::mutex> lock(mutex);
+
 	size_t allocated = 0;
 	for (unsigned i = 0; i < allocations.size(); i++) {
 		allocated += allocations[i]->size;
 	}
 	return (size - allocated);
+}
+
+// Get the  size of all allocations
+size_t MemoryPool::before() {
+	std::lock_guard<std::mutex> lock(mutex);
+
+	return allocations.front()->offset;
+}
+
+// Get the  size of all allocations
+size_t MemoryPool::after() {
+	std::lock_guard<std::mutex> lock(mutex);
+
+	return size - (allocations.back()->offset + allocations.back()->size);
+}
+
+unsigned MemoryPool::numAllocs() {
+	std::lock_guard<std::mutex> lock(mutex);
+
+	return allocations.size();
 }
 
 // Reclaim back all allocations

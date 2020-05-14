@@ -83,8 +83,6 @@ uint64_t LoadModelFromDiskTask::eligible() {
 
 void LoadModelFromDiskTask::run(cudaStream_t stream) {
 	uint64_t now = util::now(); // TODO: use chrono
-	std::cout << "LoadModelFromDiskTask latest: " << latest << "ns, "
-			  << util::millis(latest) << "ms" << std::endl;
 	if (now < earliest) {
 		std::stringstream err;
 		err << "LoadModelFromDiskTask ran before it was eligible"
@@ -339,7 +337,14 @@ void CopyInputTask::run(cudaStream_t stream) {
 	this->io_memory = manager->io_pools[gpu_id]->alloc(io_memory_size);
 
 	if (this->io_memory == nullptr) {
-		throw TaskError(actionErrorRuntimeError, "CopyInputTask failed to allocate memory from io_pool");
+		std::stringstream err;
+		err << "CopyInputTask failed to allocate memory from io_pool."
+		    << " Model = " << rm->model->source
+			<< " Batch size " << batch_size << " requires " << io_memory_size
+			<< ", but " << manager->io_pools[gpu_id]->remaining()
+			<< " of " << manager->io_pools[gpu_id]->size << " remaining"
+			<< " (" << manager->io_pools[gpu_id]->numAllocs() << " outstanding allocations)";
+		throw TaskError(actionErrorRuntimeError, err.str());
 	}
 
 	this->record_async_begin(stream);
@@ -408,20 +413,31 @@ void ExecTask::run(cudaStream_t stream) {
 	this->workspace_memory = manager->workspace_pools[gpu_id]->alloc(workspace_size);
 
 	if (this->workspace_memory == nullptr) {
-		throw TaskError(actionErrorRuntimeError, "ExecTask failed to allocate memory from workspace_pool");
+		std::stringstream err;
+		err << "ExecTask failed to allocate memory from workspace_pool."
+		    << " Model = " << rm->model->source
+			<< " Batch size " << batch_size << " requires " << workspace_size
+			<< ", but " << manager->workspace_pools[gpu_id]->remaining()
+			<< " of " << manager->workspace_pools[gpu_id]->size << " remaining"
+			<< " (" << manager->workspace_pools[gpu_id]->before() << " before"
+			<< " " << manager->workspace_pools[gpu_id]->after() << " after)"
+			<< " (" << manager->workspace_pools[gpu_id]->numAllocs() << " outstanding allocations)";
+		throw TaskError(actionErrorRuntimeError, err.str());
 	}
 
 	this->record_async_begin(stream);
 	rm->model->call(batch_size, weights->page_pointers, io_memory, workspace_memory, stream);
 	this->record_async_end(stream);
-}
 
-void ExecTask::process_completion() {
-	telemetry->async_duration = this->async_duration();
+	// With one-at-a-time execution, workspace memory allocations are unnecessary
 	if (workspace_memory != nullptr) {
 		manager->workspace_pools[gpu_id]->free(workspace_memory);
 		workspace_memory = nullptr;
 	}
+}
+
+void ExecTask::process_completion() {
+	telemetry->async_duration = this->async_duration();
 
 	rm->lock();
 

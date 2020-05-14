@@ -83,6 +83,9 @@ public:
 
 	// Get the remaining size
 	size_t remaining();
+	unsigned numAllocs();
+	size_t before();
+	size_t after();
 
 	// Reclaim back all allocations
 	void clear();
