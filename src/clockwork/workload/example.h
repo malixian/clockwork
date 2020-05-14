@@ -116,7 +116,7 @@ Engine* spam(clockwork::Client* client) {
 		engine->AddWorkload(new ClosedLoop(
 			0, 			// client id, just use the same for this
 			models[i],	// model
-			10			// concurrency
+			100			// concurrency
 		));
 	}
 
@@ -140,6 +140,40 @@ Engine* azure(clockwork::Client* client) {
 
 		Workload* replay = new PoissonTraceReplay(
 			0,				// client id, just give them all the same ID for this example
+			model,			// model
+			i,				// rng seed
+			workload,		// trace data
+			1.0,			// scale factor; default 1
+			60.0,			// interval duration; default 60
+			0				// interval to begin at; default 0; set to -1 for random
+		);
+
+		engine->AddWorkload(replay);
+	}
+
+	return engine;
+}
+
+Engine* azure_small(clockwork::Client* client) {
+	Engine* engine = new Engine();
+
+	std::vector<Model*> models;
+	for (auto &p : util::get_clockwork_modelzoo()) {
+		std::cout << "Loading " << p.first << std::endl;
+		for (auto &model : client->load_remote_models(p.second, 3)) {
+			models.push_back(model);
+		}
+	}
+
+
+	auto trace_data = azure::load_trace();
+	for (unsigned i = 0; i < trace_data.size(); i++) {
+		auto model = models[i % models.size()];
+		model->disable_inputs();
+		auto workload = trace_data[i];
+
+		Workload* replay = new PoissonTraceReplay(
+			i,				// client id, just give them all the same ID for this example
 			model,			// model
 			i,				// rng seed
 			workload,		// trace data

@@ -4,8 +4,8 @@ namespace clockwork {
 
 uint64_t action_id_seed = 0;
 
-InferOnlyScheduler::InferOnlyScheduler(std::string actions_filename) : 
-    printer(ControllerActionTelemetry::log_and_summarize(actions_filename, print_interval)) {
+InferOnlyScheduler::InferOnlyScheduler(std::string actions_filename) 
+    : actions_filename(actions_filename) {
 }
 
 InferOnlyScheduler::Request::Request(clientapi::InferenceRequest request,
@@ -350,6 +350,9 @@ void InferOnlyScheduler::run() {
                          << result->str();
         }
     }
+
+    // Create and start the printer thread
+    printer = ControllerActionTelemetry::log_and_summarize(actions_filename, print_interval);
 
     // Start processing actions + results
     while (true) {

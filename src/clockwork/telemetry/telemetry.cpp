@@ -319,8 +319,8 @@ std::map<SimpleActionPrinter::Group, std::queue<ControllerActionTelemetry>> make
 			t.status == clockworkSuccess) {
 			SimpleActionPrinter::Group key = std::make_tuple(t.worker_id, t.gpu_id, t.action_type);
 			result[key].push(t);
-			buffered.pop();
 		}
+		buffered.pop();
 	}
 	return result;
 }

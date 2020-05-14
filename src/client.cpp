@@ -24,7 +24,9 @@ void printUsage() {
 			  << "  spam" << std::endl
 			  << "  simple" << std::endl
 			  << "  simple-parametric num_models concurrency requests_per_model"
-			  << std::endl;
+			  << std::endl
+			  << "  azure" << std::endl
+			  << "  azure_small" << std::endl;
 }
 
 int main(int argc, char *argv[])
@@ -62,6 +64,8 @@ int main(int argc, char *argv[])
 			std::stoul(argv[3]), std::stoul(argv[4]), std::stoul(argv[5]));
 	else if (workload == "azure")
 		engine = workload::azure(client);
+	else if (workload == "azure_small")
+		engine = workload::azure_small(client);
 	else {
 		std::cout << "Unknown workload " << workload << std::endl << std::endl;
 		printUsage();
