@@ -1,4 +1,5 @@
 #include "clockwork/network/client_api.h"
+#include <iostream>
 
 namespace clockwork {
 namespace network {

@@ -117,7 +117,7 @@ public:
 	unsigned model_id_seed = 0;
 
 	uint64_t last_action = 0;
-	uint64_t timeout = 10000000000UL; // For now, 10s hard-coded loading stage timeout
+	uint64_t timeout; // For now, 10s hard-coded loading stage timeout
 
 	ClockworkState state;
 
@@ -130,7 +130,11 @@ public:
 	std::vector<Worker> workers;
 
 
-	LoadingStage(ClockworkState &state, std::vector<network::controller::WorkerConnection*> worker_connections);
+	LoadingStage(
+		ClockworkState &state, 
+		std::vector<network::controller::WorkerConnection*> worker_connections,
+		uint64_t timeout = 10000000000UL
+	);
 
 	void on_request(std::shared_ptr<LoadModelRequest> &request);
 	void on_result(std::shared_ptr<workerapi::Result> &result);
@@ -203,7 +207,7 @@ public:
 	/*
 	Runs the whole startup stage.  Blocks until complete.
 	*/
-	ClockworkState run(std::vector<network::controller::WorkerConnection*> workers);
+	ClockworkState run(uint64_t timeout, std::vector<network::controller::WorkerConnection*> workers);
 
 	/*
 	Initiates an orderly shutdown of the ControllerStartup.  Call this after calling `run`.
@@ -223,6 +227,7 @@ class ControllerWithStartupPhase : public Controller {
 private:
 	RequestTelemetryLogger* request_telemetry;
 	bool startup_phase = true;
+	uint64_t timeout;
 	ControllerStartup* startup;
 	std::thread startup_thread;
 	std::mutex startup_mutex;

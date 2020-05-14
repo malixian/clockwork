@@ -19,9 +19,9 @@ std::string offset(uint64_t t) {
 }
 
 std::string window(uint64_t earliest, uint64_t latest) {
-	//uint64_t now = util::now();
-	//earliest = earliest < now ? 0 : (earliest - now);
-	//latest = latest < now ? 0 : (latest - now);
+	uint64_t now = util::now();
+	earliest = earliest < now ? 0 : (earliest - now);
+	latest = latest < now ? 0 : (latest - now);
 	std::stringstream ss;
 	ss << "[" << util::millis(earliest) << ", " << util::millis(latest) << "]";
 	return ss.str();		
@@ -49,7 +49,7 @@ std::string EvictWeights::str() {
 	std::stringstream ss;
 	ss << "A" << id << ":EvictWeights"
 	   << " model=" << model_id
-	   // << " gpu=" << gpu_id
+	   << " gpu=" << gpu_id
 	   << " " << window(earliest, latest);
 	return ss.str();
 }
@@ -60,6 +60,7 @@ std::string Infer::str() {
 	   << " model=" << model_id
 	   << " gpu=" << gpu_id
 	   << " batch=" << batch_size
+	   << " input=" << input_size
 	   << " " << window(earliest, latest);
 	return ss.str();
 }
