@@ -23,8 +23,8 @@ Globally manages assignment of threads to cores, since RT priority is fragile
 */
 class CoreManager {
 public:
-	const int init_pool_size = 2;
-	const int default_pool_size = 2;
+	const int init_pool_size = 4;
+	const int default_pool_size = 4;
 
 	std::vector<bool> in_use;
 	std::vector<std::vector<unsigned>> gpu_affinity;
@@ -73,7 +73,7 @@ public:
 	}
 
 	std::vector<unsigned> alloc(unsigned count, unsigned gpu_id) {
-		std::cout << "Alloc " << count << " on " << gpu_id << " " << str() << std::endl;
+		// std::cout << "Alloc " << count << " on " << gpu_id << " " << str() << std::endl;
 		std::vector<unsigned> result;
 		for (unsigned i = 0; i < count; i++) {
 			result.push_back(alloc(gpu_id));
@@ -137,7 +137,7 @@ void initLoggerThread(std::thread &thread) {
 }
 
 void initGPUThread(int gpu_id, std::thread &thread) {
-	initHighPriorityThread(2, 0, thread);
+	initHighPriorityThread(1, 0, thread);
 }
 
 unsigned coreCount() {
