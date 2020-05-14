@@ -162,7 +162,7 @@ size_t Model::input_size() {
 
 /* Preconditions: instantiate_model_on_host && set_workspace_pages */
 void Model::transfer_input_to_device(const char* input_ptr, char* &dst_io_memory, cudaStream_t stream) {
-	transfer_input_to_device(spec->inputs[0].size, input_ptr, dst_io_memory, stream);
+	transfer_input_to_device(inputs_size, input_ptr, dst_io_memory, stream);
 }
 
 void Model::transfer_input_to_device(size_t input_size, const char* input_ptr, char* &dst_io_memory, cudaStream_t stream) {
