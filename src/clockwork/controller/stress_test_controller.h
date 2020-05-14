@@ -71,6 +71,7 @@ public:
 
 	unsigned pending_workers;
 
+	std::thread thread;
 	std::thread printer;
 
 	std::map<unsigned, std::function<void(std::shared_ptr<workerapi::Result>)>> callbacks;
@@ -80,12 +81,11 @@ public:
 	StressTestController(int client_port, std::vector<std::pair<std::string, std::string>> worker_host_port_pairs):
 		Controller::Controller(client_port, worker_host_port_pairs), action_id_seed(0), 
 		pending_workers(workers.size()),
-		results(),
-		printer(&StressTestController::printerThread, this) {
-		threading::initLoggerThread(printer);
+		results() {
 		input = static_cast<char*>(malloc(input_size));
 
-		init();
+		thread = std::thread(&StressTestController::run, this);
+		threading::initHighPriorityThread(thread);
 	}
 
 	std::string stats(std::vector<uint64_t> v, std::vector<uint64_t> e2e, uint64_t profiled, uint64_t duration) {
@@ -169,8 +169,6 @@ public:
 	}
 
 	void init() {
-		std::lock_guard<std::recursive_mutex> lock(mutex);
-
 		for (unsigned worker_id = 0; worker_id < this->workers.size(); worker_id++) {
 			unsigned action_id = action_id_seed++;
 
@@ -212,8 +210,6 @@ public:
 	}
 
 	bool evictNext(unsigned gpu_id) {
-		std::lock_guard<std::recursive_mutex> lock(mutex);
-
 		auto &gpu = gpus[gpu_id];
 
 		if (gpu.models_on_gpu.size() <= max_models_on_gpu) return false;
@@ -238,8 +234,6 @@ public:
 	}
 
 	void onEvictWeightsComplete(unsigned model_id, unsigned gpu_id, std::shared_ptr<workerapi::Result> result) {
-		std::lock_guard<std::recursive_mutex> lock(mutex);
-
 		if (auto error = std::dynamic_pointer_cast<workerapi::ErrorResult>(result)) {
 			CHECK(false) << "Error in evict weights action, which should never happen except for fatal errors";
 		} else if (auto evict = std::dynamic_pointer_cast<workerapi::EvictWeightsResult>(result)) {
@@ -251,8 +245,6 @@ public:
 	}
 
 	bool loadNext(unsigned gpu_id) {
-		std::lock_guard<std::recursive_mutex> lock(mutex);
-
 		auto &gpu = gpus[gpu_id];
 
 		if (gpu.models_not_on_gpu.size() == 0) return false;
@@ -299,8 +291,6 @@ public:
 	}
 
 	bool inferNext(unsigned gpu_id) {
-		std::lock_guard<std::recursive_mutex> lock(mutex);
-
 		auto &gpu = gpus[gpu_id];
 		if (gpu.outstanding_infer >= max_outstanding_infer) return false;
 
@@ -350,19 +340,37 @@ public:
 	virtual void sendResult(std::shared_ptr<workerapi::Result> result) {
 		if (log_actions) std::cout << "R: " << result->str() << std::endl;
 
-		std::lock_guard<std::recursive_mutex> lock(mutex);
+		results.push(result);
+	}
 
-		callback(result);
 
-		if (pending_workers > 0) return;
+	void run() {
+		init();
 
-		for (unsigned i = 0; i < gpus.size(); i++) {
-			if (stress_loadweights) {
-				while (evictNext(i));	
+		std::shared_ptr<workerapi::Result> result;
+
+		while (pending_workers > 0) {
+			if (results.try_pop(result)) {
+				callback(result);
 			}
-			while (loadNext(i));
-			if (stress_infer) {
-				while (inferNext(i));
+		}
+
+		printer = std::thread(&StressTestController::printerThread, this);
+		threading::initLoggerThread(printer);
+
+		while (true) {
+			while (results.try_pop(result)) {
+				callback(result);
+			}
+
+			for (unsigned i = 0; i < gpus.size(); i++) {
+				if (stress_loadweights) {
+					while (evictNext(i));	
+				}
+				while (loadNext(i));
+				if (stress_infer) {
+					while (inferNext(i));
+				}
 			}
 		}
 	}

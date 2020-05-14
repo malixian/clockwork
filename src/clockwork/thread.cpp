@@ -5,6 +5,7 @@
 #include <thread>
 #include <algorithm>
 #include <sstream>
+#include <sched.h>
 
 #include <dmlc/logging.h>
 
@@ -118,6 +119,10 @@ void initHighPriorityThread(std::thread &thread) {
 	initHighPriorityThread(1, 1, thread);
 }
 
+void initHighPriorityThread(std::thread &thread, int num_cores) {
+	initHighPriorityThread(num_cores, 1, thread);
+}
+
 void initLowPriorityThread(std::thread &thread) {
 	setCores(manager.default_pool, thread.native_handle());
 	setDefaultPriority(thread.native_handle());
@@ -192,6 +197,10 @@ std::vector<unsigned> currentCores() {
 		}
 	}
 	return cores;
+}
+
+unsigned getCurrentCore() {
+	return sched_getcpu();
 }
 
 std::vector<unsigned> getGPUCoreAffinity(unsigned gpu_id) {

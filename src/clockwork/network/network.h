@@ -7,6 +7,7 @@
 #include <boost/bind.hpp>
 #include <asio.hpp>
 #include "clockwork/network/message.h"
+#include "tbb/concurrent_queue.h"
 
 namespace clockwork {
 namespace network {
@@ -63,6 +64,7 @@ public:
 
 private:
   void start_send(message_tx &req);
+  void try_send();
   void send_next_message();
 
   void handle_prehdr_sent(const asio::error_code& error,
@@ -91,7 +93,7 @@ private:
   size_t body_seg_sent_;
 
   std::mutex queue_mutex;
-  std::deque<message_tx*> tx_queue_;
+  tbb::concurrent_queue<message_tx*> tx_queue_;
 };
 
 
@@ -162,6 +164,8 @@ private:
   message_receiver msg_rx_;
   asio::ip::tcp::resolver resolver_;
   asio::ip::tcp::socket socket_;
+public:
+  asio::io_service& io_service_;
 };
 
 

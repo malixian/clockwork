@@ -15,20 +15,20 @@ message_sender::message_sender(message_connection *conn, message_handler &handle
 
 void message_sender::send_message(message_tx &req)
 {
+  tx_queue_.push(&req);
+  conn_->io_service_.post(boost::bind(&message_sender::try_send, this));
+}
+
+void message_sender::try_send() {
   std::lock_guard<std::mutex> lock(queue_mutex);
 
-  if (!req_) {
-    start_send(req);
-  } else {
-    tx_queue_.push_back(&req);
-  }
+  if (!req_) send_next_message();
 }
 
 void message_sender::send_next_message()
 {
-  if (tx_queue_.empty()) return;
-  message_tx *req = tx_queue_.front();
-  tx_queue_.pop_front();
+  message_tx *req;
+  if (!tx_queue_.try_pop(req)) return;
   start_send(*req);
 }
 
@@ -240,7 +240,7 @@ void message_receiver::next_body_seg()
 
 message_connection::message_connection(asio::io_service& io_service,
     message_handler &handler)
-  : socket_(io_service), resolver_(io_service),
+  : socket_(io_service), resolver_(io_service), io_service_(io_service),
     msg_rx_(message_receiver(this, handler)),
     is_closed(ATOMIC_FLAG_INIT)
 {

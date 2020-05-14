@@ -21,6 +21,7 @@ void initGPUThread(int gpu_id, std::thread &thread);
 
 // Initializes a high priority CPU thread
 void initHighPriorityThread(std::thread &thread);
+void initHighPriorityThread(std::thread &thread, int num_cores);
 
 // Initializes a low priority CPU thread
 void initLowPriorityThread(std::thread &thread);
@@ -32,6 +33,7 @@ void setAllCores();
 void addCore(unsigned core);
 void removeCore(unsigned core);
 std::vector<unsigned> currentCores();
+unsigned getCurrentCore();
 
 std::vector<unsigned> getGPUCoreAffinity(unsigned gpu_id);
 

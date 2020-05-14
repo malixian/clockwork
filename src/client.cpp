@@ -16,18 +16,23 @@ std::pair<std::string, std::string> split(std::string addr) {
 	return {hostname, port};
 }
 
+void printUsage() {
+	std::cerr << "Usage: client [address] [workload] "
+			  << "[workload parameters (if required)]" << std::endl
+			  << "Available workloads with parameters:" << std::endl
+			  << "  example" << std::endl
+			  << "  spam" << std::endl
+			  << "  simple" << std::endl
+			  << "  simple-parametric num_models concurrency requests_per_model"
+			  << std::endl;
+}
+
 int main(int argc, char *argv[])
 {
 	threading::initProcess();
 
 	if (argc < 3) {
-		std::cerr << "Usage: client [address] [workload] "
-				  << "[workload parameters (if required)]" << std::endl;
-		std::cout << "Available workloads with parameters:" << std::endl;
-		std::cout << "  simple" << std::endl;
-		std::cout << "  example" << std::endl;
-		std::cout << "  simple-parametric num_models concurrency requests_per_model"
-				  << std::endl;
+		printUsage();
 		return 1;
 	}
 	std::string workload = argv[2];
@@ -58,7 +63,8 @@ int main(int argc, char *argv[])
 	else if (workload == "azure")
 		engine = workload::azure(client);
 	else {
-		std::cout << "Unknown workload " << workload << std::endl;
+		std::cout << "Unknown workload " << workload << std::endl << std::endl;
+		printUsage();
 		return 1;
 	}
 

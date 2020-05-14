@@ -284,9 +284,11 @@ void LoadingStage::Worker::check() {
 	worker->sendActions(actions);
 }
 
-LoadingStage::LoadingStage(ClockworkState &state, std::vector<network::controller::WorkerConnection*> worker_connections) : 
-	state(state) {
-
+LoadingStage::LoadingStage(
+	ClockworkState &state, 
+	std::vector<network::controller::WorkerConnection*> worker_connections,
+	uint64_t timeout) : timeout(timeout), state(state)
+{
 	// Determine model_id_seed
 	for (auto &worker : state.workers) {
 		for (auto &p : worker.models) {
@@ -413,7 +415,7 @@ void ControllerStartup::bounceLoadModelRequest(std::shared_ptr<LoadModelRequest>
 	request->callback(response);
 }
 
-ClockworkState ControllerStartup::run(std::vector<network::controller::WorkerConnection*> workers) {
+ClockworkState ControllerStartup::run(uint64_t timeout, std::vector<network::controller::WorkerConnection*> workers) {
 	// Create a fetcher, call run directly, receive loaded model info
 	// Create a loader, call run directly, pass it loaded model info, receive loaded model info
 	// Create a profiler, call run directly, pass it loaded model info, receive profiled model info
@@ -441,7 +443,7 @@ ClockworkState ControllerStartup::run(std::vector<network::controller::WorkerCon
 	// Create and run loader
 
 	std::cout << "(Startup-3) Awaiting LoadModel requests from clients" << std::endl;
-	state = LoadingStage(state, workers).run(load_model_request_queue, worker_results_queue);
+	state = LoadingStage(state, workers, timeout).run(load_model_request_queue, worker_results_queue);
 	std::cout << "(Startup-6) LoadModelStage complete.  Printing loaded models: " << std::endl;
 	std::cout << state.str() << std::endl;
 
@@ -514,15 +516,16 @@ ControllerWithStartupPhase::ControllerWithStartupPhase(
 			RequestTelemetryLogger* request_telemetry
 		) : 
 		Controller(client_port, worker_host_port_pairs),
+		timeout(load_stage_timeout),
 		startup(startup),
 		scheduler(scheduler),
 		startup_thread(&ControllerWithStartupPhase::runStartup, this),
 		request_telemetry(request_telemetry) {
-	threading::initHighPriorityThread(startup_thread);
+	threading::initLowPriorityThread(startup_thread);
 }
 
 void ControllerWithStartupPhase::runStartup() {
-	this->state = startup->run(this->workers);
+	this->state = startup->run(timeout, workers);
 
 	std::lock_guard<std::mutex> lock(startup_mutex);
 
