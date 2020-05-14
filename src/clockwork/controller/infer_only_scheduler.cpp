@@ -173,6 +173,8 @@ void InferOnlyScheduler::GPU::check_pending() {
 }
 
 void InferOnlyScheduler::GPU::handle_error(Action* action, std::shared_ptr<workerapi::ErrorResult> &error) {
+    std::cout << ("Worker  --> " + error->str() + "\n");
+    
     action->telemetry.set(error);
     outstanding--;
 

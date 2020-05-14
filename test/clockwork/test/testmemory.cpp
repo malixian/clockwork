@@ -224,8 +224,12 @@ TEST_CASE("MemoryPool Staggered Free Order", "[mempool]") {
 
     REQUIRE(pool.alloc(500) == nullptr);
 
-    auto alloc3 = pool.alloc(300);
+    auto alloc3 = pool.alloc(100);
     REQUIRE(alloc3 != nullptr);
+    auto alloc4 = pool.alloc(100);
+    REQUIRE(alloc4 != nullptr);
+    auto alloc5 = pool.alloc(100);
+    REQUIRE(alloc5 != nullptr);
 
     REQUIRE(pool.alloc(500) == nullptr);
 
@@ -234,6 +238,46 @@ TEST_CASE("MemoryPool Staggered Free Order", "[mempool]") {
     REQUIRE(pool.alloc(700) == nullptr);
     REQUIRE(pool.alloc(600) != nullptr);
     REQUIRE(pool.alloc(100) == nullptr);
+}
+
+TEST_CASE("MemoryPool Large alloc aligns with end of mempool Part 1", "[mempool]") {
+
+    using namespace clockwork;
+
+    size_t size = 1000;
+    char* baseptr = static_cast<char*>(malloc(size));
+    MemoryPool pool(baseptr, size);
+
+    auto alloc1 = pool.alloc(300);
+    REQUIRE(alloc1 != nullptr);
+
+    auto alloc2 = pool.alloc(400);
+    REQUIRE(alloc2 != nullptr);
+
+    pool.free(alloc1);
+
+    REQUIRE(pool.alloc(600) != nullptr);
+}
+
+TEST_CASE("MemoryPool Large alloc aligns with end of mempool Part 2", "[mempool]") {
+
+    using namespace clockwork;
+
+    size_t size = 1000;
+    char* baseptr = static_cast<char*>(malloc(size));
+    MemoryPool pool(baseptr, size);
+
+    auto alloc1 = pool.alloc(300);
+    REQUIRE(alloc1 != nullptr);
+
+    for (unsigned i = 0; i < 4; i++) {
+        auto alloc2 = pool.alloc(100);
+        REQUIRE(alloc2 != nullptr);
+    }
+
+    pool.free(alloc1);
+
+    REQUIRE(pool.alloc(600) == nullptr);
 }
 
 TEST_CASE("CUDAMemoryPool", "[mempool]") {
