@@ -23,8 +23,8 @@ Globally manages assignment of threads to cores, since RT priority is fragile
 */
 class CoreManager {
 public:
-	const int init_pool_size = 4;
-	const int default_pool_size = 4;
+	const int init_pool_size = 2;
+	const int default_pool_size = 2;
 
 	std::vector<bool> in_use;
 	std::vector<std::vector<unsigned>> gpu_affinity;
