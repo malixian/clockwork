@@ -24,6 +24,9 @@ public:
 
 class msg_inference_rsp_tx : public msg_protobuf_tx_with_body<RSP_INFERENCE, ModelInferenceRspProto, clientapi::InferenceResponse> {
 public:
+  ~msg_inference_rsp_tx() {
+    if (body_ != nullptr) free(body_);
+  }
   void set(clientapi::InferenceResponse &response);
 };
 

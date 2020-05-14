@@ -190,7 +190,7 @@ MemoryPool::~MemoryPool() {}
 // Allocate `amount` of memory; returns nullptr if out of memory
 char* MemoryPool::alloc(size_t amount) {
 	// We actually allocate a minimum of 256 bytes
-	if (amount <= 256) amount = 256;
+	if (amount <= 1) amount = 1;
 
 	std::lock_guard<std::mutex> lock(mutex);
 
