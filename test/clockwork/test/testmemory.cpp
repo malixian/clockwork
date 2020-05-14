@@ -1,6 +1,7 @@
 #include <catch2/catch.hpp>
 
 #include <cstdlib>
+#include <queue>
 
 #include "clockwork/memory.h"
 
@@ -79,6 +80,37 @@ TEST_CASE("MemoryPool Multiple Alloc", "[mempool]") {
         REQUIRE(alloc != nullptr);
     }
     REQUIRE(pool.alloc(1) == nullptr);
+}
+
+TEST_CASE("MemoryPool Multiple Alloc 2", "[mempool]") {
+
+    using namespace clockwork;
+
+    size_t size = 1000;
+    char* baseptr = static_cast<char*>(malloc(size));
+    MemoryPool pool(baseptr, size);
+
+    std::queue<char*> allocs;
+
+    for (unsigned i = 0; i < 5; i++) {
+        auto alloc = pool.alloc(7);
+        REQUIRE(alloc != nullptr);
+        allocs.push(alloc);
+    }
+
+    for (unsigned i = 0; i < 10000; i++) {
+        pool.free(allocs.front());
+        allocs.pop();
+        pool.free(allocs.front());
+        allocs.pop();
+        auto alloc = pool.alloc(7);
+        REQUIRE(alloc != nullptr);
+        allocs.push(alloc);
+        alloc = pool.alloc(7);
+        REQUIRE(alloc != nullptr);
+        allocs.push(alloc);
+    }
+
 }
 
 TEST_CASE("MemoryPool Indivisible Limit", "[mempool]") {

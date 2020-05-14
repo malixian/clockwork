@@ -70,7 +70,7 @@ InferOnlyScheduler::Action* InferOnlyScheduler::Model::try_dequeue(uint64_t expe
 
     check_timeouts();
 
-    unsigned batch_size = std::min(batch_lookup.size()-1, queue.size());
+    unsigned batch_size = batch_lookup[std::min(batch_lookup.size()-1, queue.size())];
     if (batch_size == 0) return nullptr;
 
     Action* action = new Action(id);
