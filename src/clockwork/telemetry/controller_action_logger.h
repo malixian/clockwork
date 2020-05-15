@@ -41,6 +41,7 @@ struct ControllerActionTelemetry {
 	uint64_t action_sent;
 	uint64_t result_received;
 	int status;
+	uint64_t expected_duration;
 	uint64_t worker_duration;
 	unsigned gpu_clock;
 

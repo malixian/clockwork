@@ -158,6 +158,7 @@ void ControllerActionTelemetry::set(std::shared_ptr<workerapi::Infer> &infer) {
 	model_id = infer->model_id;
 	earliest = infer->earliest;
 	latest = infer->latest;
+	expected_duration = infer->expected_duration;
 	action_sent = util::now();
 }
 
@@ -169,6 +170,7 @@ void ControllerActionTelemetry::set(std::shared_ptr<workerapi::LoadWeights> &loa
 	model_id = load->model_id;
 	earliest = load->earliest;
 	latest = load->latest;
+	expected_duration = load->expected_duration;
 	action_sent = util::now();
 }
 
@@ -180,31 +182,32 @@ void ControllerActionTelemetry::set(std::shared_ptr<workerapi::EvictWeights> &ev
 	model_id = evict->model_id;
 	earliest = evict->earliest;
 	latest = evict->latest;
+	expected_duration = 0;
 	action_sent = util::now();
 }
 
 void ControllerActionTelemetry::set(std::shared_ptr<workerapi::ErrorResult> &result) {
 	result_received = util::now();
-	status = clockworkError;
+	status = result->status;
 	worker_duration = 0;
 }
 
 void ControllerActionTelemetry::set(std::shared_ptr<workerapi::InferResult> &result) {
 	result_received = util::now();
-	status = clockworkSuccess;
+	status = result->status;
 	worker_duration = result->exec.duration;
 	gpu_clock = result->gpu_clock;
 }
 
 void ControllerActionTelemetry::set(std::shared_ptr<workerapi::LoadWeightsResult> &result) {
 	result_received = util::now();
-	status = clockworkSuccess;
+	status = result->status;
 	worker_duration = result->duration;
 }
 
 void ControllerActionTelemetry::set(std::shared_ptr<workerapi::EvictWeightsResult> &result) {
 	result_received = util::now();
-	status = clockworkSuccess;
+	status = result->status;
 	worker_duration = result->duration;
 }
 
@@ -237,6 +240,7 @@ void ControllerActionTelemetryFileLogger::write_headers() {
 	f << "model_id" << "\t";
 	f << "batch_size" << "\t";
 	f << "controller_action_duration" << "\t";
+	f << "expected_exec_duration" << "\t";
 	f << "worker_exec_duration" << "\t";
 	f << "worker_gpu_clock" << "\n";
 }
@@ -251,6 +255,7 @@ void ControllerActionTelemetryFileLogger::log(ControllerActionTelemetry &t) {
 	f << t.model_id << "\t";
 	f << t.batch_size << "\t";
 	f << (t.result_received - t.action_sent) << "\t";
+	f << t.expected_duration << "\t";
 	f << t.worker_duration << "\t";
 	f << t.gpu_clock << "\n";
 }
