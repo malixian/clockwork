@@ -112,7 +112,7 @@ Engine* spam(clockwork::Client* client) {
 	auto models = client->load_remote_models(modelpath, num_copies);
 
 	for (unsigned i = 0; i < models.size(); i++) {
-		models[i]->disable_inputs();
+		// models[i]->disable_inputs();
 		engine->AddWorkload(new ClosedLoop(
 			0, 			// client id, just use the same for this
 			models[i],	// model

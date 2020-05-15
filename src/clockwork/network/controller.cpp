@@ -5,14 +5,16 @@ namespace clockwork {
 namespace network {
 namespace controller {
 
-WorkerConnection::WorkerConnection(asio::io_service &io_service, workerapi::Controller* controller) :
+SingleWorkerConnection::SingleWorkerConnection(asio::io_service &io_service, 
+			workerapi::Controller* controller,
+			tbb::concurrent_queue<message_tx*> &queue) :
 		message_connection(io_service, *this),
-		msg_tx_(this, *this),
+		msg_tx_(this, *this, queue),
 		controller(controller),
 		connected(false) {
 }
 
-message_rx* WorkerConnection::new_rx_message(message_connection *tcp_conn, uint64_t header_len,
+message_rx* SingleWorkerConnection::new_rx_message(message_connection *tcp_conn, uint64_t header_len,
 		uint64_t body_len, uint64_t msg_type, uint64_t msg_id) {
 	using namespace clockwork::workerapi;
 
@@ -58,18 +60,18 @@ message_rx* WorkerConnection::new_rx_message(message_connection *tcp_conn, uint6
 	return nullptr;
 }
 
-void WorkerConnection::ready() {
+void SingleWorkerConnection::ready() {
 	connected.store(true);
 }
 
-void WorkerConnection::closed() {
+void SingleWorkerConnection::closed() {
 }
 
-void WorkerConnection::aborted_receive(message_connection *tcp_conn, message_rx *req) {
+void SingleWorkerConnection::aborted_receive(message_connection *tcp_conn, message_rx *req) {
 	delete req;
 }
 
-void WorkerConnection::completed_receive(message_connection *tcp_conn, message_rx *req) {
+void SingleWorkerConnection::completed_receive(message_connection *tcp_conn, message_rx *req) {
 	if (auto error = dynamic_cast<error_result_rx*>(req)) {
 		auto result = std::make_shared<workerapi::ErrorResult>();
 		error->get(*result);
@@ -112,50 +114,61 @@ void WorkerConnection::completed_receive(message_connection *tcp_conn, message_r
 	delete req;
 }
 
-void WorkerConnection::completed_transmit(message_connection *tcp_conn, message_tx *req) {
+void SingleWorkerConnection::completed_transmit(message_connection *tcp_conn, message_tx *req) {
 	delete req;
 }
 
-void WorkerConnection::aborted_transmit(message_connection *tcp_conn, message_tx *req) {
+void SingleWorkerConnection::aborted_transmit(message_connection *tcp_conn, message_tx *req) {
 	delete req;
 }
 
-void WorkerConnection::sendActions(std::vector<std::shared_ptr<workerapi::Action>> &actions) {
+void SingleWorkerConnection::send_message() {
+	msg_tx_.send_message();
+}
+
+void BondedWorkerConnection::sendActions(std::vector<std::shared_ptr<workerapi::Action>> &actions) {
 	for (auto &action : actions) {
 		sendAction(action);
 	}
 }
 
-void WorkerConnection::sendAction(std::shared_ptr<workerapi::Action> action) {
+void BondedWorkerConnection::send(message_tx* tx) {
+	queue.push(tx);
+	for (SingleWorkerConnection* connection : connections) {
+		connection->send_message();
+	}
+}
+
+void BondedWorkerConnection::sendAction(std::shared_ptr<workerapi::Action> action) {
 	if (auto load_model = std::dynamic_pointer_cast<workerapi::LoadModelFromDisk>(action)) {
 		auto tx = new load_model_from_disk_action_tx();
 		tx->set(*load_model);
-		msg_tx_.send_message(*tx);
+		send(tx);
 
 	} else if (auto load_weights = std::dynamic_pointer_cast<workerapi::LoadWeights>(action)) {
 		auto tx = new load_weights_action_tx();
 		tx->set(*load_weights);
-		msg_tx_.send_message(*tx);
+		send(tx);
 
 	} else if (auto infer = std::dynamic_pointer_cast<workerapi::Infer>(action)) {
 		auto tx = new infer_action_tx();
 		tx->set(*infer);
-		msg_tx_.send_message(*tx);
+		send(tx);
 
 	} else if (auto evict_weights = std::dynamic_pointer_cast<workerapi::EvictWeights>(action)) {
 		auto tx = new evict_weights_action_tx();
 		tx->set(*evict_weights);
-		msg_tx_.send_message(*tx);
+		send(tx);
 
 	} else if (auto clear_cache = std::dynamic_pointer_cast<workerapi::ClearCache>(action)) {
 		auto tx = new clear_cache_action_tx();
 		tx->set(*clear_cache);
-		msg_tx_.send_message(*tx);
+		send(tx);
 
 	} else if (auto get_worker_state = std::dynamic_pointer_cast<workerapi::GetWorkerState>(action)) {
 		auto tx = new get_worker_state_action_tx();
 		tx->set(*get_worker_state);
-		msg_tx_.send_message(*tx);
+		send(tx);
 
 	} else {
 		CHECK(false) << "Sending an unsupported action type";
@@ -194,13 +207,26 @@ void WorkerManager::join() {
 }
 
 WorkerConnection* WorkerManager::connect(std::string host, std::string port, workerapi::Controller* controller) {
+	std::vector<std::string> ports;
+	int baseport = atoi(port.c_str());
+	for (int i = 0; i < 8; i++) {
+		ports.push_back(std::to_string(baseport+i));
+	}
+	return WorkerManager::connect(host, ports, controller);
+}
+
+WorkerConnection* WorkerManager::connect(std::string host, std::vector<std::string> ports, workerapi::Controller* controller) {
 	try {
-		WorkerConnection* c = new WorkerConnection(io_service, controller);
-		c->connect(host, port);
-		std::cout << "Connecting to worker " << host << ":" << port << std::endl;
-		while (alive.load() && !c->connected.load()); // If connection fails, alive sets to false
-		std::cout << "Connection established" << std::endl;
-		return c;
+		BondedWorkerConnection* bc = new BondedWorkerConnection();
+		for (std::string port : ports) {
+			std::cout << "Connecting to worker " << host << ":" << port << std::endl;
+			SingleWorkerConnection* c = new SingleWorkerConnection(io_service, controller, bc->queue);
+			c->connect(host, port);
+			bc->connections.push_back(c);
+			while (alive.load() && !c->connected.load()); // If connection fails, alive sets to false
+			std::cout << "Connection established" << std::endl;
+		}
+		return bc;
 	} catch (std::exception& e) {
 		alive.store(false);
 		io_service.stop();
@@ -215,7 +241,8 @@ WorkerConnection* WorkerManager::connect(std::string host, std::string port, wor
 
 ClientConnection::ClientConnection(asio::io_service &io_service, clientapi::ClientAPI* api) :
 		message_connection(io_service, *this),
-		msg_tx_(this, *this),
+		queue(),
+		msg_tx_(this, *this, queue),
 		api(api),
 		connected(false) {
 }
@@ -279,7 +306,8 @@ void ClientConnection::completed_receive(message_connection *tcp_conn, message_r
 			auto rsp = new msg_inference_rsp_tx();
 			rsp->set(response);
 			rsp->set_msg_id(request_id);
-			msg_tx_.send_message(*rsp);
+			queue.push(rsp);
+			msg_tx_.send_message();
 		});
 
 	} else if (auto evict = dynamic_cast<msg_evict_req_rx*>(req)) {
@@ -290,7 +318,8 @@ void ClientConnection::completed_receive(message_connection *tcp_conn, message_r
 			auto rsp = new msg_evict_rsp_tx();
 			rsp->set(response);
 			rsp->set_msg_id(request_id);
-			msg_tx_.send_message(*rsp);
+			queue.push(rsp);
+			msg_tx_.send_message();
 		});
 
 	} else if (auto load_model = dynamic_cast<msg_load_remote_model_req_rx*>(req)) {
@@ -301,7 +330,8 @@ void ClientConnection::completed_receive(message_connection *tcp_conn, message_r
 			auto rsp = new msg_load_remote_model_rsp_tx();
 			rsp->set(response);
 			rsp->set_msg_id(request_id);
-			msg_tx_.send_message(*rsp);
+			queue.push(rsp);
+			msg_tx_.send_message();
 		});
 		
 	} else if (auto upload_model = dynamic_cast<msg_upload_model_req_rx*>(req)) {
@@ -312,7 +342,8 @@ void ClientConnection::completed_receive(message_connection *tcp_conn, message_r
 			auto rsp = new msg_upload_model_rsp_tx();
 			rsp->set(response);
 			rsp->set_msg_id(request_id);
-			msg_tx_.send_message(*rsp);
+			queue.push(rsp);
+			msg_tx_.send_message();
 		});
 
 	} else if (auto ls = dynamic_cast<msg_ls_req_rx*>(req)) {
@@ -323,7 +354,8 @@ void ClientConnection::completed_receive(message_connection *tcp_conn, message_r
 			auto rsp = new msg_ls_rsp_tx();
 			rsp->set(response);
 			rsp->set_msg_id(request_id);
-			msg_tx_.send_message(*rsp);
+			queue.push(rsp);
+			msg_tx_.send_message();
 		});
 		
 	} else {

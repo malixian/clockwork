@@ -93,7 +93,7 @@ class net_rpc_conn :
 
 public:
   net_rpc_conn(asio::io_service& io_service)
-    : message_connection(io_service, *this), msg_tx_(this, *this), request_id_seed(0)
+    : message_connection(io_service, *this), queue(), msg_tx_(this, *this, queue), request_id_seed(0)
   {
   }
 
@@ -107,7 +107,8 @@ protected:
     uint64_t request_id = request_id_seed++;
     rb.set_id(request_id);
     requests[request_id] = &rb;
-    msg_tx_.send_message(rb.request());
+    queue.push(&(rb.request()));
+    msg_tx_.send_message();
   }
 
   virtual message_rx *new_rx_message(message_connection *tcp_conn, uint64_t header_len,
@@ -159,6 +160,7 @@ protected:
   std::mutex requests_mutex;
   std::map<uint64_t, net_rpc_base *> requests;
   std::atomic_int request_id_seed;
+  tbb::concurrent_queue<message_tx*> queue;
 
 };
 

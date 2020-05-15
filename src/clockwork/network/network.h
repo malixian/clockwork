@@ -59,8 +59,10 @@ const size_t max_header_len = 10*1024*1024;
 
 class message_sender {
 public:
-  message_sender(message_connection *conn, message_handler &handler);
-  void send_message(message_tx &req);
+  message_sender(message_connection *conn, 
+    message_handler &handler, 
+    tbb::concurrent_queue<message_tx*> &queue);
+  void send_message();
 
 private:
   void start_send(message_tx &req);
@@ -93,7 +95,7 @@ private:
   size_t body_seg_sent_;
 
   std::mutex queue_mutex;
-  tbb::concurrent_queue<message_tx*> tx_queue_;
+  tbb::concurrent_queue<message_tx*> &tx_queue_;
 };
 
 

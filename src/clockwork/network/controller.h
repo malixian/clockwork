@@ -15,17 +15,28 @@ namespace controller {
 
 using asio::ip::tcp;
 
+class WorkerConnection : public workerapi::Worker {
+public:
+
+	virtual void sendActions(std::vector<std::shared_ptr<workerapi::Action>> &actions) = 0;
+	virtual void sendAction(std::shared_ptr<workerapi::Action> action) = 0;
+};
+
 /* Controller side of the Controller<>Worker API network impl.
 Represents a connection to a single worker. */
-class WorkerConnection : public message_connection, public message_handler, public workerapi::Worker  {
+class SingleWorkerConnection : public message_connection, public message_handler  {
 private:
-	workerapi::Controller* controller;
 	message_sender msg_tx_;
+	workerapi::Controller* controller;
 
 public:
 	std::atomic_bool connected;
 
-	WorkerConnection(asio::io_service &io_service, workerapi::Controller* controller);
+	SingleWorkerConnection(asio::io_service &io_service, 
+		workerapi::Controller* controller,
+		tbb::concurrent_queue<message_tx*> &queue);
+
+	virtual void send_message();
 
 protected:
 	virtual message_rx *new_rx_message(message_connection *tcp_conn, uint64_t header_len,
@@ -42,11 +53,21 @@ protected:
 
 	virtual void aborted_transmit(message_connection *tcp_conn, message_tx *req);
 
+};
+
+class BondedWorkerConnection : public WorkerConnection {
 public:
+	tbb::concurrent_queue<message_tx*> queue;
+	std::vector<SingleWorkerConnection*> connections;
+
+	BondedWorkerConnection() {}
 
 	virtual void sendActions(std::vector<std::shared_ptr<workerapi::Action>> &actions);
 
 	void sendAction(std::shared_ptr<workerapi::Action> action);
+
+private:
+	void send(message_tx* tx);
 
 };
 
@@ -69,6 +90,7 @@ public:
 
 	void join();
 	WorkerConnection* connect(std::string host, std::string port, workerapi::Controller* controller);
+	WorkerConnection* connect(std::string host, std::vector<std::string> ports, workerapi::Controller* controller);
 
 };
 
@@ -76,6 +98,7 @@ public:
 class ClientConnection : public message_connection, public message_handler  {
 private:
 	clientapi::ClientAPI* api;
+	tbb::concurrent_queue<message_tx*> queue;
 	message_sender msg_tx_;
 
 public:

@@ -8,14 +8,16 @@ namespace clockwork {
 namespace network {
 
 
-message_sender::message_sender(message_connection *conn, message_handler &handler)
-  : socket_(conn->get_socket()), conn_(conn), handler_(handler), req_(0)
+message_sender::message_sender(
+    message_connection *conn, 
+    message_handler &handler,
+    tbb::concurrent_queue<message_tx*> &queue)
+  : socket_(conn->get_socket()), conn_(conn), handler_(handler), req_(0), tx_queue_(queue)
 {
 }
 
-void message_sender::send_message(message_tx &req)
+void message_sender::send_message()
 {
-  tx_queue_.push(&req);
   conn_->io_service_.post(boost::bind(&message_sender::try_send, this));
 }
 

@@ -3,6 +3,7 @@
 
 #include <utility>
 #include <cstring>
+#include <atomic>
 #include <string>
 #include <iostream>
 #include <boost/bind.hpp>
@@ -28,20 +29,22 @@ public:
 
 /* Worker side of the Controller<>Worker API network impl.
 A connection to the Clockwork Controller */
-class Connection : public message_connection, public message_handler, public workerapi::Controller  {
+class Connection : public message_connection, public message_handler  {
 private:
 	ClockworkWorker* worker;
 	message_sender msg_tx_;
 	std::function<void(void)> on_close;
 	std::atomic_bool alive;
-	ConnectionStats stats;
-	std::thread printer;
+	ConnectionStats &stats;
 
 public:
-	Connection(asio::io_service &io_service, ClockworkWorker* worker, std::function<void(void)> on_close);
-
-private:
-	void print();
+	Connection(asio::io_service &io_service, 
+		ClockworkWorker* worker, 
+		std::function<void(void)> on_close,
+		tbb::concurrent_queue<message_tx*> &queue,
+		ConnectionStats &stats);
+	
+	virtual void send_message();
 
 protected:
 
@@ -56,13 +59,7 @@ protected:
 
 	virtual void aborted_transmit(message_connection *tcp_conn, message_tx *req);
 
-	virtual void ready();
 	virtual void closed();
-
-public:
-	
-	// workerapi::Controller::sendResult
-	virtual void sendResult(std::shared_ptr<workerapi::Result> result);
 
 };
 
@@ -74,7 +71,18 @@ private:
 	asio::io_service io_service;
 	std::thread network_thread;
 
-	Connection* current_connection;
+	std::atomic_int connection_id_seed = 0;
+	std::map<int, Connection*> connections;
+
+	tbb::concurrent_queue<message_tx*> queue;
+
+	ConnectionStats stats;
+	std::thread printer;
+
+
+private:
+	void send(message_tx* msg);
+	void print();
 
 public:
 	Server(ClockworkWorker* worker, int port = 12345);
@@ -90,7 +98,7 @@ public:
 private:
 	void start_accept(tcp::acceptor* acceptor);
 
-	void handle_accept(Connection* connection, tcp::acceptor* acceptor, const asio::error_code& error);
+	void handle_accept(int connection_id, Connection* connection, tcp::acceptor* acceptor, const asio::error_code& error);
 
 };
 

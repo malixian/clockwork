@@ -49,7 +49,7 @@ class StressTestController : public Controller {
 public:
 	bool stress_infer = true;
 	bool stress_loadweights = true;
-	bool send_inputs = false;
+	bool send_inputs = true;
 	bool trigger_load_errors = false;
 
 	std::string model_path = "/home/jcmace/clockwork-modelzoo-volta/resnet50_v2/model";

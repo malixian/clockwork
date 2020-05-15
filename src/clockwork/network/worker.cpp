@@ -70,12 +70,15 @@ public:
 	}
 };
 
-Connection::Connection(asio::io_service &io_service, ClockworkWorker* worker, std::function<void(void)> on_close) :
+Connection::Connection(asio::io_service &io_service, ClockworkWorker* worker, 
+			std::function<void(void)> on_close,
+			tbb::concurrent_queue<message_tx*> &queue,
+			ConnectionStats &stats) :
 		message_connection(io_service, *this),
-		msg_tx_(this, *this),
+		msg_tx_(this, *this, queue),
 		worker(worker),
+		stats(stats),
 		on_close(on_close),
-		stats(),
 		alive(true) {
 }
 
@@ -89,44 +92,6 @@ public:
 		return delta;
 	}
 };
-
-void Connection::print() {
-	uint64_t print_every = 10000000000UL; // 10s
-	uint64_t last_print = util::now();
-
-	StatTracker load;
-	StatTracker evict;
-	StatTracker infer;
-	StatTracker errors;
-
-	while (alive) {
-		uint64_t now = util::now();
-		if (last_print + print_every > now) {
-			usleep(200000); // 200ms sleep
-			continue;
-		}
-
-		uint64_t dload = load.update(stats.load);
-		uint64_t dinfer = infer.update(stats.infer);
-		uint64_t devict = evict.update(stats.evict);
-
-		uint64_t pending = stats.total_pending;
-		uint64_t derrors = errors.update(stats.errors);
-
-		std::stringstream s;
-		s << "Clock Skew=" << estimate_clock_delta()
-		  << "  RTT=" << estimate_rtt()
-		  << "  LdWts=" << dload
-		  << "  Inf=" << dinfer
-		  << "  Evct=" << devict
-		  << "  || Total Pending=" << pending
-		  << "  Errors=" << derrors
-		  << std::endl;
-
-		std::cout << s.str();
-		last_print = now;
-	}
-}
 
 message_rx* Connection::new_rx_message(message_connection *tcp_conn, uint64_t header_len,
 		uint64_t body_len, uint64_t msg_type, uint64_t msg_id) {
@@ -227,53 +192,8 @@ void Connection::aborted_transmit(message_connection *tcp_conn, message_tx *req)
 	delete req;
 }
 
-void Connection::sendResult(std::shared_ptr<workerapi::Result> result) {
-	if (verbose) std::cout << "Sending " << result->str() << std::endl;
-	using namespace workerapi;
-	if (auto load_model = std::dynamic_pointer_cast<LoadModelFromDiskResult>(result)) {
-		auto tx = new load_model_from_disk_result_tx();
-		tx->set(*load_model);
-		msg_tx_.send_message(*tx);
-
-		if (!verbose) std::cout << "Sending " << result->str() << std::endl;
-	} else if (auto load_weights = std::dynamic_pointer_cast<LoadWeightsResult>(result)) {
-		auto tx = new load_weights_result_tx();
-		tx->set(*load_weights);
-		msg_tx_.send_message(*tx);
-	} else if (auto infer = std::dynamic_pointer_cast<InferResult>(result)) {
-		auto tx = new infer_result_tx_using_io_pool(worker->runtime->manager->host_io_pool);
-		tx->set(*infer);
-		msg_tx_.send_message(*tx);
-	} else if (auto evict_weights = std::dynamic_pointer_cast<EvictWeightsResult>(result)) {
-		auto tx = new evict_weights_result_tx();
-		tx->set(*evict_weights);
-		msg_tx_.send_message(*tx);
-	} else if (auto clear_cache = std::dynamic_pointer_cast<ClearCacheResult>(result)) {
-		auto tx = new clear_cache_result_tx();
-		tx->set(*clear_cache);
-		msg_tx_.send_message(*tx);
-	} else if (auto get_worker_state = std::dynamic_pointer_cast<GetWorkerStateResult>(result)) {
-		auto tx = new get_worker_state_result_tx();
-		tx->set(*get_worker_state);
-		msg_tx_.send_message(*tx);
-
-		if (!verbose) std::cout << "Sending " << result->str() << std::endl;
-	} else if (auto error = std::dynamic_pointer_cast<ErrorResult>(result)) {
-		auto tx = new error_result_tx();
-		tx->set(*error);
-		msg_tx_.send_message(*tx);
-
-		stats.errors++;
-	} else {
-		CHECK(false) << "Sending an unsupported result type";
-	}
-
-	stats.total_pending--;
-}
-
-void Connection::ready() {
-	this->printer = std::thread(&Connection::print, this);
-	threading::initLoggerThread(this->printer);
+void Connection::send_message() {
+	msg_tx_.send_message();
 }
 
 void Connection::closed() {
@@ -285,8 +205,11 @@ Server::Server(ClockworkWorker* worker, int port) :
 		is_started(false),
 		worker(worker),
 		io_service(),
-		network_thread(&Server::run, this, port) {
+		stats(),
+		network_thread(&Server::run, this, port),
+		printer(&Server::print, this) {
 	threading::initNetworkThread(network_thread);
+	threading::initLoggerThread(printer);
 }
 
 Server::~Server() {}
@@ -305,11 +228,15 @@ void Server::join() {
 
 void Server::run(int port) {
 	try {
-		auto endpoint = tcp::endpoint(tcp::v4(), port);
 		is_started.store(true);
-		tcp::acceptor acceptor(io_service, endpoint);
-		start_accept(&acceptor);
-		std::cout << "IO service thread listening on " << endpoint << std::endl;
+		std::vector<tcp::acceptor*> acceptors;
+		for (unsigned i = 0; i < 8; i++) {
+			auto endpoint = tcp::endpoint(tcp::v4(), port+i);
+			auto acceptor = new tcp::acceptor(io_service, endpoint);
+			acceptors.push_back(acceptor);
+			start_accept(acceptor);
+			std::cout << "IO service thread listening on " << endpoint << std::endl;
+		}
 		io_service.run();
 	} catch (std::exception& e) {
 		CHECK(false) << "Exception in network thread: " << e.what();
@@ -319,33 +246,125 @@ void Server::run(int port) {
 	std::cout << "Server exiting" << std::endl;
 }
 
+void Server::send(message_tx* msg) {
+	queue.push(msg);
+	for (auto &p : connections) {
+		p.second->send_message();
+	}
+}
+
 // workerapi::Controller::sendResult
 void Server::sendResult(std::shared_ptr<workerapi::Result> result) {
-	if (current_connection == nullptr) {
-		std::cout << "Dropping result " << result->str() << std::endl;
+	if (verbose) std::cout << "Sending " << result->str() << std::endl;
+	using namespace workerapi;
+	if (auto load_model = std::dynamic_pointer_cast<LoadModelFromDiskResult>(result)) {
+		auto tx = new load_model_from_disk_result_tx();
+		tx->set(*load_model);
+		send(tx);
+
+		if (!verbose) std::cout << "Sending " << result->str() << std::endl;
+	} else if (auto load_weights = std::dynamic_pointer_cast<LoadWeightsResult>(result)) {
+		auto tx = new load_weights_result_tx();
+		tx->set(*load_weights);
+		send(tx);
+
+	} else if (auto infer = std::dynamic_pointer_cast<InferResult>(result)) {
+		auto tx = new infer_result_tx_using_io_pool(worker->runtime->manager->host_io_pool);
+		tx->set(*infer);
+		send(tx);
+
+	} else if (auto evict_weights = std::dynamic_pointer_cast<EvictWeightsResult>(result)) {
+		auto tx = new evict_weights_result_tx();
+		tx->set(*evict_weights);
+		send(tx);
+
+	} else if (auto clear_cache = std::dynamic_pointer_cast<ClearCacheResult>(result)) {
+		auto tx = new clear_cache_result_tx();
+		tx->set(*clear_cache);
+		send(tx);
+
+	} else if (auto get_worker_state = std::dynamic_pointer_cast<GetWorkerStateResult>(result)) {
+		auto tx = new get_worker_state_result_tx();
+		tx->set(*get_worker_state);
+		send(tx);
+
+		if (!verbose) std::cout << "Sending " << result->str() << std::endl;
+	} else if (auto error = std::dynamic_pointer_cast<ErrorResult>(result)) {
+		auto tx = new error_result_tx();
+		tx->set(*error);
+		send(tx);
+
+		stats.errors++;
 	} else {
-		current_connection->sendResult(result);
+		CHECK(false) << "Sending an unsupported result type";
 	}
+
+	stats.total_pending--;
 }	
 
+void Server::print() {
+	// uint64_t print_every = 10000000000UL; // 10s
+	// uint64_t last_print = util::now();
+
+	// StatTracker load;
+	// StatTracker evict;
+	// StatTracker infer;
+	// StatTracker errors;
+
+	// while (alive) {
+	// 	uint64_t now = util::now();
+	// 	if (last_print + print_every > now) {
+	// 		usleep(200000); // 200ms sleep
+	// 		continue;
+	// 	}
+
+	// 	uint64_t dload = load.update(stats.load);
+	// 	uint64_t dinfer = infer.update(stats.infer);
+	// 	uint64_t devict = evict.update(stats.evict);
+
+	// 	uint64_t pending = stats.total_pending;
+	// 	uint64_t derrors = errors.update(stats.errors);
+
+	// 	std::stringstream s;
+	// 	s << "Clock Skew=" << estimate_clock_delta()
+	// 	  << "  RTT=" << estimate_rtt()
+	// 	  << "  LdWts=" << dload
+	// 	  << "  Inf=" << dinfer
+	// 	  << "  Evct=" << devict
+	// 	  << "  || Total Pending=" << pending
+	// 	  << "  Errors=" << derrors
+	// 	  << std::endl;
+
+	// 	std::cout << s.str();
+	// 	last_print = now;
+	// }
+}
+
 void Server::start_accept(tcp::acceptor* acceptor) {
-	auto connection = new Connection(acceptor->get_io_service(), worker, [this]{
-		this->current_connection = nullptr;
-		delete this->current_connection;
-	});
+	int connection_id = connection_id_seed++;
+	auto connection = new Connection(acceptor->get_io_service(), worker, [this, connection_id]{
+		auto it = connections.find(connection_id);
+		if (it != connections.end()) {
+			auto connection = it->second;
+			connections.erase(it);
+			delete connection;
+		}
+	}, queue, stats);	
 
 	acceptor->async_accept(connection->get_socket(),
-		boost::bind(&Server::handle_accept, this, connection, acceptor,
+		boost::bind(&Server::handle_accept, this, connection_id, connection, acceptor,
 			asio::placeholders::error));
 }
 
-void Server::handle_accept(Connection* connection, tcp::acceptor* acceptor, const asio::error_code& error) {
+void Server::handle_accept(int connection_id, Connection* connection, tcp::acceptor* acceptor, const asio::error_code& error) {
 	if (error) {
 		throw std::runtime_error(error.message());
 	}
 
 	connection->established();
-	this->current_connection = connection;
+
+	connections[connection_id] = connection;
+
 	start_accept(acceptor);
 }
 
