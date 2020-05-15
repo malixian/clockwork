@@ -193,6 +193,7 @@ void ControllerActionTelemetry::set(std::shared_ptr<workerapi::InferResult> &res
 	result_received = util::now();
 	status = clockworkSuccess;
 	worker_duration = result->exec.duration;
+	gpu_clock = result->gpu_clock;
 }
 
 void ControllerActionTelemetry::set(std::shared_ptr<workerapi::LoadWeightsResult> &result) {
@@ -236,7 +237,8 @@ void ControllerActionTelemetryFileLogger::write_headers() {
 	f << "model_id" << "\t";
 	f << "batch_size" << "\t";
 	f << "controller_action_duration" << "\t";
-	f << "worker_exec_duration" << "\n";
+	f << "worker_exec_duration" << "\t";
+	f << "worker_gpu_clock" << "\n";
 }
 
 void ControllerActionTelemetryFileLogger::log(ControllerActionTelemetry &t) {
@@ -249,7 +251,8 @@ void ControllerActionTelemetryFileLogger::log(ControllerActionTelemetry &t) {
 	f << t.model_id << "\t";
 	f << t.batch_size << "\t";
 	f << (t.result_received - t.action_sent) << "\t";
-	f << t.worker_duration << "\n";
+	f << t.worker_duration << "\t";
+	f << t.gpu_clock << "\n";
 }
 
 void ControllerActionTelemetryFileLogger::shutdown(bool awaitCompletion) {
@@ -357,6 +360,8 @@ void SimpleActionPrinter::print(uint64_t interval, const Group &group, std::queu
 
 	Stat e2e;
 	Stat w;
+	Stat w_norm;
+	Stat gpu_clock;
 
 	if (buffered.empty()) {
 		std::stringstream s;
@@ -372,6 +377,8 @@ void SimpleActionPrinter::print(uint64_t interval, const Group &group, std::queu
 		auto &t = buffered.front();
 		e2e.v.push_back(t.result_received - t.action_sent);
 		w.v.push_back(t.worker_duration);
+		w_norm.v.push_back(t.worker_duration * t.gpu_clock / 1380);
+		gpu_clock.v.push_back(t.gpu_clock);
 		buffered.pop();
 	}
 
@@ -386,13 +393,18 @@ void SimpleActionPrinter::print(uint64_t interval, const Group &group, std::queu
 		default: return;
 	}
 
-	s << " min=" << w.min() 
-	  << " max=" << w.max() 
-	  << " mean=" << w.mean() 
-	  << " e2emean=" << e2e.mean() 
-	  << " e2emax=" << e2e.max() 
+	s << " min=" << (w.min() / 1000000.0)
+	  << " max=" << (w.max() / 1000000.0)
+	  << " mean=" << (w.mean() / 1000000.0) 
+	  << " e2emean=" << (e2e.mean() / 1000000.0)
+	  << " e2emax=" << (e2e.max() / 1000000.0)
+	  << std::setprecision(1)
 	  << " throughput=" << w.throughput(interval) 
+	  << std::setprecision(2)
 	  << " utilization=" << w.utilization(interval)
+	  << " clock=[" << gpu_clock.min() << "-" << gpu_clock.max() << "]"
+	  << " norm_max=" << (w_norm.max() / 1000000.0)
+	  << " norm_mean=" << (w_norm.mean() / 1000000.0)
 	  << std::endl;
 	std::cout << s.str();
 }
