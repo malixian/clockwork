@@ -320,7 +320,9 @@ void CopyInputTask::run(cudaStream_t stream) {
 		input_size = rm->model->input_size(batch_size);
 		manager->host_io_pool->free(input);
 		input = manager->host_io_pool->alloc(input_size);
-		throw TaskError(copyInputHostAlloc, "Unable to alloc from host_io_pool for infer action input");
+		if (input == nullptr) {
+			throw TaskError(copyInputHostAlloc, "Unable to alloc from host_io_pool for infer action input");
+		}
 
 	} else if (rm->model->input_size(batch_size) != input_size) {
 		// Normal behavior requires correctly sized inputs
