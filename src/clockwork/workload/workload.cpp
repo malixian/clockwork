@@ -63,7 +63,6 @@ void Engine::Run(clockwork::Client* client) {
 
 		// Run one next request if available
 		if (!queue.empty() && queue.top().ready <= now) {
-			now = queue.top().ready;
 			(queue.top().callback)();
 			queue.pop();
 		} else {
