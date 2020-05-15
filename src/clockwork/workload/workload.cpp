@@ -49,6 +49,7 @@ void Engine::Run(clockwork::Client* client) {
 		}
 	}
 
+	now = util::now();
 	for (auto &workload : workloads) {
 		workload->Start(now);
 		running++;
