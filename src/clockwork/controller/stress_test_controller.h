@@ -50,6 +50,7 @@ public:
 	bool stress_infer = true;
 	bool stress_loadweights = true;
 	bool send_inputs = false;
+	bool trigger_load_errors = false;
 
 	std::string model_path = "/home/jcmace/clockwork-modelzoo-volta/resnet50_v2/model";
 	unsigned duplicates = 40;
@@ -102,7 +103,7 @@ public:
 
 		std::stringstream s;
 		s << std::fixed << std::setprecision(2);
-		s << "profiled=" << profiled << " min=" << *min << " max=" << *max << " mean=" << (sum/count) << " e2e=" << (sume2e/count) << " e2emax=" << *e2emax << " throughput=" << throughput << " efficiency=" << (sum/((float) duration));
+		s << "profiled=" << profiled << " min=" << *min << " max=" << *max << " mean=" << (sum/count) << " e2e=" << (sume2e/count) << " e2emax=" << *e2emax << " throughput=" << throughput << " utilization=" << (sum/((float) duration));
 		return s.str();
 	}
 
@@ -253,21 +254,24 @@ public:
 		unsigned model_id = gpu.models_not_on_gpu.front();
 		gpu.models_not_on_gpu.pop_front();
 
-		unsigned action_id = action_id_seed++;
+		unsigned to_submit = trigger_load_errors ? 2 : 1;
+		for (unsigned i = 0; i < to_submit; i++) {
+			unsigned action_id = action_id_seed++;
 
-		auto load = std::make_shared<workerapi::LoadWeights>();
-		load->id = action_id;
-		load->gpu_id = gpu.worker_gpu_id;
-		load->model_id = model_id;
-		load->earliest = util::now();
-		load->latest = util::now() + 10000000000UL; // 10s
+			auto load = std::make_shared<workerapi::LoadWeights>();
+			load->id = action_id;
+			load->gpu_id = gpu.worker_gpu_id;
+			load->model_id = model_id;
+			load->earliest = util::now();
+			load->latest = util::now() + 10000000000UL; // 10s
 
-		save_callback(action_id, std::bind(&StressTestController::onLoadWeightsComplete, this, model_id, gpu_id, util::now(), std::placeholders::_1));
+			save_callback(action_id, std::bind(&StressTestController::onLoadWeightsComplete, this, model_id, gpu_id, util::now(), std::placeholders::_1));
 
-		if (log_actions) std::cout << "S: " << load->str() << std::endl;
-		this->workers[gpu.worker_id]->sendAction(load);
+			if (log_actions) std::cout << "S: " << load->str() << std::endl;
+			this->workers[gpu.worker_id]->sendAction(load);
+			gpu.outstanding_loadweights++;
+		}
 
-		gpu.outstanding_loadweights++;
 
 		return true;
 	}
