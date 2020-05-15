@@ -196,6 +196,7 @@ public:
 	int output_size;
 	char* output;
 	unsigned gpu_id;
+	unsigned gpu_clock;
 	
 	virtual std::string str();
 };

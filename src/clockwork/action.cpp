@@ -477,8 +477,8 @@ void InferAction::handle_completion(char* output) {
 	result->output = output;
 
 	result->gpu_id = action->gpu_id;
-
-	// TODO: who / where frees the output memory?
+	result->gpu_clock = runtime->gpu_clock->get(result->gpu_id);
+	
 	this->success(result);
 }
 

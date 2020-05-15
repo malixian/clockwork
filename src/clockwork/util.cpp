@@ -286,7 +286,7 @@ void GPUClockState::run() {
       std::cout << s.str();
       last_notify = now;
     }
-    usleep(1000);
+    usleep(100);
   }
 }
 void GPUClockState::shutdown() {

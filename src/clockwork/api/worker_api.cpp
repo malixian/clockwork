@@ -151,7 +151,8 @@ std::string InferResult::str() {
 	ss << "R" << id << ":Infer"
 	   << " exec=" << util::millis(exec.duration)
 	   << " input=" << util::millis(copy_input.duration)
-	   << " output=" << util::millis(copy_output.duration);
+	   << " output=" << util::millis(copy_output.duration)
+	   << " gpu" << gpu_id << "=" << gpu_clock;
 	return ss.str();
 }
 
