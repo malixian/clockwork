@@ -384,7 +384,7 @@ void ExecTask::run(cudaStream_t stream) {
 	uint64_t now = util::now(); // TODO: use chrono
 	if (now < earliest) {
 		std::stringstream err;
-		err << "ExecTask could ran before it was eligible"
+		err << "ExecTask could not run before it was eligible"
 			<< " (now " << util::millis(now)
 			<< ", earliest " << util::millis(earliest) << ")";
 		throw TaskError(actionErrorRuntimeError, err.str());
