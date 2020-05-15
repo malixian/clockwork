@@ -157,7 +157,7 @@ void LoadWeightsTask::run(cudaStream_t stream) {
 		err << "LoadWeightsTask ran before it was eligible"
 			<< " (now " << util::millis(now)
 			<< ", earliest " << util::millis(earliest) << ")";
-		throw TaskError(actionErrorRuntimeError, err.str());
+		throw TaskError(loadWeightsTooEarly, err.str());
 	}
 
 	if (now > latest) {
@@ -165,7 +165,7 @@ void LoadWeightsTask::run(cudaStream_t stream) {
 		err << "LoadWeightsTask could not start in time"
 			<< " (now " << util::millis(now)
 			<< ", latest " << util::millis(latest) << ")";
-		throw TaskError(actionErrorCouldNotStartInTime, err.str());
+		throw TaskError(loadWeightsTooLate, err.str());
 	}
 
 	rm = manager->models->get(model_id, gpu_id);
@@ -173,7 +173,7 @@ void LoadWeightsTask::run(cudaStream_t stream) {
 		std::string error_message = "LoadWeightsTask could not find model";
 		error_message += " with model ID " + std::to_string(model_id);
 		error_message += " and GPU ID " + std::to_string(gpu_id);
-		throw TaskError(actionErrorUnknownModel, error_message);
+		throw TaskError(loadWeightsUnknownModel, error_message);
 	}
 
 	rm->lock();
@@ -192,7 +192,7 @@ void LoadWeightsTask::run(cudaStream_t stream) {
 	unsigned num_pages = rm->model->num_weights_pages(manager->weights_caches[gpu_id]->page_size);
 	this->new_weights = manager->weights_caches[gpu_id]->alloc(num_pages, []{});
 	if (this->new_weights == nullptr) {
-		throw TaskError(actionErrorRuntimeError, "LoadWeightsTask failed to allocate pages from cache");
+		throw TaskError(loadWeightsInsufficientCache, "LoadWeightsTask failed to allocate pages from cache");
 	}
 
 	this->record_async_begin(stream);
@@ -219,7 +219,7 @@ void LoadWeightsTask::process_completion() {
 	if (version_unchanged) {
 		success(rm);
 	} else {
-		throw TaskError(actionErrorWeightsInUse, "Model weights were modified while being copied");
+		throw TaskError(loadWeightsConcurrentModification, "Model weights were modified while being copied");
 	}
 }
 
@@ -239,16 +239,16 @@ uint64_t EvictWeightsTask::eligible() {
 void EvictWeightsTask::run(cudaStream_t stream) {
 	uint64_t now = util::now(); // TODO: use chrono, possibly use the task telemetry
 	if (now < earliest) {
-		throw TaskError(actionErrorRuntimeError, "EvictWeightsTask ran before it was eligible");
+		throw TaskError(evictWeightsTooEarly, "EvictWeightsTask ran before it was eligible");
 	}
 
 	if (now > latest) {
-		throw TaskError(actionErrorCouldNotStartInTime, "EvictWeightsTask could not start in time");
+		throw TaskError(evictWeightsTooLate, "EvictWeightsTask could not start in time");
 	}
 
 	rm = manager->models->get(model_id, gpu_id);
 	if (rm == nullptr) {
-		throw TaskError(actionErrorUnknownModel, "EvictWeightsTask could not find model with specified id");
+		throw TaskError(evictWeightsUnknownModel, "EvictWeightsTask could not find model with specified id");
 	}
 
 	rm->lock();
@@ -260,7 +260,7 @@ void EvictWeightsTask::run(cudaStream_t stream) {
 	rm->unlock();
 
 	if (previous_weights == nullptr || previous_weights->evicted) {
-		throw TaskError(actionErrorModelWeightsNotPresent, "EvictWeightsTask not processed because no weights exist");
+		throw TaskError(evictWeightsNotInCache, "EvictWeightsTask not processed because no weights exist");
 	}
 
 	manager->weights_caches[gpu_id]->unlock(previous_weights);
@@ -293,7 +293,7 @@ void CopyInputTask::run(cudaStream_t stream) {
 		err << "CopyInputTask ran before it was eligible"
 			<< " (now " << util::millis(now)
 			<< ", earliest " << util::millis(earliest) << ")";
-		throw TaskError(actionErrorRuntimeError, err.str());
+		throw TaskError(copyInputTooEarly, err.str());
 	}
 
 	if (now > latest) {
@@ -301,18 +301,18 @@ void CopyInputTask::run(cudaStream_t stream) {
 		err << "CopyInputTask could not start in time"
 			<< " (now " << util::millis(now)
 			<< ", latest " << util::millis(latest) << ")";
-		throw TaskError(actionErrorCouldNotStartInTime, err.str());
+		throw TaskError(copyInputTooLate, err.str());
 	}
 
 	rm = manager->models->get(model_id, gpu_id);
 	if (rm == nullptr) {
-		throw TaskError(actionErrorUnknownModel, "CopyInputTask could not find model with specified id");
+		throw TaskError(copyInputUnknownModel, "CopyInputTask could not find model with specified id");
 	}
 
 	if (!rm->model->is_valid_batch_size(batch_size)) {
 		std::stringstream err;
 		err << "CopyInputTask received unsupported batch size " << batch_size;
-		throw TaskError(actionErrorInvalidBatchSize, err.str());
+		throw TaskError(copyInputInvalidBatchSize, err.str());
 	}
 
 	if (input_size == 0 && manager->allow_zero_size_inputs) {
@@ -320,7 +320,7 @@ void CopyInputTask::run(cudaStream_t stream) {
 		input_size = rm->model->input_size(batch_size);
 		manager->host_io_pool->free(input);
 		input = manager->host_io_pool->alloc(input_size);
-    	CHECK(input != nullptr) << "Unable to alloc from host_io_pool for infer action input";
+		throw TaskError(copyInputHostAlloc, "Unable to alloc from host_io_pool for infer action input");
 
 	} else if (rm->model->input_size(batch_size) != input_size) {
 		// Normal behavior requires correctly sized inputs
@@ -329,7 +329,7 @@ void CopyInputTask::run(cudaStream_t stream) {
 		    << " (expected " << rm->model->input_size(batch_size) 
 		    << ", got " << input_size
 		    << " (batch_size=" << batch_size << ")";
-		throw TaskError(actionErrorInvalidInput, err.str());	
+		throw TaskError(copyInputInvalidInput, err.str());	
 
 	}
 
@@ -344,7 +344,7 @@ void CopyInputTask::run(cudaStream_t stream) {
 			<< ", but " << manager->io_pools[gpu_id]->remaining()
 			<< " of " << manager->io_pools[gpu_id]->size << " remaining"
 			<< " (" << manager->io_pools[gpu_id]->numAllocs() << " outstanding allocations)";
-		throw TaskError(actionErrorRuntimeError, err.str());
+		throw TaskError(copyInputIOPoolExhausted, err.str());
 	}
 
 	this->record_async_begin(stream);
@@ -387,7 +387,7 @@ void ExecTask::run(cudaStream_t stream) {
 		err << "ExecTask could not run before it was eligible"
 			<< " (now " << util::millis(now)
 			<< ", earliest " << util::millis(earliest) << ")";
-		throw TaskError(actionErrorRuntimeError, err.str());
+		throw TaskError(execTooEarly, err.str());
 	}
 
 	if (now > latest) {
@@ -395,7 +395,7 @@ void ExecTask::run(cudaStream_t stream) {
 		err << "ExecTask could not start in time"
 			<< " (now " << util::millis(now)
 			<< ", latest " << util::millis(latest) << ")";
-		throw TaskError(actionErrorCouldNotStartInTime, err.str());
+		throw TaskError(execTooLate, err.str());
 	}
 
 	rm->lock();
@@ -406,7 +406,7 @@ void ExecTask::run(cudaStream_t stream) {
 	rm->unlock();
 
 	if (weights == nullptr || weights->evicted) {
-		throw TaskError(actionErrorModelWeightsNotPresent, "ExecTask failed due to missing model weights");
+		throw TaskError(execWeightsMissing, "ExecTask failed due to missing model weights");
 	}
 
 	size_t workspace_size = rm->model->workspace_memory_size(batch_size);
@@ -422,7 +422,7 @@ void ExecTask::run(cudaStream_t stream) {
 			<< " (" << manager->workspace_pools[gpu_id]->before() << " before"
 			<< " " << manager->workspace_pools[gpu_id]->after() << " after)"
 			<< " (" << manager->workspace_pools[gpu_id]->numAllocs() << " outstanding allocations)";
-		throw TaskError(actionErrorRuntimeError, err.str());
+		throw TaskError(execWorkspacePoolExhausted, err.str());
 	}
 
 	this->record_async_begin(stream);
@@ -446,7 +446,7 @@ void ExecTask::process_completion() {
 	rm->unlock();
 
 	if (this->weights_version != current_weights_version || weights->evicted) {
-		throw TaskError(actionErrorWeightsChanged, "ExecTask failed due to weights version mismatch");
+		throw TaskError(execConcurrentWeightsModification, "ExecTask failed due to weights version mismatch");
 	}
 
 	this->success();
@@ -472,18 +472,18 @@ uint64_t CopyOutputTask::eligible() {
 void CopyOutputTask::run(cudaStream_t stream) {
 	uint64_t now = util::now(); // TODO: use chrono
 	if (now < earliest) {
-		throw TaskError(actionErrorRuntimeError, "CopyOutputTask ran before it was eligible");
+		throw TaskError(copyOutputTooEarly, "CopyOutputTask ran before it was eligible");
 	}
 
 	if (now > latest) {
-		throw TaskError(actionErrorCouldNotStartInTime, "CopyOutputTask could not start in time");
+		throw TaskError(copyOutputTooLate, "CopyOutputTask could not start in time");
 	}
 
 	// TODO: this should probably be preallocated; seems silly to fail here
 	size_t output_size = rm->model->output_size(batch_size);
 	this->output = manager->host_io_pool->alloc(output_size);
 	if (this->output == nullptr) {
-		throw TaskError(actionErrorRuntimeError, "CopyOutputTask failed to allocate memory from host_io_pool");
+		throw TaskError(copyOutputHostAlloc, "CopyOutputTask failed to allocate memory from host_io_pool");
 	}
 
 	this->record_async_begin(stream);

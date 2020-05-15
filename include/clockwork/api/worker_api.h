@@ -35,6 +35,40 @@ const int actionErrorInvalidBatchSize = 31; // Invalid batch size input to an in
 const int actionErrorInvalidModelID = 40; // Invalid ID specified for load model
 const int actionErrorInvalidModelPath = 41; // Invalid path specified for load model
 
+const int loadWeightsTooEarly = 50;
+const int loadWeightsTooLate = 51;
+const int loadWeightsUnknownModel = 52;
+const int loadWeightsInsufficientCache = 53;
+const int loadWeightsConcurrentModification = 54;
+
+const int evictWeightsTooEarly = 60;
+const int evictWeightsTooLate = 61;
+const int evictWeightsUnknownModel = 62;
+const int evictWeightsNotInCache = 63;
+
+const int copyInputTooEarly = 70;
+const int copyInputTooLate = 71;
+const int copyInputUnknownModel = 72;
+const int copyInputInvalidBatchSize = 73;
+const int copyInputHostAlloc = 74;
+const int copyInputInvalidInput = 75;
+const int copyInputIOPoolExhausted = 76;
+
+const int execTooEarly = 80;
+const int execTooLate = 81;
+const int execWeightsMissing = 82;
+const int execWorkspacePoolExhausted = 83;
+const int execConcurrentWeightsModification = 84;
+
+const int copyOutputTooEarly = 90;
+const int copyOutputTooLate = 91;
+const int copyOutputHostAlloc = 92;
+
+
+
+
+
+
 
 namespace clockwork {
 namespace workerapi {

@@ -83,7 +83,10 @@ unsigned get_num_gpus() {
   status = nvmlDeviceGetCount(&deviceCount);
   if (status == NVML_ERROR_UNINITIALIZED) {
     status = nvmlInit();
-    CHECK(status == NVML_SUCCESS);
+    if (status == NVML_ERROR_DRIVER_NOT_LOADED) {
+      return 0;
+    }
+    CHECK(status == NVML_SUCCESS) << status;
     status = nvmlDeviceGetCount(&deviceCount);
   }
   CHECK(status == NVML_SUCCESS);
