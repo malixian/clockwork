@@ -23,6 +23,7 @@
 #include <libgen.h>
 #include <filesystem>
 #include <cstdlib>
+#include "clockwork/thread.h"
 
 namespace clockwork {
 namespace util {
@@ -75,19 +76,16 @@ std::string nowString() {
   return ss.str();
 }
 
-
-
 unsigned get_num_gpus() {
   nvmlReturn_t status;
 
-  status = nvmlInit();
-  CHECK(status == NVML_SUCCESS);
-
   unsigned deviceCount;
   status = nvmlDeviceGetCount(&deviceCount);
-  CHECK(status == NVML_SUCCESS);
-
-  status = nvmlShutdown();
+  if (status == NVML_ERROR_UNINITIALIZED) {
+    status = nvmlInit();
+    CHECK(status == NVML_SUCCESS);
+    status = nvmlDeviceGetCount(&deviceCount);
+  }
   CHECK(status == NVML_SUCCESS);
 
   return deviceCount;
@@ -243,6 +241,63 @@ void printCudaVersion() {
   int runtimeVersion;
   cudaRuntimeGetVersion(&runtimeVersion);
   std::cout << "Using CUDA Driver " << driverVersion << " Runtime " << runtimeVersion << std::endl;
+}
+
+GPUClockState::GPUClockState(unsigned num_gpus) : clock(num_gpus), checker(&GPUClockState::run, this) {
+  threading::initLowPriorityThread(checker);
+}
+
+void GPUClockState::run() {
+  nvmlReturn_t status;
+
+  status = nvmlInit();
+  CHECK(status == NVML_SUCCESS || status == NVML_ERROR_ALREADY_INITIALIZED);
+
+  nvmlEventSet_t eventSet;
+  CHECK(NVML_SUCCESS == nvmlEventSetCreate(&eventSet));
+
+  nvmlDevice_t devices[clock.size()];
+  for (unsigned i = 0; i < clock.size(); i++) {
+    CHECK(NVML_SUCCESS == nvmlDeviceGetHandleByIndex(i, &devices[i]));
+    CHECK(NVML_SUCCESS == nvmlDeviceRegisterEvents(devices[i], nvmlEventTypeClock, eventSet));
+    CHECK(NVML_SUCCESS == nvmlDeviceGetClockInfo(devices[i], NVML_CLOCK_SM, &clock[i]));
+  }
+
+  uint64_t notify_every = 5000000000UL;
+  uint64_t last_notify = 0;
+  while (alive) {
+    nvmlEventData_t data;
+    status = nvmlEventSetWait(eventSet, &data, 1000);
+    if (status == NVML_ERROR_TIMEOUT) continue;
+    CHECK(status == NVML_SUCCESS);
+
+    for (unsigned i = 0; i < clock.size(); i++) {
+      CHECK(NVML_SUCCESS == nvmlDeviceGetClockInfo(devices[i], NVML_CLOCK_SM, &clock[i]));
+    }
+
+    uint64_t now = util::now();
+    if (last_notify + notify_every < now) {
+      std::stringstream s;
+      s << "GPU Clocks Changed:";
+      for (unsigned i = 0; i < clock.size(); i++) {
+        s << " GPU" << i << "=" << clock[i];
+      }
+      s << std::endl;
+      std::cout << s.str();
+      last_notify = now;
+    }
+    usleep(1000);
+  }
+}
+void GPUClockState::shutdown() {
+  alive = false;
+}
+void GPUClockState::join() {
+  checker.join();
+}
+
+unsigned GPUClockState::get(unsigned gpu_id) {
+  return clock[gpu_id];
 }
 
 }

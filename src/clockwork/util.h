@@ -7,6 +7,8 @@
 #include <chrono>
 #include <vector>
 #include <map>
+#include <thread>
+#include <atomic>
 
 #define NUM_GPUS_1 1
 #define NUM_GPUS_2 2
@@ -70,6 +72,24 @@ std::string get_modelzoo_dir();
 std::string get_clockwork_model(std::string shortname);
 
 std::map<std::string, std::string> get_clockwork_modelzoo();
+
+class GPUClockState {
+ private:
+  	std::atomic_bool alive = true;
+ 	std::thread checker;
+ 	std::vector<unsigned> clock;
+
+ public:
+ 	GPUClockState(unsigned num_gpus);
+
+ 	void run();
+ 	void shutdown();
+ 	void join();
+
+ 	unsigned get(unsigned gpu_id);
+
+};
+
 
 #define DEBUG_PRINT(msg) \
 	std::cout << __FILE__ << "::" << __LINE__ << "::" << __FUNCTION__ << " "; \

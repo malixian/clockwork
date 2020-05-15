@@ -83,6 +83,7 @@ class ClockworkRuntime {
 public:
 	unsigned num_gpus;
 	MemoryManager* manager;
+	util::GPUClockState* gpu_clock;
 
 	std::vector<GPUExecutorExclusive*> gpu_executors;	// Type 3
 
@@ -143,6 +144,8 @@ protected:
 	void initialize(ClockworkWorkerConfig &config) {
 
 		num_gpus = config.num_gpus;
+
+		gpu_clock = new util::GPUClockState(num_gpus);
 
 		manager = new MemoryManager(config);
 

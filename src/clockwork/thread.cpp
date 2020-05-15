@@ -137,7 +137,7 @@ void initLoggerThread(std::thread &thread) {
 }
 
 void initGPUThread(int gpu_id, std::thread &thread) {
-	initHighPriorityThread(1, 0, thread);
+	initHighPriorityThread(2, 0, thread);
 }
 
 unsigned coreCount() {
