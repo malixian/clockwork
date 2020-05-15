@@ -364,7 +364,7 @@ ExecTask::ExecTask(RuntimeModel* rm, MemoryManager* manager, uint64_t earliest,
 	CudaEventPool* event_pool):
 		CudaAsyncTask(gpu_id, event_pool), rm(rm), manager(manager),
 		earliest(earliest), latest(latest), batch_size(batch_size),
-		io_memory(io_memory), weights(nullptr) {
+		io_memory(io_memory), weights(nullptr), workspace_memory(nullptr) {
 }
 
 ExecTask::~ExecTask() {
