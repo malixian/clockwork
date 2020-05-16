@@ -118,9 +118,7 @@ InferOnlyScheduler::Action* InferOnlyScheduler::Model::try_dequeue(uint64_t free
         uint64_t exec = estimate(batch_size);
         if (free_at + exec > batch_deadline) break;
     }
-    action->expected_duration = estimate(action->requests.size());
-    action->expected_exec_complete = free_at + action->expected_duration;
-    action->expected_gpu_clock = assigned_gpu->tracker.clock();
+    action->set_expectations(free_at, estimate(action->requests.size()), assigned_gpu->tracker.clock());
     action->batch();
 
     if (queue.empty()) assigned_gpu = nullptr;
@@ -149,7 +147,6 @@ InferOnlyScheduler::Action::Action(Model* model) : model(model) {
     action->id = action_id_seed++;
     action->model_id = model->id;
     action->earliest = util::now();
-    action->latest = action->earliest + 100000000UL; // 100 ms
 }
 
 InferOnlyScheduler::Action::~Action() {
@@ -210,6 +207,14 @@ float InferOnlyScheduler::Action::complete(uint64_t now) {
     return successful_requests / total_requests;
 }
 
+void InferOnlyScheduler::Action::set_expectations(uint64_t exec_start, uint64_t duration, int clock) {
+    action->expected_duration = duration;
+    action->expected_exec_complete = exec_start + duration;
+    action->expected_gpu_clock = clock;
+    action->earliest = util::now();
+    action->latest = action->expected_exec_complete;
+}
+
 InferOnlyScheduler::GPU::GPU() : tracker(InferOnlyScheduler::default_clock) {
 }
 
@@ -217,14 +222,11 @@ void InferOnlyScheduler::GPU::send_action(Action* action) {
     auto &infer = action->action;
     infer->gpu_id = gpu_id;
     infer->worker_id = worker_id;
-    infer->expected_duration = action->expected_duration;
-    infer->expected_exec_complete = action->expected_exec_complete;
-    infer->expected_gpu_clock = action->expected_gpu_clock;
 
     action->telemetry.set(infer);
 
     // Update GPU state
-    tracker.add(infer->id, action->expected_duration);
+    tracker.add(infer->id, infer->expected_duration);
 
     // Save it and send
     scheduler->outstanding_actions[infer->id] = {this, action};

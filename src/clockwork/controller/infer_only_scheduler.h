@@ -58,15 +58,13 @@ class InferOnlyScheduler : public Scheduler {
         std::shared_ptr<workerapi::ErrorResult> error = nullptr;
         std::shared_ptr<workerapi::InferResult> result = nullptr;
         std::vector<Request*> requests;
-        uint64_t expected_duration;
-        uint64_t expected_exec_complete;
-        int expected_gpu_clock;
 
         explicit Action(Model* model);
         ~Action();
 
         void batch();
         void unbatch();
+        void set_expectations(uint64_t exec_start, uint64_t duration, int clock);
         void set_error(std::shared_ptr<workerapi::ErrorResult> &error);
         void set_result(std::shared_ptr<workerapi::InferResult> &result);
 
