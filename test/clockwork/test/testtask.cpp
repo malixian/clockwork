@@ -1049,37 +1049,67 @@ TEST_CASE("Input Infer and Output Multiple GPUs", "[task]") {
 TEST_CASE("Test estimator", "[estimator]") {
     util::SlidingWindow window(3);
 
-    window.insert(7);
-    REQUIRE(window.get_value(0) == 7);
+    window.insert(70);
+    REQUIRE(window.get_value(0) == 70);
     REQUIRE(window.get_size() == 1);
+    REQUIRE(window.get_percentile(0) == 70);
+    REQUIRE(window.get_percentile(0.25) == 70);
+    REQUIRE(window.get_percentile(0.5) == 70);
+    REQUIRE(window.get_percentile(0.75) == 70);
+    REQUIRE(window.get_percentile(1) == 70);
 
-    window.insert(5);
-    REQUIRE(window.get_value(0) == 5);
-    REQUIRE(window.get_value(1) == 7);
+    window.insert(50);
+    REQUIRE(window.get_value(0) == 50);
+    REQUIRE(window.get_value(1) == 70);
     REQUIRE(window.get_size() == 2);
+    REQUIRE(window.get_percentile(0) == 50);
+    REQUIRE(window.get_percentile(0.25) == 55);
+    REQUIRE(window.get_percentile(0.5) == 60);
+    REQUIRE(window.get_percentile(0.75) == 65);
+    REQUIRE(window.get_percentile(1) == 70);
 
-    window.insert(9);
-    REQUIRE(window.get_value(0) == 5);
-    REQUIRE(window.get_value(1) == 7);
-    REQUIRE(window.get_value(2) == 9);
+    window.insert(90);
+    REQUIRE(window.get_value(0) == 50);
+    REQUIRE(window.get_value(1) == 70);
+    REQUIRE(window.get_value(2) == 90);
+    REQUIRE(window.get_size() == 3);
+    REQUIRE(window.get_percentile(0) == 50);
+    REQUIRE(window.get_percentile(0.25) == 60);
+    REQUIRE(window.get_percentile(0.5) == 70);
+    REQUIRE(window.get_percentile(0.75) == 80);
+    REQUIRE(window.get_percentile(1) == 90);
+
+    window.insert(110);
+    REQUIRE(window.get_value(0) == 50);
+    REQUIRE(window.get_value(1) == 90);
+    REQUIRE(window.get_value(2) == 110);
+    REQUIRE(window.get_size() == 3);
+    REQUIRE(window.get_percentile(0) == 50);
+    REQUIRE(window.get_percentile(0.25) == 70);
+    REQUIRE(window.get_percentile(0.5) == 90);
+    REQUIRE(window.get_percentile(0.75) == 100);
+    REQUIRE(window.get_percentile(1) == 110);
+
+    window.insert(20);
+    REQUIRE(window.get_value(0) == 20);
+    REQUIRE(window.get_value(1) == 90);
+    REQUIRE(window.get_value(2) == 110);
+    REQUIRE(window.get_percentile(0) == 20);
+    REQUIRE(window.get_percentile(0.25) == 55);
+    REQUIRE(window.get_percentile(0.5) == 90);
+    REQUIRE(window.get_percentile(0.75) == 100);
+    REQUIRE(window.get_percentile(1) == 110);
     REQUIRE(window.get_size() == 3);
 
-    window.insert(11);
-    REQUIRE(window.get_value(0) == 5);
-    REQUIRE(window.get_value(1) == 9);
-    REQUIRE(window.get_value(2) == 11);
-    REQUIRE(window.get_size() == 3);
-
-    window.insert(2);
-    REQUIRE(window.get_value(0) == 2);
-    REQUIRE(window.get_value(1) == 9);
-    REQUIRE(window.get_value(2) == 11);
-    REQUIRE(window.get_size() == 3);
-
-    window.insert(2);
-    REQUIRE(window.get_value(0) == 2);
-    REQUIRE(window.get_value(1) == 2);
-    REQUIRE(window.get_value(2) == 11);
+    window.insert(20);
+    REQUIRE(window.get_value(0) == 20);
+    REQUIRE(window.get_value(1) == 20);
+    REQUIRE(window.get_value(2) == 110);
+    REQUIRE(window.get_percentile(0) == 20);
+    REQUIRE(window.get_percentile(0.25) == 20);
+    REQUIRE(window.get_percentile(0.5) == 20);
+    REQUIRE(window.get_percentile(0.75) == 65);
+    REQUIRE(window.get_percentile(1) == 110);
     REQUIRE(window.get_size() == 3);
 
 }

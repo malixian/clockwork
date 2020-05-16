@@ -141,6 +141,13 @@ public:
 
 	/* Requirement: rank < oms.size() */
 	uint64_t get_value(unsigned rank) { return (*(oms.find_by_order(rank))); }
+	uint64_t get_percentile(float percentile) {
+		float position = percentile * (q.size() - 1);
+		unsigned up = ceil(position);
+		unsigned down = floor(position);
+		if (up == down) return get_value(up);
+		return get_value(up) * (position - down) + get_value(down) * (up - position);
+	}
 	void insert(uint64_t latest);
 };
 
