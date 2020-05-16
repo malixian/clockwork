@@ -50,7 +50,8 @@ Engine* simple_slo_factor(clockwork::Client* client) {
 		{models[0]},			// The model or models to apply the SLO adjustment to
 		[](float current) { 	// SLO update function
 			return current * 1.25; 
-		}
+		},
+		[](float current) { return false; } // Terminate condition
 	));
 
 	// Adjust model 1 additively
@@ -60,7 +61,8 @@ Engine* simple_slo_factor(clockwork::Client* client) {
 		{models[1]},			// The model or models to apply the SLO adjustment to
 		[](float current) { 	// SLO update function
 			return current + 1.0; 
-		}
+		},
+		[](float current) { return false; } // Terminate condition
 	));
 
 	// Adjust model 2 back and forth
@@ -70,7 +72,8 @@ Engine* simple_slo_factor(clockwork::Client* client) {
 		{models[2]},			// The model or models to apply the SLO adjustment to
 		[](float current) { 	// SLO update function
 			return current = 10 ? 1 : 10;
-		}
+		},
+		[](float current) { return false; } // Terminate condition
 	));
 
 	return engine;	
