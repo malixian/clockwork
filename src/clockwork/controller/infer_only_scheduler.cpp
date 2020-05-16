@@ -167,6 +167,7 @@ void InferOnlyScheduler::GPU::check_pending() {
 
         Action* action = next.model->try_dequeue(next.request_id);
         if (action != nullptr) {
+            action->action->expected_gpu_clock = clock;
             send_action(action);
         }
     }
@@ -191,6 +192,7 @@ void InferOnlyScheduler::GPU::handle_error(Action* action, std::shared_ptr<worke
 void InferOnlyScheduler::GPU::handle_success(Action* action, std::shared_ptr<workerapi::InferResult> &result) {
     action->telemetry.set(result);
     outstanding--;
+    clock = result->gpu_clock;
 
     check_pending();
 

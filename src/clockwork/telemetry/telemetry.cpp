@@ -13,8 +13,10 @@ void RequestTelemetryFileLogger::write_headers() {
 	f << "result" << "\t";
 	f << "user_id" << "\t";
 	f << "model_id" << "\t";
+	f << "deadline" << "\t";
 	f << "slo_factor" << "\t";
-	f << "latency" << "\n";
+	f << "latency" << "\t";
+	f << "deadline" << "\n";
 }
 
 void RequestTelemetryFileLogger::log(ControllerRequestTelemetry &t) {
@@ -24,7 +26,8 @@ void RequestTelemetryFileLogger::log(ControllerRequestTelemetry &t) {
 	f << t.user_id << "\t";
 	f << t.model_id << "\t";
 	f << t.slo_factor << "\t";
-	f << (t.departure - t.arrival) << "\n";
+	f << (t.departure - t.arrival) << "\t";
+	f << (t.deadline - t.arrival) << "\n";
 }
 
 void RequestTelemetryFileLogger::shutdown(bool awaitCompletion) {
@@ -174,6 +177,7 @@ void ControllerActionTelemetry::set(std::shared_ptr<workerapi::Infer> &infer) {
 	earliest = infer->earliest;
 	latest = infer->latest;
 	expected_duration = infer->expected_duration;
+	expected_gpu_clock = infer->expected_gpu_clock;
 	action_sent = util::now();
 }
 
@@ -257,6 +261,7 @@ void ControllerActionTelemetryFileLogger::write_headers() {
 	f << "controller_action_duration" << "\t";
 	f << "expected_exec_duration" << "\t";
 	f << "worker_exec_duration" << "\t";
+	f << "expected_gpu_clock" << "\t";
 	f << "worker_gpu_clock" << "\n";
 }
 
@@ -272,6 +277,7 @@ void ControllerActionTelemetryFileLogger::log(ControllerActionTelemetry &t) {
 	f << (t.result_received - t.action_sent) << "\t";
 	f << t.expected_duration << "\t";
 	f << t.worker_duration << "\t";
+	f << t.expected_gpu_clock << "\t";
 	f << t.gpu_clock << "\n";
 }
 

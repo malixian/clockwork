@@ -106,7 +106,7 @@ class LoadWeights : public Action {
 public:
 	uint64_t earliest;
 	uint64_t latest;
-	uint64_t expected_duration;
+	uint64_t expected_duration = 0;
 
 	int model_id;
 	unsigned gpu_id;
@@ -129,13 +129,16 @@ class Infer : public Action {
 public:
 	uint64_t earliest;
 	uint64_t latest;
-	uint64_t expected_duration;
+	uint64_t expected_duration = 0;
 
 	int model_id;
 	unsigned gpu_id;
 	int batch_size;
 	int input_size;
 	char* input;
+
+	// Not actually sent to workers; here for convenience
+	int expected_gpu_clock = 0;
 	
 	virtual std::string str();
 };

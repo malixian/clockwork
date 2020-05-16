@@ -43,6 +43,7 @@ struct ControllerActionTelemetry {
 	int status;
 	uint64_t expected_duration;
 	uint64_t worker_duration;
+	unsigned expected_gpu_clock;
 	unsigned gpu_clock;
 
 	void set(std::shared_ptr<workerapi::Infer> &infer);

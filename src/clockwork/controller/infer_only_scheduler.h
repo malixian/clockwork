@@ -73,6 +73,7 @@ class InferOnlyScheduler : public Scheduler {
         unsigned gpu_id;
         unsigned worker_id;
         unsigned outstanding = 0;
+        int clock;
 
         void send_action(Action* action);
         void check_pending();
