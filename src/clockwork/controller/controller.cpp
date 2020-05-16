@@ -559,19 +559,13 @@ void ControllerWithStartupPhase::infer(clientapi::InferenceRequest &request, std
 		}
 	}
 	if (request_telemetry != nullptr) {
-		int user_id = request.header.user_id;
-		uint64_t arrival = util::now();
-		scheduler->clientInfer(request, [this, user_id, arrival, callback](clientapi::InferenceResponse &response) {
-			ControllerRequestTelemetry telemetry{
-				response.header.user_request_id,
-				user_id,
-				response.model_id,
-				arrival,
-				util::now(),
-				response.header.status
-			};
+		ControllerRequestTelemetry* telemetry = new ControllerRequestTelemetry();
+		telemetry->set(request);
+		scheduler->clientInfer(request, [this, telemetry, callback](clientapi::InferenceResponse &response) {
+			telemetry->set(response);
 			callback(response);
-			request_telemetry->log(telemetry);
+			request_telemetry->log(*telemetry);
+			delete telemetry;
 		});
 	} else {
 		scheduler->clientInfer(request, callback);

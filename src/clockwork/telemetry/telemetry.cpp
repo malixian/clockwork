@@ -13,6 +13,7 @@ void RequestTelemetryFileLogger::write_headers() {
 	f << "result" << "\t";
 	f << "user_id" << "\t";
 	f << "model_id" << "\t";
+	f << "slo_factor" << "\t";
 	f << "latency" << "\n";
 }
 
@@ -22,6 +23,7 @@ void RequestTelemetryFileLogger::log(ControllerRequestTelemetry &t) {
 	f << t.result << "\t";
 	f << t.user_id << "\t";
 	f << t.model_id << "\t";
+	f << t.slo_factor << "\t";
 	f << (t.departure - t.arrival) << "\n";
 }
 
@@ -148,6 +150,19 @@ RequestTelemetryLogger* ControllerRequestTelemetry::log_and_summarize(std::strin
 	result->addLogger(new RequestTelemetryPrinter(print_interval));
 	result->start();
 	return result;
+}
+
+void ControllerRequestTelemetry::set(clientapi::InferenceRequest &request) {
+	arrival = util::now();
+	request_id = request.header.user_request_id;
+	user_id = request.header.user_id;
+	model_id = request.model_id;
+	slo_factor = request.slo_factor;
+}
+
+void ControllerRequestTelemetry::set(clientapi::InferenceResponse &response) {
+	departure = util::now();
+	result = response.header.status;
 }
 
 void ControllerActionTelemetry::set(std::shared_ptr<workerapi::Infer> &infer) {

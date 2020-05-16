@@ -22,7 +22,13 @@ void printUsage() {
 			  << "Available workloads with parameters:" << std::endl
 			  << "  example" << std::endl
 			  << "  spam" << std::endl
+			  << "          resnet50_v2 x 100, each with 100 closed loop" << std::endl
+			  << "  single-spam" << std::endl
+			  << "          resnet50_v2 x 1, with 1000 closed loop" << std::endl
 			  << "  simple" << std::endl
+			  << "  simple-slo-factor" << std::endl
+			  << "          3 models with closed-loop concurrency of 1" << std::endl
+			  << "          Updates each model's slo factor every 10 seconds" << std::endl
 			  << "  simple-parametric num_models concurrency requests_per_model"
 			  << std::endl
 			  << "  azure" << std::endl
@@ -57,8 +63,12 @@ int main(int argc, char *argv[])
 		engine = workload::example(client);
 	else if (workload == "spam") 
 		engine = workload::spam(client);
+	else if (workload == "single-spam") 
+		engine = workload::single_spam(client);
 	else if (workload == "simple")
 		engine = workload::simple(client);
+	else if (workload == "simple-slo-factor")
+		engine = workload::simple_slo_factor(client);
 	else if (workload == "simple-parametric")
 		engine = workload::simple_parametric(client,
 			std::stoul(argv[3]), std::stoul(argv[4]), std::stoul(argv[5]));

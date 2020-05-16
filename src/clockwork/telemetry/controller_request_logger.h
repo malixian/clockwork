@@ -19,6 +19,7 @@
 #include <tbb/concurrent_queue.h>
 #include <iomanip>
 #include "clockwork/api/api_common.h"
+#include "clockwork/api/client_api.h"
 #include <iostream>
 #include "clockwork/thread.h"
 
@@ -32,7 +33,11 @@ struct ControllerRequestTelemetry {
 	int model_id;
 	uint64_t arrival;
 	uint64_t departure;
+	float slo_factor;
 	int result;
+
+	void set(clientapi::InferenceRequest &request);
+	void set(clientapi::InferenceResponse &response);
 
 	static RequestTelemetryLogger* summarize(uint64_t print_interval);
 	static RequestTelemetryLogger* log_and_summarize(std::string filename, uint64_t print_interval);

@@ -77,6 +77,57 @@ public:
 
 };
 
+// Doesn't run requests, but can perform actions in the Engine
+class Timer : public Workload {
+public:
+
+	Timer() : Workload(-1) {}
+
+	virtual void Start(uint64_t now) = 0;
+	void InferComplete(uint64_t now, unsigned model_index) {
+		CHECK(false) << "Timers don't submit infer requests";
+	}
+	void InferError(uint64_t now, unsigned model_index, int status) {
+		CHECK(false) << "Timers don't submit infer requests";
+	}
+	void InferErrorInitializing(uint64_t now, unsigned model_index) {
+		CHECK(false) << "Timers don't submit infer requests";
+	}
+};
+
+class AdjustSLO : public Timer {
+private:
+	std::vector<clockwork::Model*> models;
+	uint64_t period;
+	float current;
+	std::function<float(float)> update;
+public:
+	AdjustSLO(
+		float period_seconds, 
+		float initial_slo_factor,
+		std::vector<clockwork::Model*> models,
+		std::function<float(float)> update)
+			: period(period_seconds * 1000000000UL),
+			  current(initial_slo_factor),
+			  models(models),
+			  update(update) {
+		for (auto model : models) {
+			model->set_slo_factor(initial_slo_factor);
+		}
+	}
+	void UpdateSLO() {
+		current = update(current);
+		std::cout << "Updating slo_factor to " << current << std::endl;
+		for (auto model : models) {
+			model->set_slo_factor(current);
+		}
+		SetTimeout(period, [this]() { UpdateSLO(); });
+	}
+	virtual void Start(uint64_t now) {
+		SetTimeout(period, [this]() { UpdateSLO(); });
+	}
+};
+
 class ClosedLoop : public Workload {
 public:
 	const unsigned concurrency;

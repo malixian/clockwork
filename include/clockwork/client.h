@@ -31,6 +31,7 @@ public:
 	virtual size_t output_size() = 0;
 	virtual int user_id() = 0;
 	virtual void set_user_id(int user_id) = 0;
+	virtual void set_slo_factor(float slo_factor) = 0;
 	virtual void disable_inputs() = 0;
 
 	/* 
