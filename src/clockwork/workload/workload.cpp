@@ -99,7 +99,8 @@ void Workload::SetEngine(Engine* engine) {
 }
 
 void Workload::Infer(unsigned model_index) {
-	CHECK(model_index < models.size()) << "Workload " << user_id << " inferring on non-existent model ";
+	CHECK(model_index < models.size()) << "Workload " << user_id
+		<< " inferring on non-existent model ";
 	auto &model = models[model_index];
 
 	std::vector<uint8_t> input(model->input_size());
@@ -127,6 +128,7 @@ void Workload::InferErrorInitializing(uint64_t now, unsigned model_index) {
 ClosedLoop::ClosedLoop(int id, clockwork::Model* model, unsigned concurrency) :
 	Workload(id, model), concurrency(concurrency), num_requests(UINT_MAX) {
 	CHECK(concurrency != 0) << "ClosedLoop with concurrency 0 created";
+	CHECK(num_requests != 0) << "ClosedLoop with num_requests 0 created";
 }
 
 ClosedLoop::ClosedLoop(int id, clockwork::Model* model, unsigned concurrency,

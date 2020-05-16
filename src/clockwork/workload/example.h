@@ -1,6 +1,7 @@
 #ifndef _CLOCKWORK_WORKLOAD_EXAMPLE_H_
 #define _CLOCKWORK_WORKLOAD_EXAMPLE_H_
 
+#include "clockwork/util.h"
 #include "clockwork/workload/workload.h"
 #include "clockwork/workload/azure.h"
 #include <cstdlib>
@@ -81,8 +82,6 @@ Engine* simple_slo_factor(clockwork::Client* client) {
 
 Engine* simple_parametric(clockwork::Client* client, unsigned num_copies,
 	unsigned concurrency, unsigned num_requests) {
-	std::cout << "Simple Parametric Engine: " << num_copies << " "
-		<< concurrency << " " << num_requests << std::endl;
 	Engine* engine = new Engine();
 
 	std::string modelpath = util::get_clockwork_modelzoo()["resnet50_v2"];
@@ -95,6 +94,33 @@ Engine* simple_parametric(clockwork::Client* client, unsigned num_copies,
 			models[i],		// model
 			concurrency,	// concurrency
 			num_requests	// max num requests
+		));
+	}
+
+	return engine;
+}
+
+Engine* poisson_open_loop(clockwork::Client* client, unsigned num_models,
+	double rate) {
+	Engine* engine = new Engine();
+
+	std::string model_name = "resnet50_v2";
+	std::string modelpath = util::get_clockwork_modelzoo()[model_name];
+
+	std::cout << "Loading " << num_models << " " << model_name
+			  << " models" << std::endl;
+	std::cout << "Cumulative request rate across models: " << rate
+			  << " requests/seconds" << std::endl;
+	auto models = client->load_remote_models(modelpath, num_models);
+
+	std::cout << "Adding a PoissonOpenLoop Workload (" << (rate/num_models)
+			  << " requests/second) for each model" << std::endl;
+	for (unsigned i = 0; i < models.size(); i++) {
+		engine->AddWorkload(new PoissonOpenLoop(
+			i,				// client id
+			models[i],  	// model
+			i,      		// rng seed
+			rate/num_models	// requests/second
 		));
 	}
 
