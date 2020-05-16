@@ -12,13 +12,15 @@ InferOnlyScheduler::Request::Request(clientapi::InferenceRequest request,
     std::function<void(clientapi::InferenceResponse&)> callback) : 
         request(request), 
         callback(callback), 
-        deadline(util::now() + InferOnlyScheduler::slo) {
+        deadline(request.arrival + InferOnlyScheduler::slo) {
+    // Set the response header fields now
     response.header.user_request_id = request.header.user_request_id;
     response.header.message = "";
     response.model_id = request.model_id;
     response.batch_size = request.batch_size;
     response.output = nullptr;
     response.output_size = 0;
+    response.deadline = deadline;
 }
 
 InferOnlyScheduler::Request::~Request() {
@@ -36,10 +38,17 @@ void InferOnlyScheduler::Request::set_error(int status, std::string message) {
     response.header.message = message;
 }
 
-void InferOnlyScheduler::Request::complete() {
+bool InferOnlyScheduler::Request::complete(uint64_t now) {
     if (print_debug) std::cout << ("Client <--  " + response.str() + "\n");
 
+    // Set the departure time (controller.cpp can also do this, 
+    // but we want to report departure time back to the action to determine goodput)
+    this->departure = now;
+    response.departure = now;
+
     callback(response);
+
+    return response.header.status == clockworkSuccess && departure <= deadline;
 }
 
 std::vector<unsigned> batch_lookup = {0,1,2,2,4,4,4,4,8,8,8,8,8,8,8,8,16};
@@ -58,7 +67,8 @@ void InferOnlyScheduler::Model::check_timeouts() {
         queue.pop();
 
         request->response.header.status = clockworkTimeout;
-        request->complete();                
+        request->response.departure = now;
+        CHECK(!request->complete(now)) << "Timed out request should not be treated as successful";
         delete request;
     }
     if (queue.empty()) assigned_gpu = nullptr;
@@ -138,11 +148,17 @@ void InferOnlyScheduler::Action::set_result(std::shared_ptr<workerapi::InferResu
     this->unbatch();
 }
 
-void InferOnlyScheduler::Action::complete() {
+float InferOnlyScheduler::Action::complete(uint64_t now) {
+    float successful_requests = 0;
+    float total_requests = 0;
     for (Request* request : requests) {
-        request->complete();
+        if (request->complete(now)) {
+            successful_requests += 1;
+        }
+        total_requests += 1;
         delete request;
     }
+    return successful_requests / total_requests;
 }
 
 void InferOnlyScheduler::GPU::send_action(Action* action) {
@@ -182,7 +198,7 @@ void InferOnlyScheduler::GPU::handle_error(Action* action, std::shared_ptr<worke
     check_pending();
 
     action->set_error(error);
-    action->complete();
+    CHECK(action->complete(util::now()) == 0) << "ErrorResult should not result in successful requests";
 
     scheduler->printer->log(action->telemetry);
 
@@ -197,7 +213,7 @@ void InferOnlyScheduler::GPU::handle_success(Action* action, std::shared_ptr<wor
     check_pending();
 
     action->set_result(result);
-    action->complete();
+    action->telemetry.goodput = action->complete(util::now());
 
     scheduler->printer->log(action->telemetry);
 
@@ -304,7 +320,7 @@ void InferOnlyScheduler::handle_request(Request* request) {
     auto it = models.find(request->request.model_id);
     if (it == models.end()) {
         request->set_error(clockworkError, "Invalid model ID");
-        request->complete();
+        CHECK(!request->complete(util::now())) << "Erroneous request should not be successful";
         delete request;
         return;
     }

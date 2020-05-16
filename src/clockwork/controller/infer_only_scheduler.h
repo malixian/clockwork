@@ -21,6 +21,8 @@ class InferOnlyScheduler : public Scheduler {
         clientapi::InferenceResponse response;
         std::function<void(clientapi::InferenceResponse&)> callback;
         uint64_t deadline;
+        uint64_t departure;
+
 
         Request(clientapi::InferenceRequest request,
             std::function<void(clientapi::InferenceResponse&)> callback);
@@ -28,7 +30,9 @@ class InferOnlyScheduler : public Scheduler {
 
         void set_result(char* output, size_t output_size);
         void set_error(int status, std::string message);
-        void complete();
+
+        // Returns true if the result was successful and within the deadline
+        bool complete(uint64_t now);
     };
 
     class Action {
@@ -46,7 +50,9 @@ class InferOnlyScheduler : public Scheduler {
         void unbatch();
         void set_error(std::shared_ptr<workerapi::ErrorResult> &error);
         void set_result(std::shared_ptr<workerapi::InferResult> &result);
-        void complete();
+
+        // Returns the fraction of successful requests
+        float complete(uint64_t now);
     };
 
     class GPU;

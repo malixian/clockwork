@@ -33,7 +33,7 @@ struct ControllerRequestTelemetry {
 	int model_id;
 	uint64_t arrival;
 	uint64_t departure;
-	uint64_t deadline = 0;
+	uint64_t deadline;
 	float slo_factor;
 	int result;
 

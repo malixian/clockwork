@@ -45,6 +45,7 @@ struct ControllerActionTelemetry {
 	uint64_t worker_duration;
 	unsigned expected_gpu_clock;
 	unsigned gpu_clock;
+	float goodput = 1.0;
 
 	void set(std::shared_ptr<workerapi::Infer> &infer);
 	void set(std::shared_ptr<workerapi::LoadWeights> &load);

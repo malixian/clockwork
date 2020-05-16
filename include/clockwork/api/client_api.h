@@ -65,8 +65,11 @@ struct InferenceRequest {
 	int batch_size;
 	size_t input_size;
 	void* input;
-	uint64_t deadline;
+	uint64_t deadline = 0;
 	float slo_factor;
+
+	// Not sent over the network; used by controller
+	uint64_t arrival = 0;
 
 	std::string str();
 };
@@ -78,6 +81,10 @@ struct InferenceResponse {
 	int batch_size;
 	size_t output_size;
 	void* output;
+
+	// Not sent over the network; used by controller
+	uint64_t deadline = 0;
+	uint64_t departure = 0;
 
 	std::string str();
 };

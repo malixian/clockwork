@@ -13,10 +13,10 @@ void RequestTelemetryFileLogger::write_headers() {
 	f << "result" << "\t";
 	f << "user_id" << "\t";
 	f << "model_id" << "\t";
-	f << "deadline" << "\t";
 	f << "slo_factor" << "\t";
 	f << "latency" << "\t";
-	f << "deadline" << "\n";
+	f << "deadline" << "\t";
+	f << "deadline_met" << "\n";
 }
 
 void RequestTelemetryFileLogger::log(ControllerRequestTelemetry &t) {
@@ -27,7 +27,21 @@ void RequestTelemetryFileLogger::log(ControllerRequestTelemetry &t) {
 	f << t.model_id << "\t";
 	f << t.slo_factor << "\t";
 	f << (t.departure - t.arrival) << "\t";
-	f << (t.deadline - t.arrival) << "\n";
+
+	int64_t deadline;
+	bool deadline_met;
+	if (t.deadline == 0) {
+		deadline = -1;
+		deadline_met = t.result == clockworkSuccess;
+	} else if (t.deadline < t.arrival) {
+		deadline = 0;
+		deadline_met = false;
+	} else {
+		deadline = t.deadline - t.arrival; // Print the deadline relative to arrival time
+		deadline_met = t.result == clockworkSuccess && t.departure <= t.deadline;
+	}
+	f << deadline << "\t";
+	f << deadline_met << "\n";
 }
 
 void RequestTelemetryFileLogger::shutdown(bool awaitCompletion) {
@@ -156,7 +170,10 @@ RequestTelemetryLogger* ControllerRequestTelemetry::log_and_summarize(std::strin
 }
 
 void ControllerRequestTelemetry::set(clientapi::InferenceRequest &request) {
-	arrival = util::now();
+	if (request.arrival == 0) {
+		request.arrival = util::now();
+	}
+	arrival = request.arrival;
 	request_id = request.header.user_request_id;
 	user_id = request.header.user_id;
 	model_id = request.model_id;
@@ -164,8 +181,12 @@ void ControllerRequestTelemetry::set(clientapi::InferenceRequest &request) {
 }
 
 void ControllerRequestTelemetry::set(clientapi::InferenceResponse &response) {
-	departure = util::now();
+	if (response.departure == 0) {
+		response.departure = util::now();
+	}
+	departure = response.departure;
 	result = response.header.status;
+	deadline = response.deadline;
 }
 
 void ControllerActionTelemetry::set(std::shared_ptr<workerapi::Infer> &infer) {
@@ -262,7 +283,8 @@ void ControllerActionTelemetryFileLogger::write_headers() {
 	f << "expected_exec_duration" << "\t";
 	f << "worker_exec_duration" << "\t";
 	f << "expected_gpu_clock" << "\t";
-	f << "worker_gpu_clock" << "\n";
+	f << "worker_gpu_clock" << "\t";
+	f << "goodput" << "\n";
 }
 
 void ControllerActionTelemetryFileLogger::log(ControllerActionTelemetry &t) {
@@ -278,7 +300,7 @@ void ControllerActionTelemetryFileLogger::log(ControllerActionTelemetry &t) {
 	f << t.expected_duration << "\t";
 	f << t.worker_duration << "\t";
 	f << t.expected_gpu_clock << "\t";
-	f << t.gpu_clock << "\n";
+	f << static_cast<uint64_t>(t.worker_duration * t.goodput) << "\n";
 }
 
 void ControllerActionTelemetryFileLogger::shutdown(bool awaitCompletion) {
