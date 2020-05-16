@@ -28,6 +28,54 @@ Engine* simple(clockwork::Client* client) {
 	return engine;
 }
 
+Engine* simple_slo_factor(clockwork::Client* client) {
+	Engine* engine = new Engine();
+
+	unsigned num_copies = 3;
+	std::string modelpath = util::get_clockwork_modelzoo()["resnet50_v2"];
+	auto models = client->load_remote_models(modelpath, num_copies);
+
+	for (unsigned i = 0; i < models.size(); i++) {
+		engine->AddWorkload(new ClosedLoop(
+			0, 			// client id, just use the same for this
+			models[i],	// model
+			1			// concurrency
+		));
+	}
+
+	// Adjust model 0 multiplicatively
+	engine->AddWorkload(new AdjustSLO(
+		10.0, 					// period in seconds
+		4.0,					// initial slo_factor
+		{models[0]},			// The model or models to apply the SLO adjustment to
+		[](float current) { 	// SLO update function
+			return current * 1.25; 
+		}
+	));
+
+	// Adjust model 1 additively
+	engine->AddWorkload(new AdjustSLO(
+		10.0, 					// period in seconds
+		4.0,					// initial slo_factor
+		{models[1]},			// The model or models to apply the SLO adjustment to
+		[](float current) { 	// SLO update function
+			return current + 1.0; 
+		}
+	));
+
+	// Adjust model 2 back and forth
+	engine->AddWorkload(new AdjustSLO(
+		10.0, 					// period in seconds
+		10,						// initial slo_factor
+		{models[2]},			// The model or models to apply the SLO adjustment to
+		[](float current) { 	// SLO update function
+			return current = 10 ? 1 : 10;
+		}
+	));
+
+	return engine;	
+}
+
 Engine* simple_parametric(clockwork::Client* client, unsigned num_copies,
 	unsigned concurrency, unsigned num_requests) {
 	std::cout << "Simple Parametric Engine: " << num_copies << " "
@@ -117,6 +165,25 @@ Engine* spam(clockwork::Client* client) {
 			0, 			// client id, just use the same for this
 			models[i],	// model
 			100			// concurrency
+		));
+	}
+
+	return engine;
+}
+
+Engine* single_spam(clockwork::Client* client) {
+	Engine* engine = new Engine();
+
+	unsigned num_copies = 1;
+	std::string modelpath = util::get_clockwork_modelzoo()["resnet50_v2"];
+	auto models = client->load_remote_models(modelpath, num_copies);
+
+	for (unsigned i = 0; i < models.size(); i++) {
+		models[i]->disable_inputs();
+		engine->AddWorkload(new ClosedLoop(
+			0, 			// client id, just use the same for this
+			models[i],	// model
+			1000			// concurrency
 		));
 	}
 

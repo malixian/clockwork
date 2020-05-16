@@ -48,6 +48,7 @@ public:
 	const std::string source_;
 	const size_t input_size_;
 	const size_t output_size_;
+	float slo_factor_ = 0;
 
 	ModelImpl(NetworkClient *client, int model_id, std::string source, size_t input_size_, size_t output_size, bool print);
 
@@ -57,6 +58,7 @@ public:
 	virtual std::string source();
 	virtual int user_id();
 	virtual void set_user_id(int user_id);
+	virtual void set_slo_factor(float slo_factor) { slo_factor_ = slo_factor; }
 
 	virtual void disable_inputs();
 
@@ -268,6 +270,7 @@ void ModelImpl::infer(std::vector<uint8_t> &input, std::function<void(std::vecto
 	request.batch_size = 1; // TODO: support batched requests in client
 	request.input_size = input.size();
 	request.input = input_data;
+	request.slo_factor = slo_factor_;
 
 	if (!inputs_enabled_) {
 		request.input_size = 0;

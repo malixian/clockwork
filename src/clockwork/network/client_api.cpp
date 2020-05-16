@@ -30,6 +30,7 @@ void msg_inference_req_tx::set(clientapi::InferenceRequest &request) {
   	set_header(request.header, msg.mutable_header());
   	msg.set_model_id(request.model_id);
   	msg.set_batch_size(request.batch_size);
+    msg.set_slo_factor(request.slo_factor);
   	body_len_ = request.input_size;
   	body_ = request.input;
 }
@@ -38,6 +39,7 @@ void msg_inference_req_rx::get(clientapi::InferenceRequest &request) {
 	get_header(request.header, msg.header());
 	request.model_id = msg.model_id();
 	request.batch_size = msg.batch_size();
+  request.slo_factor = msg.slo_factor();
 	request.input_size = body_len_;
 	request.input = body_;
 }

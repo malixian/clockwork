@@ -66,6 +66,7 @@ struct InferenceRequest {
 	size_t input_size;
 	void* input;
 	uint64_t deadline;
+	float slo_factor;
 
 	std::string str();
 };
