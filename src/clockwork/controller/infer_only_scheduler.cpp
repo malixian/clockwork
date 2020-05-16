@@ -142,7 +142,7 @@ void InferOnlyScheduler::Model::add_measurement(unsigned batch_size, uint64_t du
 
 uint64_t InferOnlyScheduler::Model::estimate(unsigned batch_size) {
     unsigned effective_batch_size = batch_lookup[batch_size];
-    return estimates[effective_batch_size] / assigned_gpu->clock;
+    return estimates[effective_batch_size] / assigned_gpu->tracker.clock();
 }
 
 InferOnlyScheduler::Action::Action(Model* model) : model(model) {

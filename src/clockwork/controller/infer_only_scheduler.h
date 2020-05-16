@@ -103,7 +103,6 @@ class InferOnlyScheduler : public Scheduler {
 
         unsigned gpu_id;
         unsigned worker_id;
-        int clock = InferOnlyScheduler::default_clock;
 
         GPU();
 
