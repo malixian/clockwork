@@ -409,7 +409,7 @@ public:
 		current_interval = (interval % intervals.size());
 		SetTimeout(interval_duration, [this, interval]() { Advance(interval+1); });
 		if (intervals[interval] > 0) {
-			uint64_t timeout = rng() % ((uint64_t)(distribution(rng) / intervals[interval]));
+			uint64_t timeout = rng() % (1 + ((uint64_t)(distribution(rng) / intervals[interval])));
 			SetTimeout(timeout, [this, interval]() { Submit(interval); });
 		}
 	}

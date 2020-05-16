@@ -108,6 +108,8 @@ int main(int argc, char *argv[])
 		engine = workload::azure(client);
 	else if (workload == "azure_small")
 		engine = workload::azure_small(client);
+	else if (workload == "azure_fast")
+		engine = workload::azure_fast(client);
 	else {
 		std::cout << "Unknown workload " << workload << std::endl << std::endl;
 		printUsage();
