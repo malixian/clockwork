@@ -101,7 +101,7 @@ int main(int argc, char *argv[])
 			std::stod(argv[6]),		// arrival rate (requests/second)
 			std::stoull(argv[7]),	// starting slo (in ms)
 			std::stoull(argv[8]),	// ending slo (in ms)
-			std::stoull(argv[9]),	// slo increase factor
+			std::stod(argv[9]),	    // slo increase factor
 			std::string(argv[10]),	// slo increase operator
 			std::stoull(argv[11]));	// slo step duration (in seconds)
 	else if (workload == "azure")

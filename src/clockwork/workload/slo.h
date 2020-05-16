@@ -18,7 +18,7 @@ Engine* slo_experiment_1(
 	double rate,
 	unsigned slo_start,
 	unsigned slo_end,
-	unsigned slo_factor,
+	double slo_factor,
 	std::string slo_op,
 	unsigned period) {
 
