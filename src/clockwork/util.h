@@ -169,7 +169,7 @@ private:
 			outstanding.pop_front();
 		} else {
 			// the work was done but we don't know when
-			for (auto it = outstanding.begin(); it != outstanding.end(); ){
+			for (auto it = outstanding.begin(); it != outstanding.end(); it++){
 				if (it->id == id) {
 					total_outstanding -= it->size;
 					if (success) work_begin += it->size/clock_;
