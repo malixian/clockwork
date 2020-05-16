@@ -43,6 +43,8 @@ struct ControllerActionTelemetry {
 	int status;
 	uint64_t expected_duration;
 	uint64_t worker_duration;
+	uint64_t expected_exec_complete = 0;
+	uint64_t worker_exec_complete;
 	unsigned expected_gpu_clock;
 	unsigned gpu_clock;
 	float goodput = 1.0;

@@ -230,12 +230,14 @@ void ControllerActionTelemetry::set(std::shared_ptr<workerapi::ErrorResult> &res
 	result_received = util::now();
 	status = result->status;
 	worker_duration = 0;
+	worker_exec_complete = 0;
 }
 
 void ControllerActionTelemetry::set(std::shared_ptr<workerapi::InferResult> &result) {
 	result_received = util::now();
 	status = result->status;
 	worker_duration = result->exec.duration;
+	worker_exec_complete = result->exec.end;
 	gpu_clock = result->gpu_clock;
 }
 
@@ -282,6 +284,8 @@ void ControllerActionTelemetryFileLogger::write_headers() {
 	f << "controller_action_duration" << "\t";
 	f << "expected_exec_duration" << "\t";
 	f << "worker_exec_duration" << "\t";
+	f << "expected_exec_complete" << "\t";
+	f << "worker_exec_complete" << "\t";
 	f << "expected_gpu_clock" << "\t";
 	f << "worker_gpu_clock" << "\t";
 	f << "goodput" << "\n";
@@ -299,7 +303,18 @@ void ControllerActionTelemetryFileLogger::log(ControllerActionTelemetry &t) {
 	f << (t.result_received - t.action_sent) << "\t";
 	f << t.expected_duration << "\t";
 	f << t.worker_duration << "\t";
+	if (t.expected_exec_complete == 0) {
+		f << "0\t";
+	} else {
+		f << (t.expected_exec_complete - t.action_sent) << "\t";
+	}
+	if (t.worker_exec_complete == 0) {
+		f << "0\t";
+	} else {
+		f << (t.worker_exec_complete - t.action_sent) << "\t";
+	}
 	f << t.expected_gpu_clock << "\t";
+	f << t.gpu_clock << "\t";
 	f << static_cast<uint64_t>(t.worker_duration * t.goodput) << "\n";
 }
 

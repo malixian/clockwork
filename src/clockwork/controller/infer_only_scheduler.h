@@ -32,18 +32,21 @@ class InferOnlyScheduler : public Scheduler {
         void set_error(int status, std::string message);
 
         // Returns true if the result was successful and within the deadline
+        void timeout(uint64_t now);
         bool complete(uint64_t now);
     };
 
+    class Model;
     class Action {
      public:
+        Model* model;
         ControllerActionTelemetry telemetry;
         std::shared_ptr<workerapi::Infer> action = std::make_shared<workerapi::Infer>();
         std::shared_ptr<workerapi::ErrorResult> error = nullptr;
         std::shared_ptr<workerapi::InferResult> result = nullptr;
         std::vector<Request*> requests;
 
-        explicit Action(unsigned model_id);
+        explicit Action(Model* model);
         ~Action();
 
         void batch();
@@ -58,17 +61,22 @@ class InferOnlyScheduler : public Scheduler {
     class GPU;
     class Model {
      public:
+        std::map<unsigned, uint64_t> estimates;
+        std::map<unsigned, util::SlidingWindow*> estimators;
+
         uint64_t request_id_seed = 0;
         unsigned id;
 
         GPU* assigned_gpu = nullptr;
         std::queue<Request*> queue;
 
-        Model(unsigned id);
+        Model(BatchedModelState &state);
 
         void enqueue(Request* request);
-        void check_timeouts();
+        void check_timeouts(uint64_t now);
         Action* try_dequeue(uint64_t expected_request_id);
+        void add_measurement(unsigned batch_size, uint64_t duration, unsigned gpu_clock);
+        uint64_t estimate(unsigned batch_size);
     };
 
     class GPU {
@@ -79,7 +87,7 @@ class InferOnlyScheduler : public Scheduler {
         unsigned gpu_id;
         unsigned worker_id;
         unsigned outstanding = 0;
-        int clock;
+        int clock = InferOnlyScheduler::default_clock;
 
         void send_action(Action* action);
         void check_pending();
@@ -91,6 +99,8 @@ class InferOnlyScheduler : public Scheduler {
 
     static const uint64_t print_interval = 10000000000UL; // 10 seconds
     static const uint64_t slo = 100000000UL; // 100ms
+    static const uint64_t buffer = 2000000UL; // 2ms buffer
+    static const uint64_t default_clock = 1380; // 2ms buffer
     static const bool print_debug = false;
     static const unsigned max_outstanding = 2;
 

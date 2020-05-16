@@ -11,8 +11,7 @@ InferOnlyScheduler::InferOnlyScheduler(std::string actions_filename)
 InferOnlyScheduler::Request::Request(clientapi::InferenceRequest request,
     std::function<void(clientapi::InferenceResponse&)> callback) : 
         request(request), 
-        callback(callback), 
-        deadline(request.arrival + InferOnlyScheduler::slo) {
+        callback(callback) {
     // Set the response header fields now
     response.header.user_request_id = request.header.user_request_id;
     response.header.message = "";
@@ -20,7 +19,9 @@ InferOnlyScheduler::Request::Request(clientapi::InferenceRequest request,
     response.batch_size = request.batch_size;
     response.output = nullptr;
     response.output_size = 0;
-    response.deadline = deadline;
+    response.deadline = request.arrival + InferOnlyScheduler::slo;
+
+    this->deadline = response.deadline - InferOnlyScheduler::buffer;
 }
 
 InferOnlyScheduler::Request::~Request() {
@@ -51,24 +52,43 @@ bool InferOnlyScheduler::Request::complete(uint64_t now) {
     return response.header.status == clockworkSuccess && departure <= deadline;
 }
 
+void InferOnlyScheduler::Request::timeout(uint64_t now) {
+    if (print_debug) std::cout << ("Client <--  " + response.str() + "\n");
+
+    response.header.status = clockworkTimeout;
+    response.departure = now;
+
+    callback(response);
+}
+
 std::vector<unsigned> batch_lookup = {0,1,2,2,4,4,4,4,8,8,8,8,8,8,8,8,16};
 
-InferOnlyScheduler::Model::Model(unsigned id) : id(id) {}
+InferOnlyScheduler::Model::Model(BatchedModelState &state) : id(state.id) {
+    // Store initial exec estimates
+    for (auto &batch_size : state.supported_batch_sizes) {
+        auto it = state.exec_duration.find(batch_size);
+        if (it == state.exec_duration.end()) {
+            estimates[batch_size] = 1000000UL; // Start with 0.1ms estimate
+        } else {
+            estimates[batch_size] = it->second * InferOnlyScheduler::default_clock * 0.75;
+        }
+        estimators[batch_size] = new util::SlidingWindow();
+        estimators[batch_size]->insert(estimates[batch_size]);
+    }
+}
 
 void InferOnlyScheduler::Model::enqueue(Request* request) {
     request->id = request_id_seed++;
     queue.push(request);
 }
 
-void InferOnlyScheduler::Model::check_timeouts() {
-    uint64_t now = util::now();
-    while (!queue.empty() && queue.front()->deadline < now) {
+void InferOnlyScheduler::Model::check_timeouts(uint64_t now) {
+    while (!queue.empty()) {
         Request* request = queue.front();
-        queue.pop();
+        if (request->deadline >= now + estimates[1]/ assigned_gpu->clock) break;
 
-        request->response.header.status = clockworkTimeout;
-        request->response.departure = now;
-        CHECK(!request->complete(now)) << "Timed out request should not be treated as successful";
+        queue.pop();
+        request->timeout(now);
         delete request;
     }
     if (queue.empty()) assigned_gpu = nullptr;
@@ -78,16 +98,32 @@ InferOnlyScheduler::Action* InferOnlyScheduler::Model::try_dequeue(uint64_t expe
     if (queue.empty()) return nullptr;
     if (queue.front()->id > expected_request_id) return nullptr;
 
-    check_timeouts();
+    uint64_t now = util::now();
+    check_timeouts(now);
 
-    unsigned batch_size = batch_lookup[std::min(batch_lookup.size()-1, queue.size())];
-    if (batch_size == 0) return nullptr;
+    unsigned max_batch_size = batch_lookup[std::min(batch_lookup.size()-1, queue.size())];
+    if (max_batch_size == 0) return nullptr;
 
-    Action* action = new Action(id);
-    for (unsigned i = 0; i < batch_size; i++) {
-        action->requests.push_back(queue.front());
-        queue.pop();
+    uint64_t batch_deadline = queue.front()->deadline;
+
+    unsigned batch_size = 1;
+    Action* action = new Action(this);
+    while (true) {
+        while (action->requests.size() < batch_size) {
+            action->requests.push_back(queue.front());
+            queue.pop();
+        }
+
+        batch_size *= 2;
+        if (batch_size > max_batch_size) break;
+
+        uint64_t exec = estimate(batch_size);
+        if (now + exec > batch_deadline) break;
+
+        action->action->expected_duration = exec;
     }
+    action->action->expected_duration = estimate(action->requests.size());
+    action->action->expected_gpu_clock = assigned_gpu->clock;
     action->batch();
 
     if (queue.empty()) assigned_gpu = nullptr;
@@ -95,10 +131,24 @@ InferOnlyScheduler::Action* InferOnlyScheduler::Model::try_dequeue(uint64_t expe
     return action;
 }
 
+void InferOnlyScheduler::Model::add_measurement(unsigned batch_size, uint64_t duration, unsigned gpu_clock) {
+    auto it = estimators.find(batch_size);
+    CHECK(it != estimators.end()) << "Unsupported batch size " << batch_size;
+    auto estimator = it->second;
+    estimator->insert(duration * gpu_clock);
 
-InferOnlyScheduler::Action::Action(unsigned model_id) {
+    unsigned rank = estimator->get_size() - 1; // by default, get max value
+    estimates[batch_size] = estimator->get_value(rank);
+}
+
+uint64_t InferOnlyScheduler::Model::estimate(unsigned batch_size) {
+    unsigned effective_batch_size = batch_lookup[batch_size];
+    return estimates[effective_batch_size] / assigned_gpu->clock;
+}
+
+InferOnlyScheduler::Action::Action(Model* model) : model(model) {
     action->id = action_id_seed++;
-    action->model_id = model_id;
+    action->model_id = model->id;
     action->earliest = util::now();
     action->latest = action->earliest + 100000000UL; // 100 ms
 }
@@ -146,6 +196,7 @@ void InferOnlyScheduler::Action::set_error(std::shared_ptr<workerapi::ErrorResul
 void InferOnlyScheduler::Action::set_result(std::shared_ptr<workerapi::InferResult> &result) {
     this->result = result;
     this->unbatch();
+    model->add_measurement(action->batch_size, result->exec.duration, result->gpu_clock);
 }
 
 float InferOnlyScheduler::Action::complete(uint64_t now) {
@@ -183,7 +234,6 @@ void InferOnlyScheduler::GPU::check_pending() {
 
         Action* action = next.model->try_dequeue(next.request_id);
         if (action != nullptr) {
-            action->action->expected_gpu_clock = clock;
             send_action(action);
         }
     }
@@ -277,7 +327,7 @@ void InferOnlyScheduler::initialize_models(ClockworkState &state) {
         if (total + model.num_weights_pages < max_pages) {
             total += model.num_weights_pages;
 
-            this->models[model.id] = new Model(model.id);
+            this->models[model.id] = new Model(model);
         }
     }
 
