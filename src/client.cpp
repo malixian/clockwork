@@ -5,6 +5,7 @@
 #include <string>
 #include <iostream>
 #include "clockwork/workload/azure.h"
+#include "clockwork/workload/slo.h"
 #include "clockwork/thread.h"
 
 using namespace clockwork;
@@ -20,19 +21,38 @@ void printUsage() {
 	std::cerr << "Usage: client [address] [workload] "
 			  << "[workload parameters (if required)]" << std::endl
 			  << "Available workloads with parameters:" << std::endl
-			  << "  example" << std::endl
-			  << "  spam" << std::endl
-			  << "          resnet50_v2 x 100, each with 100 closed loop" << std::endl
-			  << "  single-spam" << std::endl
-			  << "          resnet50_v2 x 1, with 1000 closed loop" << std::endl
-			  << "  simple" << std::endl
-			  << "  simple-slo-factor" << std::endl
-			  << "          3 models with closed-loop concurrency of 1" << std::endl
-			  << "          Updates each model's slo factor every 10 seconds" << std::endl
-			  << "  simple-parametric num_models concurrency requests_per_model"
-			  << std::endl
-			  << "  azure" << std::endl
-			  << "  azure_small" << std::endl;
+			  << "\t example" << std::endl
+			  << "\t spam" << std::endl
+			  << "\t\t resnet50_v2 x 100, each with 100 closed loop" << std::endl
+			  << "\t single-spam" << std::endl
+			  << "\t\t resnet50_v2 x 1, with 1000 closed loop" << std::endl
+			  << "\t simple" << std::endl
+			  << "\t simple-slo-factor" << std::endl
+			  << "\t\t 3 models with closed-loop concurrency of 1" << std::endl
+			  << "\t\t Updates each model's slo factor every 10 seconds" << std::endl
+			  << "\t simple-parametric num_models concurrency requests_per_model" << std::endl
+			  << "\t poisson-open-loop num_models rate " << std::endl
+			  << "\t\t Rate should be provided in requests/second" << std::endl
+			  << "\t\t Rate is split across all models" << std::endl
+			  << "\t slo-exp-1 model copies dist rate slo-start slo-end slo-factor slo-op period" << std::endl
+			  << "\t\t Workload parameters:" << std::endl
+			  << "\t\t\t model: model name (e.g., \"resnet50_v2\")" << std::endl
+			  << "\t\t\t copies: number of model instances" << std::endl
+			  << "\t\t\t dist: arrival distribution (\"poisson\"/\"fixed-rate\")" << std::endl
+			  << "\t\t\t rate: arrival rate (in requests/second)" << std::endl
+			  << "\t\t\t slo-start: starting slo value (in ms)" << std::endl
+			  << "\t\t\t slo-end: ending slo value (in ms)" << std::endl
+			  << "\t\t\t slo-factor: factor by which the slo should change" << std::endl
+			  << "\t\t\t slo-op: operator (\"add\"/\"mul\") for incrementing slo" << std::endl
+			  << "\t\t\t period: number of seconds before changing slo" << std::endl
+			  << "\t\t Examples:" << std::endl
+			  << "\t\t\t client volta04:12346 slo-exp-1 resnet50_v2 4 poisson 100 2 32 2 mul 7" << std::endl
+			  << "\t\t\t\t (increases slo every 7s as follows: 2 4 8 16 32)" << std::endl
+			  << "\t\t\t client volta04:12346 slo-exp-1 resnet50_v2 4 poisson 100 10 100 10 add 3" << std::endl
+			  << "\t\t\t\t (increases slo every 3s as follows: 10 20 30 ... 100)" << std::endl
+			  << "\t\t In each case, an open loop client is used" << std::endl
+			  << "\tazure" << std::endl
+			  << "\tazure_small" << std::endl;
 }
 
 int main(int argc, char *argv[])
@@ -72,6 +92,18 @@ int main(int argc, char *argv[])
 	else if (workload == "simple-parametric")
 		engine = workload::simple_parametric(client,
 			std::stoul(argv[3]), std::stoul(argv[4]), std::stoul(argv[5]));
+	else if (workload == "slo-exp-1")
+		engine = workload::slo_experiment_1(
+			client,
+			std::string(argv[3]), 	// model name
+			std::stoul(argv[4]),	// num of copies
+			std::string(argv[5]),	// arrival distribution
+			std::stod(argv[6]),		// arrival rate (requests/second)
+			std::stoull(argv[7]),	// starting slo (in ms)
+			std::stoull(argv[8]),	// ending slo (in ms)
+			std::stoull(argv[9]),	// slo increase factor
+			std::string(argv[10]),	// slo increase operator
+			std::stoull(argv[11]));	// slo step duration (in seconds)
 	else if (workload == "azure")
 		engine = workload::azure(client);
 	else if (workload == "azure_small")

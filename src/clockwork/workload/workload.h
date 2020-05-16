@@ -101,22 +101,32 @@ private:
 	uint64_t period;
 	float current;
 	std::function<float(float)> update;
+	std::function<bool(float)> terminate;
 public:
 	AdjustSLO(
 		float period_seconds, 
 		float initial_slo_factor,
 		std::vector<clockwork::Model*> models,
-		std::function<float(float)> update)
+		std::function<float(float)> update,
+		std::function<bool(float)> terminate)
 			: period(period_seconds * 1000000000UL),
 			  current(initial_slo_factor),
 			  models(models),
-			  update(update) {
+			  update(update),
+			  terminate(terminate) {
 		for (auto model : models) {
 			model->set_slo_factor(initial_slo_factor);
 		}
 	}
 	void UpdateSLO() {
 		current = update(current);
+
+		if (terminate(current)) {
+			engine->running = 0;
+			std::cout << "Terminating engine" << std::endl;
+			return;
+		}
+
 		std::cout << "Updating slo_factor to " << current << std::endl;
 		for (auto model : models) {
 			model->set_slo_factor(current);
