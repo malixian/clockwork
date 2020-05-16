@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <functional>
 #include <vector>
+#include "clockwork/util.h"
 #include "clockwork/client.h"
 #include "tbb/concurrent_queue.h"
 #include <random>
@@ -185,7 +186,7 @@ public:
 	const uint64_t& operator()(std::minstd_rand rng) const { return value; }
 };
 
-typedef std::poisson_distribution<uint64_t> Poisson;
+typedef std::exponential_distribution<double> Exponential;
 
 class FixedRate : public OpenLoop<Static> {
 public:
@@ -196,11 +197,13 @@ public:
 
 };
 
-class PoissonOpenLoop : public OpenLoop<Poisson> {
+class PoissonOpenLoop : public OpenLoop<Exponential> {
 public:
 	// mean is provided in seconds
 	PoissonOpenLoop(int id, clockwork::Model* model, int rng_seed, double rate) : 
-		OpenLoop(id, model, rng_seed, Poisson(1000000000.0 / rate)) {
+		// Exponential requires the rate parameter. Here, we translate the
+		// rate parameter, which is in requests/second, into requests/nanosecond
+		OpenLoop(id, model, rng_seed, Exponential(rate / 1000000000.0)) {
 	}
 
 };
@@ -274,14 +277,14 @@ public:
 };
 
 
-class BurstyPoissonClosedLoop : public BurstyClosedLoop<Poisson, Poisson> {
+class BurstyPoissonClosedLoop : public BurstyClosedLoop<Exponential, Exponential> {
 public:
 	// mean is provided in seconds
 	BurstyPoissonClosedLoop(int id, clockwork::Model* model, unsigned concurrency,
 		int rng_seed, double burstIntervalSeconds, double burstDurationSeconds) : 
 		BurstyClosedLoop(id, model, concurrency, rng_seed,
-			Poisson(1000000000.0 * burstIntervalSeconds),
-			Poisson(1000000000.0 * burstDurationSeconds)) {
+			Exponential(1 / (1000000000.0 * burstIntervalSeconds)),
+			Exponential(1 / (1000000000.0 * burstDurationSeconds))) {
 	}
 
 };
@@ -351,15 +354,15 @@ public:
 
 };
 
-class BurstyPoissonOpenLoop : public BurstyOpenLoop<Poisson, Poisson, Poisson> {
+class BurstyPoissonOpenLoop : public BurstyOpenLoop<Exponential, Exponential, Exponential> {
 public:
 	// mean is provided in seconds
 	BurstyPoissonOpenLoop(int id, clockwork::Model* model, int rng_seed, 
 			double rate, double burstDurationSeconds, double idleDurationSeconds) : 
 		BurstyOpenLoop(id, model, rng_seed, 
-			Poisson(1000000000.0 / rate),
-			Poisson(1000000000.0 * burstDurationSeconds),
-			Poisson(1000000000.0 * idleDurationSeconds)) {
+			Exponential(rate / 1000000000.0),
+			Exponential(1 / (1000000000.0 * burstDurationSeconds)),
+			Exponential(1 / (1000000000.0 * idleDurationSeconds))) {
 	}
 
 };
@@ -406,7 +409,7 @@ public:
 		current_interval = (interval % intervals.size());
 		SetTimeout(interval_duration, [this, interval]() { Advance(interval+1); });
 		if (intervals[interval] > 0) {
-			uint64_t timeout = rng() % (distribution(rng) / intervals[interval]);
+			uint64_t timeout = rng() % ((uint64_t)(distribution(rng) / intervals[interval]));
 			SetTimeout(timeout, [this, interval]() { Submit(interval); });
 		}
 	}
@@ -421,7 +424,7 @@ public:
 
 };
 
-class PoissonTraceReplay : public TraceReplay<Poisson> {
+class PoissonTraceReplay : public TraceReplay<Exponential> {
 public:
 
 	PoissonTraceReplay(int id, clockwork::Model* model, int rng_seed,
@@ -430,7 +433,7 @@ public:
 		double interval_duration_seconds = 60.0,
 		int start_at = 0 // which interval to start at.  if set to -1, will randomise
 	) : TraceReplay(id, model, rng_seed, interval_rates, interval_duration_seconds, start_at,
-			Poisson(60000000000.0 / scale_factor)) {
+			Exponential(scale_factor / 60000000000.0)) {
 	}
 
 };
