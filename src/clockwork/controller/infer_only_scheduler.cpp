@@ -81,29 +81,29 @@ void InferOnlyScheduler::Model::enqueue(Request* request) {
     queue.push(request);
 }
 
-void InferOnlyScheduler::Model::check_timeouts(uint64_t now) {
+void InferOnlyScheduler::Model::check_timeouts(GPU* gpu, uint64_t now) {
     while (!queue.empty()) {
         Request* request = queue.front();
-        if (request->deadline >= now + estimate(1)) break;
+        if (request->deadline >= now + estimate(1, gpu->tracker.clock())) break;
 
         queue.pop();
         request->timeout(now);
         delete request;
     }
-    if (queue.empty()) assigned_gpu = nullptr;
 }
 
-InferOnlyScheduler::Action* InferOnlyScheduler::Model::try_dequeue(uint64_t free_at, uint64_t expected_request_id) {
+InferOnlyScheduler::Action* InferOnlyScheduler::Model::try_dequeue(GPU* gpu, uint64_t free_at, uint64_t expected_request_id) {
     if (queue.empty()) return nullptr;
     if (queue.front()->id > expected_request_id) return nullptr;
 
-    check_timeouts(free_at);
+    check_timeouts(gpu, free_at);
 
     unsigned max_batch_size = batch_lookup[std::min(batch_lookup.size()-1, queue.size())];
     if (max_batch_size == 0) return nullptr;
 
     uint64_t batch_deadline = queue.front()->deadline;
 
+    int clock = gpu->tracker.clock();
     unsigned batch_size = 1;
     Action* action = new Action(this);
     while (true) {
@@ -112,16 +112,15 @@ InferOnlyScheduler::Action* InferOnlyScheduler::Model::try_dequeue(uint64_t free
             queue.pop();
         }
 
-        batch_size *= 2;
-        if (batch_size > max_batch_size) break;
+        if (batch_size * 2 > max_batch_size) break;
 
-        uint64_t exec = estimate(batch_size);
+        uint64_t exec = estimate(batch_size * 2, clock);
         if (free_at + exec > batch_deadline) break;
-    }
-    action->set_expectations(free_at, estimate(action->requests.size()), assigned_gpu->tracker.clock());
-    action->batch();
 
-    if (queue.empty()) assigned_gpu = nullptr;
+        batch_size *= 2;
+    }
+    action->set_expectations(free_at, estimate(batch_size, clock), clock);
+    action->batch();
 
     return action;
 }
@@ -138,9 +137,9 @@ void InferOnlyScheduler::Model::add_measurement(unsigned batch_size, uint64_t du
     estimates[batch_size] = estimator->get_percentile(InferOnlyScheduler::estimate_percentile);
 }
 
-uint64_t InferOnlyScheduler::Model::estimate(unsigned batch_size) {
+uint64_t InferOnlyScheduler::Model::estimate(unsigned batch_size, int clock) {
     unsigned effective_batch_size = batch_lookup[batch_size];
-    return estimates[effective_batch_size] / assigned_gpu->tracker.clock();
+    return estimates[effective_batch_size] / clock;
 }
 
 InferOnlyScheduler::Action::Action(Model* model) : model(model) {
@@ -212,7 +211,7 @@ void InferOnlyScheduler::Action::set_expectations(uint64_t exec_start, uint64_t 
     action->expected_exec_complete = exec_start + duration;
     action->expected_gpu_clock = clock;
     action->earliest = util::now();
-    action->latest = action->expected_exec_complete;
+    action->latest = std::max(action->expected_exec_complete, action->earliest+InferOnlyScheduler::schedule_ahead);
 }
 
 InferOnlyScheduler::GPU::GPU() : tracker(InferOnlyScheduler::default_clock) {
@@ -242,7 +241,7 @@ void InferOnlyScheduler::GPU::check_pending() {
         auto &next = scheduler->queue.front();
         scheduler->queue.pop();
 
-        Action* action = next.model->try_dequeue(available, next.request_id);
+        Action* action = next.model->try_dequeue(this, available, next.request_id);
         if (action != nullptr) {
             send_action(action);
         }
@@ -256,9 +255,6 @@ void InferOnlyScheduler::GPU::handle_error(Action* action, std::shared_ptr<worke
     
     // Update GPU state tracking
     tracker.error(error->id, util::now());
-
-    // Schedule next
-    check_pending();
 
     action->set_error(error);
     CHECK(action->complete(util::now()) == 0) << "ErrorResult should not result in successful requests";
@@ -277,9 +273,6 @@ void InferOnlyScheduler::GPU::handle_success(Action* action, std::shared_ptr<wor
 
     // Update model execution tracking
     action->model->add_measurement(action->action->batch_size, result->exec.duration, result->gpu_clock);
-
-    // Schedule next
-    check_pending();
 
     action->set_result(result);
     action->telemetry.goodput = action->complete(util::now());
@@ -397,15 +390,7 @@ void InferOnlyScheduler::handle_request(Request* request) {
     Model* model = it->second;
     model->enqueue(request);
 
-    if (model->assigned_gpu == nullptr) {
-        model->assigned_gpu = gpu_fifo.front();
-        gpu_fifo.pop();
-        gpu_fifo.push(model->assigned_gpu);
-    }
-
-
     queue.push(QueueElement{request->id, model});
-    model->assigned_gpu->check_pending();
 }
 
 void InferOnlyScheduler::handle_result(std::shared_ptr<workerapi::Result> result) {
@@ -417,7 +402,6 @@ void InferOnlyScheduler::handle_result(std::shared_ptr<workerapi::Result> result
     outstanding_actions.erase(it);
 
     o.gpu->handle_result(o.action, result);
-    o.gpu->check_pending();
 }
 
 void InferOnlyScheduler::run() {
@@ -444,16 +428,22 @@ void InferOnlyScheduler::run() {
     printer = ControllerActionTelemetry::log_and_summarize(actions_filename, print_interval);
 
     // Start processing actions + results
+    unsigned start = 0;
     while (true) {
         Request* request;
-        if (request_queue.try_pop(request)) {
+        while (request_queue.try_pop(request)) {
             handle_request(request);
         }
 
         std::shared_ptr<workerapi::Result> result;
-        if (result_queue.try_pop(result)) {
+        while (result_queue.try_pop(result)) {
             handle_result(result);
         }
+
+        for (unsigned i = 0; i < gpus.size(); i++) {
+            gpus[(i + start) % gpus.size()]->check_pending();
+        }
+        start = (start + 1) % gpus.size();
     }
 }
 

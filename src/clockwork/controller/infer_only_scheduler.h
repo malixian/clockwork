@@ -17,13 +17,13 @@ class InferOnlyScheduler : public Scheduler {
 
     static const uint64_t print_interval = 10000000000UL; // 10 seconds
     static const uint64_t slo = 100000000UL; // 100ms
-    static const uint64_t buffer = 2000000UL; // 2ms buffer
-    static const uint64_t default_clock = 1380; // 2ms buffer
+    static const uint64_t buffer = 5000000UL; // 5ms buffer
+    static const uint64_t default_clock = 1380; // default gpu clock speed
     static const bool print_debug = false;
-    static const int estimate_window_size = 100;
+    static const int estimate_window_size = 10;
     static const float estimate_percentile;
 
-    static const uint64_t schedule_ahead = 4000000UL; // schedule 4ms into the future
+    static const uint64_t schedule_ahead = 10000000UL; // schedule 10ms into the future
 
 
 
@@ -81,16 +81,15 @@ class InferOnlyScheduler : public Scheduler {
         uint64_t request_id_seed = 0;
         unsigned id;
 
-        GPU* assigned_gpu = nullptr;
         std::queue<Request*> queue;
 
         Model(BatchedModelState &state);
 
         void enqueue(Request* request);
-        void check_timeouts(uint64_t now);
-        Action* try_dequeue(uint64_t gpu_free_at, uint64_t expected_request_id);
+        void check_timeouts(GPU* gpu, uint64_t now);
+        Action* try_dequeue(GPU* gpu, uint64_t gpu_free_at, uint64_t expected_request_id);
         void add_measurement(unsigned batch_size, uint64_t duration, unsigned gpu_clock);
-        uint64_t estimate(unsigned batch_size);
+        uint64_t estimate(unsigned batch_size, int clock);
     };
 
     class GPU {
