@@ -192,12 +192,14 @@ void ControllerRequestTelemetry::set(clientapi::InferenceResponse &response) {
 void ControllerActionTelemetry::set(std::shared_ptr<workerapi::Infer> &infer) {
 	action_id = infer->id;
 	gpu_id = infer->gpu_id;
+	worker_id = infer->worker_id;
 	action_type = workerapi::inferAction;
 	batch_size = infer->batch_size;
 	model_id = infer->model_id;
 	earliest = infer->earliest;
 	latest = infer->latest;
 	expected_duration = infer->expected_duration;
+	expected_exec_complete = infer->expected_exec_complete;
 	expected_gpu_clock = infer->expected_gpu_clock;
 	action_sent = util::now();
 }

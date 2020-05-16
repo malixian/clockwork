@@ -138,7 +138,9 @@ public:
 	char* input;
 
 	// Not actually sent to workers; here for convenience
+	int worker_id = -1;
 	int expected_gpu_clock = 0;
+	uint64_t expected_exec_complete = 0;
 	
 	virtual std::string str();
 };

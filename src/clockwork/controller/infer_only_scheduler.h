@@ -45,6 +45,9 @@ class InferOnlyScheduler : public Scheduler {
         std::shared_ptr<workerapi::ErrorResult> error = nullptr;
         std::shared_ptr<workerapi::InferResult> result = nullptr;
         std::vector<Request*> requests;
+        uint64_t expected_duration;
+        uint64_t expected_exec_complete;
+        int expected_gpu_clock;
 
         explicit Action(Model* model);
         ~Action();
@@ -74,7 +77,7 @@ class InferOnlyScheduler : public Scheduler {
 
         void enqueue(Request* request);
         void check_timeouts(uint64_t now);
-        Action* try_dequeue(uint64_t expected_request_id);
+        Action* try_dequeue(uint64_t gpu_free_at, uint64_t expected_request_id);
         void add_measurement(unsigned batch_size, uint64_t duration, unsigned gpu_clock);
         uint64_t estimate(unsigned batch_size);
     };
@@ -86,11 +89,12 @@ class InferOnlyScheduler : public Scheduler {
 
         unsigned gpu_id;
         unsigned worker_id;
-        unsigned outstanding = 0;
+        uint64_t free_at = 0;
         int clock = InferOnlyScheduler::default_clock;
 
         void send_action(Action* action);
         void check_pending();
+        void adjust_clock(uint64_t expected_duration, uint64_t actual_duration);
         void handle_error(Action* action, std::shared_ptr<workerapi::ErrorResult> &error);
         void handle_success(Action* action, std::shared_ptr<workerapi::InferResult> &result);
         void handle_result(Action* action, std::shared_ptr<workerapi::Result> &result);
@@ -102,7 +106,8 @@ class InferOnlyScheduler : public Scheduler {
     static const uint64_t buffer = 2000000UL; // 2ms buffer
     static const uint64_t default_clock = 1380; // 2ms buffer
     static const bool print_debug = false;
-    static const unsigned max_outstanding = 2;
+
+    static const uint64_t schedule_ahead = 4000000UL; // schedule 4ms into the future
 
     // Clockwork State
     std::vector<GPU*> gpus;
