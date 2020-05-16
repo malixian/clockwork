@@ -1042,3 +1042,44 @@ TEST_CASE("Input Infer and Output Multiple GPUs", "[task]") {
 		free(copy_output_tasks[i]);
 	}
 }
+
+
+
+
+TEST_CASE("Test estimator", "[estimator]") {
+    util::SlidingWindow window(3);
+
+    window.insert(7);
+    REQUIRE(window.get_value(0) == 7);
+    REQUIRE(window.get_size() == 1);
+
+    window.insert(5);
+    REQUIRE(window.get_value(0) == 5);
+    REQUIRE(window.get_value(1) == 7);
+    REQUIRE(window.get_size() == 2);
+
+    window.insert(9);
+    REQUIRE(window.get_value(0) == 5);
+    REQUIRE(window.get_value(1) == 7);
+    REQUIRE(window.get_value(2) == 9);
+    REQUIRE(window.get_size() == 3);
+
+    window.insert(11);
+    REQUIRE(window.get_value(0) == 5);
+    REQUIRE(window.get_value(1) == 9);
+    REQUIRE(window.get_value(2) == 11);
+    REQUIRE(window.get_size() == 3);
+
+    window.insert(2);
+    REQUIRE(window.get_value(0) == 2);
+    REQUIRE(window.get_value(1) == 9);
+    REQUIRE(window.get_value(2) == 11);
+    REQUIRE(window.get_size() == 3);
+
+    window.insert(2);
+    REQUIRE(window.get_value(0) == 2);
+    REQUIRE(window.get_value(1) == 2);
+    REQUIRE(window.get_value(2) == 11);
+    REQUIRE(window.get_size() == 3);
+
+}
