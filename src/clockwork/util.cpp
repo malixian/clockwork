@@ -303,5 +303,30 @@ unsigned GPUClockState::get(unsigned gpu_id) {
   return clock[gpu_id];
 }
 
+/* Pre- and post-condition: q.size() == oms.size() */
+void SlidingWindow::insert(uint64_t latest) {
+	q.push_back(latest);
+	oms.insert(latest);
+	if (q.size() > window_size) {
+		uint64_t oldest = q.front();
+		q.pop_front();
+		auto it=oms.upper_bound (oldest);
+		oms.erase(it); // Assumption: *it == oldest
+	}
+}
+
+void SlidingWindow::test() {
+	std::cout << "Testing SlidingWindow" << std::endl;
+	SlidingWindow sw(5);
+	std::vector<uint64_t> items {12, 505, 30, 1000, 100, 504, 1, 122, 8987, 1, 1};
+	for (unsigned i = 0; i < items.size(); i++) { sw.insert(items[i]); }
+	CHECK(sw.get_size() == 5);
+	CHECK(sw.get_value(0) == 1);
+	CHECK(sw.get_value(1) == 1);
+	CHECK(sw.get_value(2) == 1);
+	CHECK(sw.get_value(3) == 122);
+	CHECK(sw.get_value(4) == 8987);
+}
+
 }
 }
