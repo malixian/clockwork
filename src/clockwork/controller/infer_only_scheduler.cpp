@@ -70,10 +70,9 @@ InferOnlyScheduler::Model::Model(BatchedModelState &state) : id(state.id) {
         if (it == state.exec_duration.end()) {
             estimates[batch_size] = 1000000UL; // Start with 0.1ms estimate
         } else {
-            estimates[batch_size] = it->second * InferOnlyScheduler::default_clock * 0.75;
+            estimates[batch_size] = it->second * InferOnlyScheduler::default_clock;
         }
-        estimators[batch_size] = new util::SlidingWindow();
-        estimators[batch_size]->insert(estimates[batch_size]);
+        estimators[batch_size] = new util::SlidingWindow(InferOnlyScheduler::estimate_window_size);
     }
 }
 
@@ -85,7 +84,7 @@ void InferOnlyScheduler::Model::enqueue(Request* request) {
 void InferOnlyScheduler::Model::check_timeouts(uint64_t now) {
     while (!queue.empty()) {
         Request* request = queue.front();
-        if (request->deadline >= now + estimates[1]/ assigned_gpu->clock) break;
+        if (request->deadline >= now + estimate(1)) break;
 
         queue.pop();
         request->timeout(now);
@@ -121,7 +120,7 @@ InferOnlyScheduler::Action* InferOnlyScheduler::Model::try_dequeue(uint64_t free
     }
     action->expected_duration = estimate(action->requests.size());
     action->expected_exec_complete = free_at + action->expected_duration;
-    action->expected_gpu_clock = assigned_gpu->clock;
+    action->expected_gpu_clock = assigned_gpu->tracker.clock();
     action->batch();
 
     if (queue.empty()) assigned_gpu = nullptr;
@@ -129,14 +128,16 @@ InferOnlyScheduler::Action* InferOnlyScheduler::Model::try_dequeue(uint64_t free
     return action;
 }
 
+
+const float InferOnlyScheduler::estimate_percentile = 0.99;
+
 void InferOnlyScheduler::Model::add_measurement(unsigned batch_size, uint64_t duration, unsigned gpu_clock) {
     auto it = estimators.find(batch_size);
     CHECK(it != estimators.end()) << "Unsupported batch size " << batch_size;
     auto estimator = it->second;
     estimator->insert(duration * gpu_clock);
 
-    unsigned rank = estimator->get_size() - 1; // by default, get max value
-    estimates[batch_size] = estimator->get_value(rank);
+    estimates[batch_size] = estimator->get_percentile(InferOnlyScheduler::estimate_percentile);
 }
 
 uint64_t InferOnlyScheduler::Model::estimate(unsigned batch_size) {
@@ -194,7 +195,6 @@ void InferOnlyScheduler::Action::set_error(std::shared_ptr<workerapi::ErrorResul
 void InferOnlyScheduler::Action::set_result(std::shared_ptr<workerapi::InferResult> &result) {
     this->result = result;
     this->unbatch();
-    model->add_measurement(action->batch_size, result->exec.duration, result->gpu_clock);
 }
 
 float InferOnlyScheduler::Action::complete(uint64_t now) {
@@ -210,17 +210,23 @@ float InferOnlyScheduler::Action::complete(uint64_t now) {
     return successful_requests / total_requests;
 }
 
+InferOnlyScheduler::GPU::GPU() : tracker(InferOnlyScheduler::default_clock) {
+}
+
 void InferOnlyScheduler::GPU::send_action(Action* action) {
     auto &infer = action->action;
     infer->gpu_id = gpu_id;
     infer->worker_id = worker_id;
     infer->expected_duration = action->expected_duration;
     infer->expected_exec_complete = action->expected_exec_complete;
+    infer->expected_gpu_clock = action->expected_gpu_clock;
 
     action->telemetry.set(infer);
 
+    // Update GPU state
+    tracker.add(infer->id, action->expected_duration);
+
     // Save it and send
-    free_at = action->expected_exec_complete;
     scheduler->outstanding_actions[infer->id] = {this, action};
     worker->sendAction(infer);
 
@@ -229,32 +235,27 @@ void InferOnlyScheduler::GPU::send_action(Action* action) {
 
 void InferOnlyScheduler::GPU::check_pending() {
     uint64_t schedule_until = util::now() + schedule_ahead;
-    while (free_at < schedule_until && scheduler->queue.size() > 0) {
+    uint64_t available;
+    while ((available = tracker.available()) < schedule_until && scheduler->queue.size() > 0) {
         auto &next = scheduler->queue.front();
         scheduler->queue.pop();
 
-        uint64_t free_at = std::max(this->free_at, util::now() + 1000000UL);
-        Action* action = next.model->try_dequeue(free_at, next.request_id);
+        Action* action = next.model->try_dequeue(available, next.request_id);
         if (action != nullptr) {
             send_action(action);
         }
     }
 }
 
-void InferOnlyScheduler::GPU::adjust_clock(uint64_t expected_duration, uint64_t actual_duration) {
-    free_at = std::max(util::now(), free_at + actual_duration - expected_duration);
-}
-
 void InferOnlyScheduler::GPU::handle_error(Action* action, std::shared_ptr<workerapi::ErrorResult> &error) {
     std::cout << ("Worker  --> " + error->str() + "\n");
-    
+
     action->telemetry.set(error);
+    
+    // Update GPU state tracking
+    tracker.error(error->id, util::now());
 
-    uint64_t now = util::now();
-    if (action->expected_exec_complete > now) {
-        free_at = std::max(util::now(), free_at - (action->expected_exec_complete - now));
-    }
-
+    // Schedule next
     check_pending();
 
     action->set_error(error);
@@ -267,9 +268,15 @@ void InferOnlyScheduler::GPU::handle_error(Action* action, std::shared_ptr<worke
 
 void InferOnlyScheduler::GPU::handle_success(Action* action, std::shared_ptr<workerapi::InferResult> &result) {
     action->telemetry.set(result);
-    adjust_clock(action->expected_duration, result->exec.duration);
-    clock = result->gpu_clock;
 
+    // Update GPU state tracking
+    tracker.success(result->id, result->exec.end);
+    tracker.update_clock(result->gpu_clock);
+
+    // Update model execution tracking
+    action->model->add_measurement(action->action->batch_size, result->exec.duration, result->gpu_clock);
+
+    // Schedule next
     check_pending();
 
     action->set_result(result);

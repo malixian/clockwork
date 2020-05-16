@@ -14,6 +14,19 @@ namespace clockwork {
 
 class InferOnlyScheduler : public Scheduler {
  public:
+
+    static const uint64_t print_interval = 10000000000UL; // 10 seconds
+    static const uint64_t slo = 100000000UL; // 100ms
+    static const uint64_t buffer = 2000000UL; // 2ms buffer
+    static const uint64_t default_clock = 1380; // 2ms buffer
+    static const bool print_debug = false;
+    static const int estimate_window_size = 100;
+    static const float estimate_percentile;
+
+    static const uint64_t schedule_ahead = 4000000UL; // schedule 4ms into the future
+
+
+
     class Request {
      public:
         uint64_t id;
@@ -86,28 +99,21 @@ class InferOnlyScheduler : public Scheduler {
      public:
         InferOnlyScheduler* scheduler;
         network::controller::WorkerConnection* worker;
+        util::WorkerTracker tracker;
 
         unsigned gpu_id;
         unsigned worker_id;
-        uint64_t free_at = 0;
         int clock = InferOnlyScheduler::default_clock;
+
+        GPU();
 
         void send_action(Action* action);
         void check_pending();
-        void adjust_clock(uint64_t expected_duration, uint64_t actual_duration);
         void handle_error(Action* action, std::shared_ptr<workerapi::ErrorResult> &error);
         void handle_success(Action* action, std::shared_ptr<workerapi::InferResult> &result);
         void handle_result(Action* action, std::shared_ptr<workerapi::Result> &result);
         unsigned load_model_weights();
     };
-
-    static const uint64_t print_interval = 10000000000UL; // 10 seconds
-    static const uint64_t slo = 100000000UL; // 100ms
-    static const uint64_t buffer = 2000000UL; // 2ms buffer
-    static const uint64_t default_clock = 1380; // 2ms buffer
-    static const bool print_debug = false;
-
-    static const uint64_t schedule_ahead = 4000000UL; // schedule 4ms into the future
 
     // Clockwork State
     std::vector<GPU*> gpus;

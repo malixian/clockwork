@@ -9,6 +9,7 @@
 #include <map>
 #include <thread>
 #include <atomic>
+#include <deque>
 
 /* These two files are included for the Order Statistics Tree. */
 #include <ext/pb_ds/assoc_container.hpp>
@@ -150,6 +151,73 @@ public:
 	}
 	void insert(uint64_t latest);
 };
+
+
+
+class WorkerTracker {
+private:
+	struct Work { int id; uint64_t size; };
+	int clock_;
+	uint64_t work_begin;
+	std::deque<Work> outstanding;
+	uint64_t total_outstanding = 0;
+
+	void update(int id, uint64_t time_of_completion, bool success) {
+		if (outstanding.front().id == id) {
+			total_outstanding -= outstanding.front().size;
+			work_begin = time_of_completion;
+			outstanding.pop_front();
+		} else {
+			// the work was done but we don't know when
+			for (auto it = outstanding.begin(); it != outstanding.end(); ){
+				if (it->id == id) {
+					total_outstanding -= it->size;
+					if (success) work_begin += it->size/clock_;
+					outstanding.erase(it);
+					break;
+				}
+			}
+		}
+	}
+
+public:
+
+	WorkerTracker(int clock) : clock_(clock) {}
+
+	// Returns the time outstanding work will complete
+	uint64_t available() {
+		return std::max(work_begin + total_outstanding / clock_, now());
+	}
+
+	int clock() {
+		return clock_;
+	}
+
+	void update_clock(int clock) {
+		this->clock_ = clock;
+	}
+
+	void add(int id, uint64_t work_size) {
+		if (outstanding.empty()) {
+			work_begin = now();
+		}
+		uint64_t size = work_size * clock_;
+		outstanding.push_back({id, size});
+		total_outstanding += size;
+	}
+
+	void success(int id, uint64_t time_of_completion) {
+		update(id, time_of_completion, true);
+	}
+
+	void error(int id, uint64_t time_of_completion) {
+		update(id, time_of_completion, false);
+	}
+
+};
+
+
+
 
 #define DEBUG_PRINT(msg) \
 	std::cout << __FILE__ << "::" << __LINE__ << "::" << __FUNCTION__ << " "; \
