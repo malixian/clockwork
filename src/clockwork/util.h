@@ -95,7 +95,8 @@ class GPUClockState {
 
 };
 
-class SlidingWindow {
+template <typename T> 
+class SlidingWindowT {
 private:
 	unsigned window_size;
 
@@ -112,9 +113,9 @@ private:
 	     -- https://www.geeksforgeeks.org/order-statistic-tree-using-fenwick-tree-bit/ */
 
 	typedef __gnu_pbds::tree<
-		uint64_t,
+		T,
 		__gnu_pbds::null_type,
-		std::less_equal<uint64_t>,
+		std::less_equal<T>,
 		__gnu_pbds::rb_tree_tag,
 		__gnu_pbds::tree_order_statistics_node_update> OrderedMultiset;
 
@@ -127,29 +128,48 @@ private:
 	   is always equal to the upper bound. Thus, we have:
 			-- Invariant 1: q.size() == oms.size()
 			-- Invariant 2: q.size() <= window_size */
-	std::list<uint64_t> q;
+	std::list<T> q;
 	OrderedMultiset oms;
 
 public:
-	SlidingWindow() : window_size(100) {}
-	SlidingWindow(unsigned window_size) : window_size(window_size) {}
-
-	/* A simple test case */
-	static void test();
+	SlidingWindowT() : window_size(100) {}
+	SlidingWindowT(unsigned window_size) : window_size(window_size) {}
 
 	/* Assumption: q.size() == oms.size() */
 	unsigned get_size() { return q.size(); }
 
 	/* Requirement: rank < oms.size() */
-	uint64_t get_value(unsigned rank) { return (*(oms.find_by_order(rank))); }
-	uint64_t get_percentile(float percentile) {
+	T get_value(unsigned rank) { return (*(oms.find_by_order(rank))); }
+	T get_percentile(float percentile) {
 		float position = percentile * (q.size() - 1);
 		unsigned up = ceil(position);
 		unsigned down = floor(position);
 		if (up == down) return get_value(up);
 		return get_value(up) * (position - down) + get_value(down) * (up - position);
 	}
-	void insert(uint64_t latest);
+	T get_min() { return get_value(0); }
+	T get_max() { return get_value(q.size()-1); }
+	void insert(T latest) {
+		q.push_back(latest);
+		oms.insert(latest);
+		if (q.size() > window_size) {
+			uint64_t oldest = q.front();
+			q.pop_front();
+			auto it=oms.upper_bound (oldest);
+			oms.erase(it); // Assumption: *it == oldest
+		}
+	}
+	
+	SlidingWindowT(unsigned window_size, T initial_value) : window_size(window_size) {
+		insert(initial_value);
+	}
+};
+
+class SlidingWindow : public SlidingWindowT<uint64_t> {
+
+public:
+	SlidingWindow() : SlidingWindowT(100) {}
+	SlidingWindow(unsigned window_size) : SlidingWindowT(window_size) {}
 };
 
 

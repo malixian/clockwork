@@ -8,6 +8,7 @@
 #include <asio.hpp>
 #include "clockwork/network/message.h"
 #include "tbb/concurrent_queue.h"
+#include "clockwork/util.h"
 
 namespace clockwork {
 namespace network {
@@ -33,8 +34,10 @@ public:
 
   // time synchronization
   void synchronize(int64_t local_delta, int64_t remote_delta) {
-    if (local_delta < local_delta_) local_delta_ = local_delta;
-    if (remote_delta < remote_delta_) remote_delta_ = remote_delta;
+    local_delta_tracker.insert(local_delta);
+    remote_delta_tracker.insert(remote_delta);
+    local_delta_ = local_delta_tracker.get_min();
+    remote_delta_ = remote_delta_tracker.get_min();
   }
 
   int64_t estimate_clock_delta() {
@@ -49,7 +52,8 @@ public:
 
   int64_t local_delta_ = INT64_MAX;
   int64_t remote_delta_ = INT64_MAX;
-
+  util::SlidingWindowT<int64_t> local_delta_tracker = util::SlidingWindowT<int64_t>(32);
+  util::SlidingWindowT<int64_t> remote_delta_tracker = util::SlidingWindowT<int64_t>(32);
 
 };
 
