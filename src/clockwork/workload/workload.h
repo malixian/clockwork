@@ -370,8 +370,9 @@ public:
 template <typename TDISTRIBUTION> 
 class TraceReplay : public Workload {
 public:
-	bool randomise_start = false;
-	unsigned current_interval;
+	bool randomise_start;
+	unsigned starting_interval;
+
 	std::vector<unsigned> intervals;
 	uint64_t interval_duration;
 	std::minstd_rand rng;
@@ -389,34 +390,57 @@ public:
 	{
 		CHECK(intervals.size() > 0) << "Cannot create TraceReplay without intervals";
 		if (start_at < 0) {
-			start_at = rng();
+			starting_interval = start_at % intervals.size();
 			randomise_start = true;
+		} else {
+			starting_interval = 0;
+			randomise_start = false;
 		}
-		current_interval = start_at % intervals.size();
 	}
 
-	void Submit(unsigned interval) {
-		if (interval == current_interval) {
-			Infer(0);
-			if (intervals[interval] > 0) {
-				uint64_t timeout = distribution(rng) / intervals[interval];
-				SetTimeout(timeout, [this, interval]() { Submit(interval); });
+	void Submit(unsigned interval, uint64_t remaining, uint64_t next_arrival) {
+		unsigned rate = intervals[interval];
+		// std::cout << "Interval " << interval << ", rate=" << rate << ", remaining=" << remaining << ", next=" << next_arrival << std::endl;
+		if (rate == 0) {
+			SetTimeout(remaining, [this, interval, next_arrival]() {
+				Submit(
+					(interval + 1) % intervals.size(),
+					interval_duration,
+					next_arrival
+				);
+			});
+		} else {
+			uint64_t timeout = next_arrival / rate;
+			if (timeout <= remaining) {
+				remaining -= timeout;
+				SetTimeout(timeout, [this, interval, remaining]() {
+					Infer(0);
+					Submit(
+						interval, 
+						remaining, 
+						distribution(rng)
+					);
+				});
+			} else {
+				next_arrival = (timeout - remaining) * rate;
+				SetTimeout(remaining, [this, interval, next_arrival]() {
+					Submit(
+						(interval + 1) % intervals.size(), 
+						interval_duration, 
+						next_arrival
+					);
+				});
 			}
 		}
 	}
 
-	void Advance(uint64_t interval) {
-		current_interval = (interval % intervals.size());
-		SetTimeout(interval_duration, [this, interval]() { Advance(interval+1); });
-		if (intervals[interval] > 0) {
-			uint64_t timeout = rng() % (1 + ((uint64_t)(distribution(rng) / intervals[interval])));
-			SetTimeout(timeout, [this, interval]() { Submit(interval); });
-		}
-	}
-
 	void Start(uint64_t now) {
-		uint64_t start_at = randomise_start ? rng() % interval_duration : 0;
-		SetTimeout(start_at, [this]() { Advance(current_interval); });
+		// Determing starting point in interval
+		uint64_t remaining = interval_duration;
+		if (randomise_start) remaining = rng() % remaining;
+
+		uint64_t next_arrival = distribution(rng);
+		Submit(starting_interval, remaining, next_arrival);
 	}
 
 	void InferComplete(uint64_t now, unsigned model_index) {}

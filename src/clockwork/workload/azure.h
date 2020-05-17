@@ -68,6 +68,7 @@ std::vector<std::vector<unsigned>> read_trace_data(std::string filename) {
 	std::vector<std::vector<unsigned>> results;
 
 	std::string line;
+	std::getline(f, line); // Skip headers
 	while (std::getline(f, line)) {
 		results.push_back(process_trace_line(line, 4));
 	}
