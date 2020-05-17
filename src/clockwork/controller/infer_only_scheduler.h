@@ -17,7 +17,7 @@ class InferOnlyScheduler : public Scheduler {
 
     static const uint64_t print_interval = 10000000000UL; // 10 seconds
     static const uint64_t slo = 100000000UL; // 100ms
-    static const uint64_t buffer = 5000000UL; // 5ms buffer
+    static const uint64_t buffer = 10000000UL; // 10ms buffer
     static const uint64_t default_clock = 1380; // default gpu clock speed
     static const bool print_debug = false;
     static const int estimate_window_size = 10;
@@ -119,9 +119,6 @@ class InferOnlyScheduler : public Scheduler {
     std::string actions_filename;
     ControllerActionTelemetryLogger* printer;
     std::thread thread;
-
-    // Algorithm State
-    std::queue<GPU*> gpu_fifo;
 
     // Messages
     tbb::concurrent_queue<std::shared_ptr<workerapi::Result>> result_queue;

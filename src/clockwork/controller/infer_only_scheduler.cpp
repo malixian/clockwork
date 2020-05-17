@@ -49,7 +49,7 @@ bool InferOnlyScheduler::Request::complete(uint64_t now) {
 
     callback(response);
 
-    return response.header.status == clockworkSuccess && departure <= deadline;
+    return response.header.status == clockworkSuccess && departure <= response.deadline;
 }
 
 void InferOnlyScheduler::Request::timeout(uint64_t now) {
@@ -359,9 +359,10 @@ void InferOnlyScheduler::initialize_gpus(std::vector<network::controller::Worker
             gpu->worker_id = worker.id;
             gpu->gpu_id = gpustate.id;
             gpus.push_back(gpu);
-            gpu_fifo.push(gpu);
+            std::cout << "Create Worker-" << gpu->worker_id << " GPU-" << gpu->gpu_id << std::endl;
         }
     }
+    std::cout << "Created " << gpus.size() << " Worker-GPUs" << std::endl;
 }
 
 

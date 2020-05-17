@@ -178,7 +178,7 @@ class WorkerTracker {
 private:
 	struct Work { int id; uint64_t size; };
 	int clock_;
-	uint64_t work_begin;
+	uint64_t work_begin = 0;
 	std::deque<Work> outstanding;
 	uint64_t total_outstanding = 0;
 
