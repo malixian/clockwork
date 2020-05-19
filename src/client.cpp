@@ -40,9 +40,9 @@ void printUsage() {
 			  << "\t\t\t copies: number of model instances" << std::endl
 			  << "\t\t\t dist: arrival distribution (\"poisson\"/\"fixed-rate\")" << std::endl
 			  << "\t\t\t rate: arrival rate (in requests/second)" << std::endl
-			  << "\t\t\t slo-start: starting slo value (in ms)" << std::endl
-			  << "\t\t\t slo-end: ending slo value (in ms)" << std::endl
-			  << "\t\t\t slo-factor: factor by which the slo should change" << std::endl
+			  << "\t\t\t slo-start: starting slo multiplier" << std::endl
+			  << "\t\t\t slo-end: ending slo multiplier" << std::endl
+			  << "\t\t\t slo-factor: factor by which the slo multiplier should change" << std::endl
 			  << "\t\t\t slo-op: operator (\"add\"/\"mul\") for incrementing slo" << std::endl
 			  << "\t\t\t period: number of seconds before changing slo" << std::endl
 			  << "\t\t Examples:" << std::endl
@@ -51,6 +51,26 @@ void printUsage() {
 			  << "\t\t\t client volta04:12346 slo-exp-1 resnet50_v2 4 poisson 100 10 100 10 add 3" << std::endl
 			  << "\t\t\t\t (increases slo every 3s as follows: 10 20 30 ... 100)" << std::endl
 			  << "\t\t In each case, an open loop client is used" << std::endl
+			  << "\t slo-exp-2 model copies-fg dist-fg rate-fg slo-start-fg slo-end-fg slo-factor-fg slo-op-fg period-fg copies-bg concurrency-bg slo-bg" << std::endl
+			  << "\t\t Description: Running latency-sensitive (foreground or FG) and batch (background or BG) workloads simultaneously" << std::endl
+			  << "\t\t Workload parameters:" << std::endl
+			  << "\t\t\t model: model name (e.g., \"resnet50_v2\")" << std::endl
+			  << "\t\t\t copies-fg: number of FG models" << std::endl
+			  << "\t\t\t dist-fg: arrival distribution (\"poisson\"/\"fixed-rate\") for open loop clients for FG models" << std::endl
+			  << "\t\t\t rate-fg: total arrival rate (in requests/second) for FG models" << std::endl
+			  << "\t\t\t slo-start-fg: starting slo multiplier for FG models" << std::endl
+			  << "\t\t\t slo-end-fg: ending slo multiplier for FG models" << std::endl
+			  << "\t\t\t slo-factor-fg: factor by which the slo multiplier should change for FG models" << std::endl
+			  << "\t\t\t slo-op-fg: operator (\"add\"/\"mul\") for applying param slo-factor-fg" << std::endl
+			  << "\t\t\t period-fg: number of seconds before changing FG models' slo" << std::endl
+			  << "\t\t\t copies-bg: number of BG models (for which requests arrive in closed loop)" << std::endl
+			  << "\t\t\t concurrency-bg: number of concurrent requests for BG model' closed loop clients" << std::endl
+			  << "\t\t\t slo-bg: slo multiplier for BG moels (ideally, should be a relaxed slo)" << std::endl
+			  << "\t\t Examples:" << std::endl
+			  << "\t\t\t client volta04:12346 slo-exp-2 resnet50_v2    2 poisson 200  2 32 2 mul 7    4 1 100" << std::endl
+			  << "\t\t\t\t (2 FG models with PoissonOpenLoop clients sending requests at 200 rps)" << std::endl
+			  << "\t\t\t\t (the SLO factor of each FG model is updated every 7 seconds as follows: 2 4 8 16 32)" << std::endl
+			  << "\t\t\t\t (4 BG models with a relaxed SLO factor of 100 and respective ClosedLoop clients configured with a concurrency factor of 1)" << std::endl
 			  << "\tazure" << std::endl
 			  << "\tazure_small" << std::endl;
 }
@@ -92,6 +112,9 @@ int main(int argc, char *argv[])
 	else if (workload == "simple-parametric")
 		engine = workload::simple_parametric(client,
 			std::stoul(argv[3]), std::stoul(argv[4]), std::stoul(argv[5]));
+	else if (workload == "poisson-open-loop")
+		engine = workload::poisson_open_loop(client, std::stoul(argv[3]),
+			std::stod(argv[4]));
 	else if (workload == "slo-exp-1")
 		engine = workload::slo_experiment_1(
 			client,
@@ -99,11 +122,26 @@ int main(int argc, char *argv[])
 			std::stoul(argv[4]),	// num of copies
 			std::string(argv[5]),	// arrival distribution
 			std::stod(argv[6]),		// arrival rate (requests/second)
-			std::stoull(argv[7]),	// starting slo (in ms)
-			std::stoull(argv[8]),	// ending slo (in ms)
-			std::stod(argv[9]),	    // slo increase factor
+			std::stoull(argv[7]),	// starting slo
+			std::stoull(argv[8]),	// ending slo
+			std::stod(argv[9]),		// slo increase factor
 			std::string(argv[10]),	// slo increase operator
 			std::stoull(argv[11]));	// slo step duration (in seconds)
+	else if (workload == "slo-exp-2")
+		engine = workload::slo_experiment_2(
+			client,
+			std::string(argv[3]), 	// model name
+			std::stoul(argv[4]),	// copies for FG models
+			std::string(argv[5]),	// arrival distribution for FG model clients
+			std::stod(argv[6]),		// arrival rate (requests/second) for FG model clients
+			std::stoull(argv[7]),	// starting SLO factor for FG models
+			std::stoull(argv[8]),	// ending SLO factor for FG models
+			std::stod(argv[9]),		// SLO increase factor for FG models
+			std::string(argv[10]),	// SLO increase operator for FG models
+			std::stoull(argv[11]),	// SLO step duration (in seconds) for FG models
+			std::stoul(argv[12]),	// copies for BG models
+			std::stoul(argv[13]),	// concurrency for BG model clients
+			std::stod(argv[14]));	// SLO factor for BG models
 	else if (workload == "azure")
 		engine = workload::azure(client);
 	else if (workload == "azure_small")
