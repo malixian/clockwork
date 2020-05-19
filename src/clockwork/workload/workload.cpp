@@ -126,19 +126,31 @@ void Workload::InferErrorInitializing(uint64_t now, unsigned model_index) {
 }
 
 ClosedLoop::ClosedLoop(int id, clockwork::Model* model, unsigned concurrency) :
-	Workload(id, model), concurrency(concurrency), num_requests(UINT_MAX) {
+	Workload(id, model), concurrency(concurrency), num_requests(UINT64_MAX),
+	jitter(0) {
 	CHECK(concurrency != 0) << "ClosedLoop with concurrency 0 created";
 	CHECK(num_requests != 0) << "ClosedLoop with num_requests 0 created";
 }
 
 ClosedLoop::ClosedLoop(int id, clockwork::Model* model, unsigned concurrency,
-	unsigned num_requests) :
-	Workload(id, model), concurrency(concurrency), num_requests(num_requests) {
+	uint64_t num_requests, uint64_t jitter) :
+	Workload(id, model), concurrency(concurrency), num_requests(num_requests),
+	jitter(jitter) {
 	CHECK(concurrency != 0) << "ClosedLoop with concurrency 0 created";
 	CHECK(num_requests != 0) << "ClosedLoop with num_requests 0 created";
 }
 
 void ClosedLoop::Start(uint64_t now) {
+	if (jitter > 0) { // Dealyed start
+		std::cout << "Model " << user_id << "'s start delayed by " << jitter
+				  << " seconds" << std::endl;
+		SetTimeout(jitter * 1000000000, [this]() { ActualStart(); });
+	} else { // Immediate start
+		ActualStart();
+	}
+}
+
+void ClosedLoop::ActualStart() {
 	for (unsigned i = 0; i < concurrency; i++) {
 		Infer();
 	}

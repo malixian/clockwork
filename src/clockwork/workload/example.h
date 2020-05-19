@@ -93,7 +93,8 @@ Engine* simple_parametric(clockwork::Client* client, unsigned num_copies,
 			i, 				// client id
 			models[i],		// model
 			concurrency,	// concurrency
-			num_requests	// max num requests
+			num_requests,	// max num requests
+			0				// jitter
 		));
 	}
 

@@ -16,6 +16,8 @@ namespace workload {
 
 class Workload;
 
+typedef std::exponential_distribution<double> Exponential;
+
 class Engine {
 private:
 	struct element {
@@ -142,14 +144,16 @@ public:
 class ClosedLoop : public Workload {
 public:
 	const unsigned concurrency;
-	unsigned num_requests;
+	uint64_t num_requests;
+	uint64_t jitter;
 
 	ClosedLoop(int id, clockwork::Model* model, unsigned concurrency);
 
 	ClosedLoop(int id, clockwork::Model* model, unsigned concurrency,
-		unsigned num_requests);
+		uint64_t num_requests, uint64_t jitter);
 
 	virtual void Start(uint64_t now);
+	virtual void ActualStart();
 	virtual void InferComplete(uint64_t now, unsigned model_index);
 	virtual void InferError(uint64_t now, unsigned model_index, int status);
 	virtual void InferErrorInitializing(uint64_t now, unsigned model_index);
@@ -162,6 +166,10 @@ public:
 
 	OpenLoop(int id, clockwork::Model* model, int rng_seed, TDISTRIBUTION distribution) : 
 		Workload(id, model), rng(rng_seed), distribution(distribution) {
+	}
+
+	void set_distribution(TDISTRIBUTION new_distribution) {
+		distribution = new_distribution;
 	}
 
 	void Submit() {
@@ -181,12 +189,15 @@ public:
 
 class Static {
 public:
-	const uint64_t value;
+	uint64_t value;
 	Static(uint64_t value) : value(value) {}
 	const uint64_t& operator()(std::minstd_rand rng) const { return value; }
-};
 
-typedef std::exponential_distribution<double> Exponential;
+	Static& operator= (const Static &other) {
+		value = other.value;
+		return *this;
+	}
+};
 
 class FixedRate : public OpenLoop<Static> {
 public:
@@ -460,6 +471,100 @@ public:
 			Exponential(scale_factor / 60000000000.0)) {
 	}
 
+};
+
+template <typename TDISTRIBUTION> class AdjustRate : public Timer {
+public:
+	std::vector<OpenLoop<TDISTRIBUTION>*> workloads;
+	uint64_t period;
+	double current;
+	std::function<double(double)> update;
+	std::function<bool(double)> terminate;
+
+	AdjustRate(
+		unsigned period_seconds,
+		double initial_rate,
+		std::vector<OpenLoop<TDISTRIBUTION>*> workloads,
+		std::function<double(double)> update,
+		std::function<bool(double)> terminate)
+			: period(period_seconds * 1000000000UL),
+			  current(initial_rate),
+			  workloads(workloads),
+			  update(update),
+			  terminate(terminate) {}
+	virtual void UpdateRate() = 0;
+
+	virtual void Start(uint64_t now) {
+		SetTimeout(period, [this]() { UpdateRate(); });
+	}
+
+	void try_termination() {
+		if (terminate(current)) {
+			engine->running = 0;
+			std::cout << "Terminating engine" << std::endl;
+		}
+	}
+};
+
+class AdjustPoissonRate : public AdjustRate<Exponential> {
+public:
+	AdjustPoissonRate(
+		unsigned period_seconds,
+		double initial_rate,
+		std::vector<OpenLoop<Exponential>*> workloads,
+		std::function<double(double)> update,
+		std::function<bool(double)> terminate) :
+			AdjustRate(
+				period_seconds,
+				initial_rate,
+				workloads,
+				update,
+				terminate
+			) {}
+
+	void UpdateRate() {
+		current = update(current);
+		try_termination();
+
+		std::cout << "Updating rate to " << current << std::endl;
+		for (auto workload : workloads) {
+			workload->set_distribution(Exponential(current / 1000000000.0));
+		}
+
+		SetTimeout(period, [this]() { UpdateRate(); });
+	}
+};
+
+class AdjustFixedRate : public AdjustRate<Static> {
+public:
+	AdjustFixedRate(
+		unsigned period_seconds,
+		double initial_rate,
+		std::vector<OpenLoop<Static>*> workloads,
+		std::function<double(double)> update,
+		std::function<bool(double)> terminate) :
+			AdjustRate(
+				period_seconds,
+				initial_rate,
+				workloads,
+				update,
+				terminate
+			) {}
+
+	void UpdateRate() {
+		double previous = current;
+		current = update(current);
+		try_termination();
+
+		std::cout << "Updating rate to " << current << std::endl;
+		for (auto workload : workloads) {
+			workload->set_distribution(Static(1000000000.0 / current));
+		}
+
+		if (previous == 0) { Start(util::now()); }
+
+		SetTimeout(period, [this]() { UpdateRate(); });
+	}
 };
 
 }
