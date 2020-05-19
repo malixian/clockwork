@@ -18,15 +18,18 @@ namespace infer2 {
 class InferOnlyScheduler : public Scheduler {
  public:
 
-    static const uint64_t print_interval = 10000000000UL; // 10 seconds
-    static const uint64_t slo = 100000000UL; // 100ms
-    static const uint64_t buffer = 10000000UL; // 10ms buffer
-    static const uint64_t default_clock = 1380; // default gpu clock speed
+    static const uint64_t print_interval = 10000000000UL;
     static const bool print_debug = false;
-    static const int estimate_window_size = 10;
-    static const float estimate_percentile;
 
+
+    static const uint64_t slo = 100000000UL; // 100ms SLO
+    static const uint64_t buffer = 5000000UL; // Aim for an SLO this much prior to actual SLO
+    static const uint64_t default_clock = 1380; // default gpu clock speed
+    static const int estimate_window_size = 10; // Estimate execution time using last 10 measurements
+    static const float estimate_percentile; // Percentile to use for estimation; 0.99 (effectively max)
+    static const uint64_t latest_delta = 3000000UL; // Actions can run up to 3ms behind schedule before the worker will drop them
     static const uint64_t schedule_ahead = 10000000UL; // schedule 10ms into the future
+    static const uint64_t max_allowable_exec_time = 18000000UL; // for batching, never consider batch sizes that exceed 18ms exec time (too big)
 
 
 
@@ -78,19 +81,28 @@ class InferOnlyScheduler : public Scheduler {
     class InferStrategy;
     class GPU;
     class Model {
-     public:
+     private:
         std::vector<unsigned> supported_batch_sizes;
+        std::vector<unsigned> batch_lookup_;
+        unsigned max_batch_size;
+
         std::map<unsigned, uint64_t> estimates;
         std::map<unsigned, util::SlidingWindow*> estimators;
-
         uint64_t request_id_seed = 0;
-        unsigned id;
 
         std::queue<Request*> queue;
+
+     public:
+
+        unsigned id;
 
         Model(BatchedModelState &state);
 
         std::vector<InferStrategy*> enqueue(Request* request);
+
+        // For num_requests requests, what is the maximum batch size we could execute?
+        unsigned batch_lookup(unsigned num_requests);
+        
         void check_timeouts(GPU* gpu, uint64_t free_at);
         Action* try_dequeue(GPU* gpu, uint64_t gpu_free_at, InferStrategy* strategy);
         void add_measurement(unsigned batch_size, uint64_t duration, unsigned gpu_clock);

@@ -208,11 +208,13 @@ void ControllerActionTelemetry::set(std::shared_ptr<workerapi::LoadWeights> &loa
 	action_id = load->id;
 	gpu_id = load->gpu_id;
 	action_type = workerapi::loadWeightsAction;
-	batch_size = 0;
+	batch_size = 1;
 	model_id = load->model_id;
 	earliest = load->earliest;
 	latest = load->latest;
 	expected_duration = load->expected_duration;
+	expected_exec_complete = load->expected_exec_complete;
+	expected_gpu_clock = 0;
 	action_sent = util::now();
 }
 
@@ -220,39 +222,61 @@ void ControllerActionTelemetry::set(std::shared_ptr<workerapi::EvictWeights> &ev
 	action_id = evict->id;
 	gpu_id = evict->gpu_id;
 	action_type = workerapi::evictWeightsAction;
-	batch_size = 0;
+	batch_size = 1;
 	model_id = evict->model_id;
 	earliest = evict->earliest;
 	latest = evict->latest;
 	expected_duration = 0;
+	expected_exec_complete = 0;
+	expected_gpu_clock = 0;
 	action_sent = util::now();
 }
 
 void ControllerActionTelemetry::set(std::shared_ptr<workerapi::ErrorResult> &result) {
 	result_received = util::now();
 	status = result->status;
+	gpu_clock_before = 0;
+	gpu_clock = 0;
+	worker_action_received = result->action_received;
 	worker_duration = 0;
 	worker_exec_complete = 0;
+	worker_copy_output_complete = 0;
+	worker_result_sent = result->result_sent;
 }
 
 void ControllerActionTelemetry::set(std::shared_ptr<workerapi::InferResult> &result) {
 	result_received = util::now();
 	status = result->status;
+	gpu_clock_before = result->gpu_clock_before;
+	gpu_clock = result->gpu_clock;
+	worker_action_received = result->action_received;
 	worker_duration = result->exec.duration;
 	worker_exec_complete = result->exec.end;
-	gpu_clock = result->gpu_clock;
+	worker_copy_output_complete = result->copy_output.end;
+	worker_result_sent = result->result_sent;
 }
 
 void ControllerActionTelemetry::set(std::shared_ptr<workerapi::LoadWeightsResult> &result) {
 	result_received = util::now();
 	status = result->status;
+	gpu_clock_before = 0;
+	gpu_clock = 0;
+	worker_action_received = result->action_received;
 	worker_duration = result->duration;
+	worker_exec_complete = result->end;
+	worker_copy_output_complete = 0;
+	worker_result_sent = result->result_sent;
 }
 
 void ControllerActionTelemetry::set(std::shared_ptr<workerapi::EvictWeightsResult> &result) {
 	result_received = util::now();
 	status = result->status;
+	gpu_clock = 0;
+	worker_action_received = result->action_received;
 	worker_duration = result->duration;
+	worker_exec_complete = 0;
+	worker_copy_output_complete = 0;
+	worker_result_sent = result->result_sent;
 }
 
 AsyncControllerActionTelemetryLogger* ControllerActionTelemetry::summarize(uint64_t print_interval) {
@@ -278,45 +302,61 @@ void ControllerActionTelemetryFileLogger::write_headers() {
 	f << "t" << "\t";
 	f << "action_id" << "\t";
 	f << "action_type" << "\t";
+
 	f << "status" << "\t";
 	f << "worker_id" << "\t";
 	f << "gpu_id" << "\t";
 	f << "model_id" << "\t";
 	f << "batch_size" << "\t";
-	f << "controller_action_duration" << "\t";
+
 	f << "expected_exec_duration" << "\t";
 	f << "worker_exec_duration" << "\t";
+
 	f << "expected_exec_complete" << "\t";
 	f << "worker_exec_complete" << "\t";
+
 	f << "expected_gpu_clock" << "\t";
+	f << "worker_gpu_clock_before" << "\t";
 	f << "worker_gpu_clock" << "\t";
+
+	f << "worker_copy_output_complete" << "\t";
+	f << "worker_action_received" << "\t";
+	f << "worker_result_sent" << "\t";
+	f << "controller_action_duration" << "\t";
+
 	f << "goodput" << "\n";
+}
+
+uint64_t delta_from(uint64_t value, uint64_t start) {
+	return value == 0 ? 0 : value - start;
 }
 
 void ControllerActionTelemetryFileLogger::log(ControllerActionTelemetry &t) {
 	f << t.result_received << "\t";
 	f << t.action_id << "\t";
 	f << t.action_type << "\t";
+
 	f << t.status << "\t";
 	f << t.worker_id << "\t";
 	f << t.gpu_id << "\t";
 	f << t.model_id << "\t";
 	f << t.batch_size << "\t";
-	f << (t.result_received - t.action_sent) << "\t";
+
 	f << t.expected_duration << "\t";
 	f << t.worker_duration << "\t";
-	if (t.expected_exec_complete == 0) {
-		f << "0\t";
-	} else {
-		f << (t.expected_exec_complete - t.action_sent) << "\t";
-	}
-	if (t.worker_exec_complete == 0) {
-		f << "0\t";
-	} else {
-		f << (t.worker_exec_complete - t.action_sent) << "\t";
-	}
+
+	f << delta_from(t.expected_exec_complete, t.action_sent) << "\t";
+	f << delta_from(t.worker_exec_complete, t.action_sent) << "\t";
+
 	f << t.expected_gpu_clock << "\t";
+	f << t.gpu_clock_before << "\t";
 	f << t.gpu_clock << "\t";
+
+	f << delta_from(t.worker_copy_output_complete, t.action_sent) << "\t";
+	f << delta_from(t.worker_action_received, t.action_sent) << "\t";
+	f << delta_from(t.worker_result_sent, t.action_sent) << "\t";
+	f << (t.result_received - t.action_sent) << "\t";
+
 	f << static_cast<uint64_t>(t.worker_duration * t.goodput) << "\n";
 }
 

@@ -182,11 +182,11 @@ Engine* example(clockwork::Client* client) {
 	return engine;
 }
 
-Engine* spam(clockwork::Client* client) {
+Engine* spam(clockwork::Client* client, std::string model_name = "resnet50_v2") {
 	Engine* engine = new Engine();
 
 	unsigned num_copies = 100;
-	std::string modelpath = util::get_clockwork_modelzoo()["resnet50_v2"];
+	std::string modelpath = util::get_clockwork_modelzoo()[model_name];
 	auto models = client->load_remote_models(modelpath, num_copies);
 
 	for (unsigned i = 0; i < models.size(); i++) {
@@ -195,6 +195,26 @@ Engine* spam(clockwork::Client* client) {
 			0, 			// client id, just use the same for this
 			models[i],	// model
 			100			// concurrency
+		));
+	}
+
+	return engine;
+}
+
+Engine* spam2(clockwork::Client* client) {
+	Engine* engine = new Engine();
+
+	unsigned num_copies = 100;
+	std::string modelpath = util::get_clockwork_modelzoo()["resnet50_v2"];
+	auto models = client->load_remote_models(modelpath, num_copies);
+
+	for (unsigned i = 0; i < models.size(); i++) {
+		models[i]->disable_inputs();
+		engine->AddWorkload(new PoissonOpenLoop(
+			i,				// client id
+			models[i],  	// model
+			i,      		// rng seed
+			1000			// requests/second
 		));
 	}
 
@@ -251,10 +271,41 @@ Engine* azure(clockwork::Client* client) {
 	return engine;
 }
 
-Engine* azure_small(clockwork::Client* client) {
+Engine* azure_single(clockwork::Client* client) {
 	Engine* engine = new Engine();
 
 	auto trace_data = azure::load_trace();
+
+	unsigned trace_id = 1;
+	std::string model = util::get_clockwork_model("resnet50_v2");
+	unsigned num_copies = 1;
+
+	auto models = client->load_remote_models(model, num_copies);
+
+	for (unsigned i = 0; i < num_copies; i++) {
+		auto model = models[i % num_copies];
+		auto workload = trace_data[i];
+
+		Workload* replay = new PoissonTraceReplay(
+			0,				// client id, just give them all the same ID for this example
+			model,			// model
+			i,				// rng seed
+			workload,		// trace data
+			1.0,			// scale factor; default 1
+			1.0,			// interval duration; default 60
+			0				// interval to begin at; default 0; set to -1 for random
+		);
+
+		engine->AddWorkload(replay);
+	}
+
+	return engine;
+}
+
+Engine* azure_small(clockwork::Client* client) {
+	Engine* engine = new Engine();
+
+	auto trace_data = azure::load_trace(1);
 
 	std::vector<Model*> models;
 	for (auto &p : util::get_clockwork_modelzoo()) {
@@ -301,7 +352,7 @@ Engine* azure_fast(clockwork::Client* client, unsigned trace_id = 1) {
 
 	for (unsigned i = 0; i < trace_data.size(); i++) {
 		auto model = models[i % models.size()];
-		// model->disable_inputs();
+		model->disable_inputs();
 		auto workload = trace_data[i];
 
 		Workload* replay = new PoissonTraceReplay(

@@ -22,8 +22,9 @@ void printUsage() {
 			  << "[workload parameters (if required)]" << std::endl
 			  << "Available workloads with parameters:" << std::endl
 			  << "\t example" << std::endl
-			  << "\t spam" << std::endl
-			  << "\t\t resnet50_v2 x 100, each with 100 closed loop" << std::endl
+			  << "\t spam [modelname]" << std::endl
+			  << "\t\t default modelname is resnet50_v2" << std::endl
+			  << "\t\t 100 instances, each with 100 closed loop" << std::endl
 			  << "\t single-spam" << std::endl
 			  << "\t\t resnet50_v2 x 1, with 1000 closed loop" << std::endl
 			  << "\t simple" << std::endl
@@ -101,8 +102,10 @@ int main(int argc, char *argv[])
 	workload::Engine* engine;
 	if (workload == "example") 
 		engine = workload::example(client);
-	else if (workload == "spam") 
-		engine = workload::spam(client);
+	else if (workload == "spam") {
+		if (argc > 3) engine = workload::spam(client, argv[3]);
+		else engine = workload::spam(client);
+	}
 	else if (workload == "single-spam") 
 		engine = workload::single_spam(client);
 	else if (workload == "simple")
@@ -146,6 +149,8 @@ int main(int argc, char *argv[])
 		engine = workload::azure(client);
 	else if (workload == "azure_small")
 		engine = workload::azure_small(client);
+	else if (workload == "azure_single")
+		engine = workload::azure_single(client);
 	else if (workload == "azure_fast")
 		engine = workload::azure_fast(client);
 	else {

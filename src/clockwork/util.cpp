@@ -54,8 +54,12 @@ clockwork::time_point hrt() {
   return std::chrono::steady_clock::now();
 }
 
+clockwork::time_point epoch = hrt();
+uint64_t epoch_time = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        std::chrono::system_clock::now().time_since_epoch()).count();
+
 std::uint64_t nanos(clockwork::time_point t) {
-  return std::chrono::duration_cast<std::chrono::nanoseconds>(t.time_since_epoch()).count() + steady_clock_offset;
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(t - epoch).count() + epoch_time;
 }
 
 std::string nowString() {
@@ -289,7 +293,7 @@ void GPUClockState::run() {
       std::cout << s.str();
       last_notify = now;
     }
-    usleep(100);
+    // usleep(100);
   }
 }
 void GPUClockState::shutdown() {
@@ -301,6 +305,22 @@ void GPUClockState::join() {
 
 unsigned GPUClockState::get(unsigned gpu_id) {
   return clock[gpu_id];
+}
+
+std::vector<unsigned> make_batch_lookup(std::vector<unsigned> supported_batch_sizes) {
+  std::vector<unsigned> lookup;
+  lookup.push_back(0);
+  for (auto batch_size : supported_batch_sizes) {
+      auto prev = lookup[lookup.size()-1];
+      while (lookup.size() < (batch_size + 1)) {
+          lookup.push_back(prev);
+      }
+
+      for (unsigned i = batch_size; i < lookup.size(); i++) {
+          lookup[i] = std::max(lookup[i], batch_size);
+      }
+  }
+  return lookup;
 }
 
 }

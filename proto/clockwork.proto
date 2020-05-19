@@ -122,6 +122,8 @@ message ErrorResultProto {
   required int32 action_type = 2;
   required int32 status = 3;
   required string message = 4;
+  required uint64 action_received = 5;
+  required uint64 result_sent = 6;
 }
 
 message TimingProto {
@@ -150,6 +152,8 @@ message LoadModelFromDiskResultProto {
   required uint64 weights_load_time_nanos = 8;
   repeated uint64 batch_size_exec_times_nanos = 9;
   required int32 copies_created = 10;
+  required uint64 action_received = 11;
+  required uint64 result_sent = 12;
 }
 
 message LoadWeightsActionProto {
@@ -164,6 +168,8 @@ message LoadWeightsActionProto {
 message LoadWeightsResultProto {
   required int32 action_id = 1;
   required TimingProto timing = 2;
+  required uint64 action_received = 3;
+  required uint64 result_sent = 4;
 }
 
 message EvictWeightsActionProto {
@@ -177,6 +183,8 @@ message EvictWeightsActionProto {
 message EvictWeightsResultProto {
   required int32 action_id = 1;
   required TimingProto timing = 2;
+  required uint64 action_received = 3;
+  required uint64 result_sent = 4;
 }
 
 message InferActionProto {
@@ -195,7 +203,10 @@ message InferResultProto {
   required TimingProto exec_timing = 3;
   required TimingProto copy_output_timing = 4;
   required uint32 gpu_id = 5;
-  required uint32 gpu_clock = 6;
+  required uint32 gpu_clock_before = 6;
+  required uint32 gpu_clock = 7;
+  required uint64 action_received = 8;
+  required uint64 result_sent = 9;
 }
 
 message ClearCacheActionProto {
@@ -204,6 +215,8 @@ message ClearCacheActionProto {
 
 message ClearCacheResultProto {
   required int32 action_id = 1;
+  required uint64 action_received = 2;
+  required uint64 result_sent = 3;
 }
 
 message GetWorkerStateActionProto {
@@ -242,4 +255,6 @@ message WorkerMemoryInfoProto {
 message GetWorkerStateResultProto {
   required int32 action_id = 1;
   required WorkerMemoryInfoProto worker_memory_info = 2;
+  required uint64 action_received = 3;
+  required uint64 result_sent = 4;
 }

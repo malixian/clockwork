@@ -349,6 +349,7 @@ InferAction::ExecTaskImpl::ExecTaskImpl(InferAction* infer):
 
 void InferAction::ExecTaskImpl::run(cudaStream_t stream) {
 	try {
+		gpu_clock_before = infer->runtime->gpu_clock->get(gpu_id);
 		ExecTask::run(stream);
 		infer->runtime->gpu_checkers[gpu_id]->enqueue(this);
 	} catch (TaskError &error) {
@@ -393,6 +394,7 @@ void InferAction::CopyOutputTaskImpl::run(cudaStream_t stream) {
 
 		// Making this synchronous
 		CUDA_CALL(cudaStreamSynchronize(stream));
+		telemetry->async_complete = util::hrt();
 		CopyOutputTask::process_completion();
 	} catch (TaskError &error) {
 		infer->handle_error(error);
@@ -400,11 +402,11 @@ void InferAction::CopyOutputTaskImpl::run(cudaStream_t stream) {
 }
 
 void InferAction::CopyOutputTaskImpl::process_completion() {
-	try {
-		CopyOutputTask::process_completion();
-	} catch (TaskError &error) {
-		infer->handle_error(error);
-	}
+	// try {
+	// 	CopyOutputTask::process_completion();
+	// } catch (TaskError &error) {
+	// 	infer->handle_error(error);
+	// }
 }
 
 void InferAction::CopyOutputTaskImpl::success(char* output) {
@@ -417,7 +419,7 @@ void InferAction::CopyOutputTaskImpl::cancel() {
 }
 
 InferAction::InferAction(ClockworkRuntime* runtime, std::shared_ptr<workerapi::Infer> action) :
-		runtime(runtime), action(action), rm(nullptr), io_memory(nullptr) {}
+		runtime(runtime), action(action), rm(nullptr), io_memory(nullptr), zero_size(action->input_size == 0) {}
 
 InferAction::~InferAction() {
 	if (copy_input != nullptr) delete copy_input;
@@ -447,36 +449,41 @@ void InferAction::handle_completion(char* output) {
 	result->action_type = workerapi::inferAction;
 	result->status = actionSuccess;
 
-	set_taskTelemetry(
-			copy_input->telemetry, 
-			action->id, action->model_id, action->gpu_id,
-			actionSuccess, action->batch_size, copy_input_earliest(),
-			workerapi::inferAction, copyInputTask);
+	// set_taskTelemetry(
+	// 		copy_input->telemetry, 
+	// 		action->id, action->model_id, action->gpu_id,
+	// 		actionSuccess, action->batch_size, copy_input_earliest(),
+	// 		workerapi::inferAction, copyInputTask);
 
-	set_taskTelemetry(
-			exec->telemetry, 
-			action->id, action->model_id, action->gpu_id,
-			actionSuccess, action->batch_size, action->earliest,
-			workerapi::inferAction, execTask);
+	// set_taskTelemetry(
+	// 		exec->telemetry, 
+	// 		action->id, action->model_id, action->gpu_id,
+	// 		actionSuccess, action->batch_size, action->earliest,
+	// 		workerapi::inferAction, execTask);
 
-	set_taskTelemetry(
-			copy_output->telemetry, 
-			action->id, action->model_id, action->gpu_id,
-			actionSuccess, action->batch_size, action->earliest,
-			workerapi::inferAction, copyOutputTask);
+	// set_taskTelemetry(
+	// 		copy_output->telemetry, 
+	// 		action->id, action->model_id, action->gpu_id,
+	// 		actionSuccess, action->batch_size, action->earliest,
+	// 		workerapi::inferAction, copyOutputTask);
 
 	extract_timing_async(&result->copy_input, copy_input->telemetry);
 	extract_timing_async(&result->exec, exec->telemetry);
 	extract_timing_async(&result->copy_output, copy_output->telemetry);
 
-	runtime->task_telemetry_logger->log(copy_input->telemetry);
-	runtime->task_telemetry_logger->log(exec->telemetry);
-	runtime->task_telemetry_logger->log(copy_output->telemetry);
+	// runtime->task_telemetry_logger->log(copy_input->telemetry);
+	// runtime->task_telemetry_logger->log(exec->telemetry);
+	// runtime->task_telemetry_logger->log(copy_output->telemetry);
 
-	result->output_size = rm->model->output_size(action->batch_size);
+	if (zero_size) {
+		result->output_size = 0;
+	} else {
+		result->output_size = rm->model->output_size(action->batch_size);
+	}
 	result->output = output;
 
 	result->gpu_id = action->gpu_id;
+	result->gpu_clock_before = exec->gpu_clock_before;
 	result->gpu_clock = runtime->gpu_clock->get(result->gpu_id);
 	
 	this->success(result);

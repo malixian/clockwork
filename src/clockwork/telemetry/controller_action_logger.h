@@ -30,6 +30,10 @@ namespace clockwork {
 
 class AsyncControllerActionTelemetryLogger;
 struct ControllerActionTelemetry {
+	// Values set explicitly by scheduler
+	float goodput = 1.0;
+
+	// Values set automatically by `set` methods on actions
 	int action_id;
 	int worker_id;
 	int gpu_id;
@@ -38,16 +42,21 @@ struct ControllerActionTelemetry {
 	int model_id;
 	uint64_t earliest;
 	uint64_t latest;
+	uint64_t expected_duration;
+	unsigned expected_gpu_clock;
+	uint64_t expected_exec_complete;
 	uint64_t action_sent;
+
+	// Values set automatically by `set` methods on results
 	uint64_t result_received;
 	int status;
-	uint64_t expected_duration;
-	uint64_t worker_duration;
-	uint64_t expected_exec_complete = 0;
-	uint64_t worker_exec_complete;
-	unsigned expected_gpu_clock;
+	unsigned gpu_clock_before;
 	unsigned gpu_clock;
-	float goodput = 1.0;
+	uint64_t worker_action_received;
+	uint64_t worker_duration;
+	uint64_t worker_exec_complete;
+	uint64_t worker_copy_output_complete;
+	uint64_t worker_result_sent;
 
 	void set(std::shared_ptr<workerapi::Infer> &infer);
 	void set(std::shared_ptr<workerapi::LoadWeights> &load);
