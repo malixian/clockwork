@@ -14,6 +14,8 @@ public:
   	msg.set_action_type(result.action_type);
   	msg.set_status(result.status);
   	msg.set_message(result.message);
+    msg.set_action_received(result.action_received);
+    msg.set_result_sent(result.result_sent);
   }
 };
 
@@ -24,6 +26,8 @@ public:
   	result.action_type = msg.action_type();
   	result.status = msg.status();
   	result.message = msg.message();
+    result.action_received = msg.action_received();
+    result.result_sent = msg.result_sent();
   }
 };
 
@@ -71,6 +75,8 @@ public:
   	msg.mutable_timing()->set_begin(result.begin);
   	msg.mutable_timing()->set_end(result.end);
   	msg.mutable_timing()->set_duration(result.duration);
+    msg.set_action_received(result.action_received);
+    msg.set_result_sent(result.result_sent);
   }
 };
 
@@ -95,6 +101,8 @@ public:
     for (unsigned i = 0; i < msg.batch_size_exec_times_nanos_size(); i++) {
       result.batch_size_exec_times_nanos.push_back(msg.batch_size_exec_times_nanos(i));
     }
+    result.action_received = msg.action_received();
+    result.result_sent = msg.result_sent();
   }
 };
 
@@ -130,6 +138,8 @@ public:
   	msg.mutable_timing()->set_begin(result.begin);
   	msg.mutable_timing()->set_end(result.end);
   	msg.mutable_timing()->set_duration(result.duration);
+    msg.set_action_received(result.action_received);
+    msg.set_result_sent(result.result_sent);
   }
 };
 
@@ -142,6 +152,8 @@ public:
   	result.begin = msg.timing().begin();
   	result.end = msg.timing().end();
   	result.duration = msg.timing().duration();
+    result.action_received = msg.action_received();
+    result.result_sent = msg.result_sent();
   }
 };
 
@@ -175,6 +187,8 @@ public:
   	msg.mutable_timing()->set_begin(result.begin);
   	msg.mutable_timing()->set_end(result.end);
   	msg.mutable_timing()->set_duration(result.duration);
+    msg.set_action_received(result.action_received);
+    msg.set_result_sent(result.result_sent);
   }
 };
 
@@ -187,6 +201,8 @@ public:
   	result.begin = msg.timing().begin();
   	result.end = msg.timing().end();
   	result.duration = msg.timing().duration();
+    result.action_received = msg.action_received();
+    result.result_sent = msg.result_sent();
   }
 };
 
@@ -226,6 +242,7 @@ public:
   virtual void set(workerapi::InferResult &result) {
   	msg.set_action_id(result.id);
 	  msg.set_gpu_id(result.gpu_id);
+    msg.set_gpu_clock_before(result.gpu_clock_before);
     msg.set_gpu_clock(result.gpu_clock);
   	msg.mutable_copy_input_timing()->set_begin(result.copy_input.begin);
   	msg.mutable_copy_input_timing()->set_end(result.copy_input.end);
@@ -236,6 +253,8 @@ public:
   	msg.mutable_copy_output_timing()->set_begin(result.copy_output.begin);
   	msg.mutable_copy_output_timing()->set_end(result.copy_output.end);
   	msg.mutable_copy_output_timing()->set_duration(result.copy_output.duration);
+    msg.set_action_received(result.action_received);
+    msg.set_result_sent(result.result_sent);
   	body_len_ = result.output_size;
   	body_ = result.output;
   }
@@ -248,6 +267,7 @@ public:
   	result.action_type = workerapi::inferAction;
   	result.status = actionSuccess;
 	  result.gpu_id = msg.gpu_id();
+    result.gpu_clock_before = msg.gpu_clock_before();
     result.gpu_clock = msg.gpu_clock();
   	result.copy_input.begin = msg.copy_input_timing().begin();
   	result.copy_input.end = msg.copy_input_timing().end();
@@ -258,6 +278,8 @@ public:
   	result.copy_output.begin = msg.copy_output_timing().begin();
   	result.copy_output.end = msg.copy_output_timing().end();
   	result.copy_output.duration = msg.copy_output_timing().duration();
+    result.action_received = msg.action_received();
+    result.result_sent = msg.result_sent();
   	result.output_size = body_len_;
   	result.output = static_cast<char*>(body_);
   }
@@ -282,6 +304,8 @@ class clear_cache_result_tx : public msg_protobuf_tx_with_body<RES_CLEAR_CACHE, 
 public:
   virtual void set(workerapi::ClearCacheResult &result) {
 	msg.set_action_id(result.id);
+    msg.set_action_received(result.action_received);
+    msg.set_result_sent(result.result_sent);
   }
 };
 
@@ -290,6 +314,8 @@ public:
   virtual void get(workerapi::ClearCacheResult &result) {
 	result.id = msg.action_id();
 	result.action_type = workerapi::clearCacheAction;
+    result.action_received = msg.action_received();
+    result.result_sent = msg.result_sent();
   }
 };
 
@@ -356,6 +382,8 @@ public:
       ModelInfoProto* modelproto = proto->add_models();
       setmodel(model, modelproto);
     }
+    msg.set_action_received(result.action_received);
+    msg.set_result_sent(result.result_sent);
   }
 };
 
@@ -408,6 +436,8 @@ public:
       getmodel(model, proto.models(i));
       worker.models.push_back(model);
     }
+    result.action_received = msg.action_received();
+    result.result_sent = msg.result_sent();
   }
 };
 

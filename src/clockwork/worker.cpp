@@ -162,22 +162,26 @@ LoadModelFromDisk::LoadModelFromDisk(ClockworkWorker* worker, std::shared_ptr<wo
 		LoadModelFromDiskAction(worker->runtime, action), worker(worker),
 		action_telemetry(std::make_shared<ActionTelemetry>()),
 		response_telemetry(std::make_shared<ActionTelemetry>()) {
-	set_and_log_actionTelemetry(action_telemetry, runtime, 0, action->id, workerapi::loadModelFromDiskAction, 0, util::hrt());
+	// set_and_log_actionTelemetry(action_telemetry, runtime, 0, action->id, workerapi::loadModelFromDiskAction, 0, util::hrt());
 }
 
 void LoadModelFromDisk::success(std::shared_ptr<workerapi::LoadModelFromDiskResult> result) {
-	set_and_log_actionTelemetry(response_telemetry, runtime, 1, result->id, workerapi::loadModelFromDiskAction, actionSuccess, util::hrt());
+	// set_and_log_actionTelemetry(response_telemetry, runtime, 1, result->id, workerapi::loadModelFromDiskAction, actionSuccess, util::hrt());
 
 	// It is a hack to do this here, but easiest / safest place to do it for now
 	result->begin = adjust_timestamp(result->begin, -action->clock_delta);
 	result->end = adjust_timestamp(result->end, -action->clock_delta);
+	result->action_received = adjust_timestamp(action->received, -action->clock_delta);
+	result->result_sent = util::now() - action->clock_delta;
 
 	worker->controller->sendResult(result);
 	delete this;
 }
 
 void LoadModelFromDisk::error(std::shared_ptr<workerapi::ErrorResult> result) {
-	set_and_log_actionTelemetry(response_telemetry, runtime, 1, result->id, workerapi::loadModelFromDiskAction, result->status, util::hrt());
+	// set_and_log_actionTelemetry(response_telemetry, runtime, 1, result->id, workerapi::loadModelFromDiskAction, result->status, util::hrt());
+	result->action_received = adjust_timestamp(action->received, -action->clock_delta);
+	result->result_sent = util::now() - action->clock_delta;
 	worker->controller->sendResult(result);
 	delete this;
 }
@@ -187,22 +191,26 @@ LoadWeights::LoadWeights(ClockworkWorker* worker, std::shared_ptr<workerapi::Loa
 		LoadWeightsAction(worker->runtime, action), worker(worker),
 		action_telemetry(std::make_shared<ActionTelemetry>()),
 		response_telemetry(std::make_shared<ActionTelemetry>()) {
-	set_and_log_actionTelemetry(action_telemetry, runtime, 0, action->id, workerapi::loadWeightsAction, 0, util::hrt());
+	// set_and_log_actionTelemetry(action_telemetry, runtime, 0, action->id, workerapi::loadWeightsAction, 0, util::hrt());
 }
 
 void LoadWeights::success(std::shared_ptr<workerapi::LoadWeightsResult> result) {
-	set_and_log_actionTelemetry(response_telemetry, runtime, 1, result->id, workerapi::loadWeightsAction, actionSuccess, util::hrt());
+	// set_and_log_actionTelemetry(response_telemetry, runtime, 1, result->id, workerapi::loadWeightsAction, actionSuccess, util::hrt());
 	
 	// It is a hack to do this here, but easiest / safest place to do it for now
 	result->begin = adjust_timestamp(result->begin, -action->clock_delta);
 	result->end = adjust_timestamp(result->end, -action->clock_delta);
-
+	result->action_received = adjust_timestamp(action->received, -action->clock_delta);
+	result->result_sent = util::now() - action->clock_delta;
+	
 	worker->controller->sendResult(result);
 	delete this;
 }
 
 void LoadWeights::error(std::shared_ptr<workerapi::ErrorResult> result) {
-	set_and_log_actionTelemetry(response_telemetry, runtime, 1, result->id, workerapi::loadWeightsAction, result->status, util::hrt());
+	// set_and_log_actionTelemetry(response_telemetry, runtime, 1, result->id, workerapi::loadWeightsAction, result->status, util::hrt());
+	result->action_received = adjust_timestamp(action->received, -action->clock_delta);
+	result->result_sent = util::now() - action->clock_delta;
 	worker->controller->sendResult(result);
 	delete this;
 }
@@ -211,23 +219,26 @@ EvictWeights::EvictWeights(ClockworkWorker* worker, std::shared_ptr<workerapi::E
 		EvictWeightsAction(worker->runtime, action), worker(worker),
 		action_telemetry(std::make_shared<ActionTelemetry>()),
 		response_telemetry(std::make_shared<ActionTelemetry>()) {
-	set_and_log_actionTelemetry(action_telemetry, runtime, 0, action->id, workerapi::evictWeightsAction, 0, util::hrt());
+	// set_and_log_actionTelemetry(action_telemetry, runtime, 0, action->id, workerapi::evictWeightsAction, 0, util::hrt());
 }
 
 void EvictWeights::success(std::shared_ptr<workerapi::EvictWeightsResult> result) {
-	set_and_log_actionTelemetry(response_telemetry, runtime, 1, result->id, workerapi::evictWeightsAction, actionSuccess, util::hrt());
+	// set_and_log_actionTelemetry(response_telemetry, runtime, 1, result->id, workerapi::evictWeightsAction, actionSuccess, util::hrt());
 	
 	// It is a hack to do this here, but easiest / safest place to do it for now
 	result->begin = adjust_timestamp(result->begin, -action->clock_delta);
 	result->end = adjust_timestamp(result->end, -action->clock_delta);
-
-
+	result->action_received = adjust_timestamp(action->received, -action->clock_delta);
+	result->result_sent = util::now() - action->clock_delta;
+	
 	worker->controller->sendResult(result);
 	delete this;
 }
 
 void EvictWeights::error(std::shared_ptr<workerapi::ErrorResult> result) {
-	set_and_log_actionTelemetry(response_telemetry, runtime, 1, result->id, workerapi::evictWeightsAction, result->status, util::hrt());
+	// set_and_log_actionTelemetry(response_telemetry, runtime, 1, result->id, workerapi::evictWeightsAction, result->status, util::hrt());
+	result->action_received = adjust_timestamp(action->received, -action->clock_delta);
+	result->result_sent = util::now() - action->clock_delta;
 	worker->controller->sendResult(result);
 	delete this;
 }
@@ -236,11 +247,11 @@ Infer::Infer(ClockworkWorker* worker, std::shared_ptr<workerapi::Infer> action) 
 		InferAction(worker->runtime, action), worker(worker),
 		action_telemetry(std::make_shared<ActionTelemetry>()),
 		response_telemetry(std::make_shared<ActionTelemetry>())   {
-	set_and_log_actionTelemetry(action_telemetry, runtime, 0, action->id, workerapi::inferAction, 0, util::hrt());
+	// set_and_log_actionTelemetry(action_telemetry, runtime, 0, action->id, workerapi::inferAction, 0, util::hrt());
 }
 
 void Infer::success(std::shared_ptr<workerapi::InferResult> result) {
-	set_and_log_actionTelemetry(response_telemetry, runtime, 1, result->id, workerapi::inferAction, actionSuccess, util::hrt());
+	// set_and_log_actionTelemetry(response_telemetry, runtime, 1, result->id, workerapi::inferAction, actionSuccess, util::hrt());
 	
 	// It is a hack to do this here, but easiest / safest place to do it for now
 	result->copy_input.begin = adjust_timestamp(result->copy_input.begin, -action->clock_delta);
@@ -249,15 +260,17 @@ void Infer::success(std::shared_ptr<workerapi::InferResult> result) {
 	result->exec.end = adjust_timestamp(result->exec.end, -action->clock_delta);
 	result->copy_output.begin = adjust_timestamp(result->copy_output.begin, -action->clock_delta);
 	result->copy_output.end = adjust_timestamp(result->copy_output.end, -action->clock_delta);
-
-
+	result->action_received = adjust_timestamp(action->received, -action->clock_delta);
+	result->result_sent = util::now() - action->clock_delta;
+	
 	worker->controller->sendResult(result);
 	delete this;
 }
 
 void Infer::error(std::shared_ptr<workerapi::ErrorResult> result) {
-	set_and_log_actionTelemetry(response_telemetry, runtime, 1, result->id, workerapi::inferAction, result->status, util::hrt());
-
+	// set_and_log_actionTelemetry(response_telemetry, runtime, 1, result->id, workerapi::inferAction, result->status, util::hrt());
+	result->action_received = adjust_timestamp(action->received, -action->clock_delta);
+	result->result_sent = util::now() - action->clock_delta;
 	worker->controller->sendResult(result);
 	delete this;
 }

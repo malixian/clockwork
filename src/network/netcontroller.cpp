@@ -17,12 +17,10 @@ using namespace clockwork;
 class ClientEchoController : public clientapi::ClientAPI {
 public:
 	size_t output_size = 1000;
-	char* output;
 
 	network::controller::Server* client_facing_server;
 	ClientEchoController(int client_port) {
 		client_facing_server = new network::controller::Server(this, client_port);
-		output = static_cast<char*>(malloc(output_size));
 	}
 
 	// clientapi -- requests from clients call these functions
@@ -37,8 +35,8 @@ public:
 		clientapi::InferenceResponse rsp;
 		rsp.header.user_request_id = request.header.user_request_id;
 		rsp.header.status = clockworkSuccess;
-		rsp.output_size = output_size;
-		rsp.output = output;
+		rsp.output_size = 0;//output_size;
+		rsp.output = nullptr;//static_cast<char*>(malloc(output_size));;
 		callback(rsp);
 	}
 

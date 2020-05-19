@@ -127,24 +127,35 @@ public:
 				continue;
 			}
 
-			std::map<unsigned, std::vector<Sample>> samples_by_user;
+			std::vector<Sample> all_samples;
+			// std::map<unsigned, std::vector<Sample>> samples_by_user;
 			while (!newSamples.empty()) {
 				sample = newSamples.front();
-				samples_by_user[sample.user_id].push_back(sample);
+				// samples_by_user[sample.user_id].push_back(sample);
+				all_samples.push_back(sample);
 				newSamples.pop();
 			}
 
 			std::stringstream report;
-			if (begun && samples_by_user.size() == 0) {
+			if (begun && all_samples.size() == 0) {
 				report << "throughput=0" << std::endl;
-			} else {
-				for (auto &p : samples_by_user) {
-					report << "User " << p.first << " " 
-					       << Summary(now - last_print, p.second).str() 
-					       << std::endl;
-				}
+			} else if (begun) {
+				report << Summary(now - last_print,all_samples).str() 
+				       << std::endl;
 			}
 			std::cout << report.str();
+
+			// std::stringstream report;
+			// if (begun && samples_by_user.size() == 0) {
+			// 	report << "throughput=0" << std::endl;
+			// } else {
+			// 	for (auto &p : samples_by_user) {
+			// 		report << "User " << p.first << " " 
+			// 		       << Summary(now - last_print, p.second).str() 
+			// 		       << std::endl;
+			// 	}
+			// }
+			// std::cout << report.str();
 
 			last_print = now;
 		}

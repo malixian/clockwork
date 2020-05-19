@@ -211,7 +211,8 @@ void Connection::completed_receive(message_connection *tcp_conn, message_rx *req
 	}
 	if (verbose) std::cout << "Received " << actions[0]->str() << std::endl;
 
-	actions[0]->clock_delta = estimate_clock_delta();	
+	actions[0]->clock_delta = estimate_clock_delta();
+	actions[0]->received = util::now();
 
 	stats.total_pending++;
 

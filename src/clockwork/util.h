@@ -236,7 +236,7 @@ public:
 
 };
 
-
+std::vector<unsigned> make_batch_lookup(std::vector<unsigned> supported_batch_sizes);
 
 
 #define DEBUG_PRINT(msg) \

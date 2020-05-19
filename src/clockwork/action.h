@@ -133,6 +133,7 @@ public:
 	class ExecTaskImpl : public ExecTask {
 	public:
 		InferAction* infer;
+		unsigned gpu_clock_before;
 
 		ExecTaskImpl(InferAction* infer);
 
@@ -160,6 +161,8 @@ public:
 
 	RuntimeModel* rm;
 	char* io_memory;
+
+	bool zero_size = false;
 
 	CopyInputTaskImpl* copy_input = nullptr;
 	ExecTaskImpl* exec = nullptr;

@@ -200,6 +200,7 @@ add_executable (tests
 	test/clockwork/test/testtelemetry.cpp
 	test/clockwork/test/testnetwork.cpp
 	test/clockwork/test/testconfig.cpp
+	test/clockwork/test/testutil.cpp
 	test/clockwork/test/model/testmodel.cpp
 	test/clockwork/test/model/testbatched.cpp
 )

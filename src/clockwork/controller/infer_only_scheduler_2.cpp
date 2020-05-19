@@ -64,23 +64,35 @@ void InferOnlyScheduler::Request::timeout() {
     callback(response);
 }
 
-std::vector<unsigned> batch_lookup_ = {0,1,2,2,4,4,4,4,8,8,8,8,8,8,8,8,16};
-unsigned batch_lookup(unsigned request_count) {
-    return request_count < 16 ? batch_lookup_[request_count] : 16;
+unsigned InferOnlyScheduler::Model::batch_lookup(unsigned num_requests) {
+    return num_requests > max_batch_size ? max_batch_size : batch_lookup_[num_requests];
 }
 
 InferOnlyScheduler::Model::Model(BatchedModelState &state)
-    : id(state.id), supported_batch_sizes(state.supported_batch_sizes) {
-    // Store initial exec estimates
+    : id(state.id) {
     for (auto &batch_size : state.supported_batch_sizes) {
+
+        uint64_t estimate = 0; // Default 0.1ms estimate
+
+        // Lookup real estimate if it was provided
         auto it = state.exec_duration.find(batch_size);
-        if (it == state.exec_duration.end()) {
-            estimates[batch_size] = 1000000UL; // Start with 0.1ms estimate
-        } else {
-            estimates[batch_size] = it->second * InferOnlyScheduler::default_clock;
+        if (it != state.exec_duration.end()) {
+            estimate = it->second;
         }
-        estimators[batch_size] = new util::SlidingWindow(InferOnlyScheduler::estimate_window_size);
+
+        // Limit the batch sizes we use
+        if (batch_size == 1 || 
+            (estimate > 0 && estimate < InferOnlyScheduler::max_allowable_exec_time)) {
+            estimates[batch_size] = estimate * InferOnlyScheduler::default_clock;
+            estimators[batch_size] = new util::SlidingWindow(InferOnlyScheduler::estimate_window_size);
+            supported_batch_sizes.push_back(batch_size);
+        } else {
+            std::cout << "Excluding b" << batch_size << " with estimate " << estimate << "model=" << state.model_path << std::endl;
+        }
     }
+
+    batch_lookup_ = util::make_batch_lookup(supported_batch_sizes);
+    max_batch_size = batch_lookup_.size() - 1;
 }
 
 std::vector<InferOnlyScheduler::InferStrategy*> 
@@ -251,9 +263,9 @@ void InferOnlyScheduler::Action::set_expectations(uint64_t exec_start, uint64_t 
     action->expected_duration = duration;
     action->expected_exec_complete = exec_start + duration;
     action->expected_gpu_clock = clock;
-    auto now = util::now();
-    action->earliest = now - InferOnlyScheduler::schedule_ahead;
-    action->latest = std::max(action->expected_exec_complete, now + InferOnlyScheduler::schedule_ahead);
+    action->earliest = util::now() - InferOnlyScheduler::schedule_ahead;
+    action->latest = action->expected_exec_complete + InferOnlyScheduler::latest_delta;
+    // std::max(action->expected_exec_complete, now + InferOnlyScheduler::schedule_ahead);
 }
 
 InferOnlyScheduler::GPU::GPU() : tracker(InferOnlyScheduler::default_clock) {
@@ -315,7 +327,12 @@ void InferOnlyScheduler::GPU::handle_success(Action* action, std::shared_ptr<wor
     tracker.update_clock(result->gpu_clock);
 
     // Update model execution tracking
-    action->model->add_measurement(action->action->batch_size, result->exec.duration, result->gpu_clock);
+    action->model->add_measurement(
+        action->action->batch_size, 
+        result->exec.duration, 
+        (result->gpu_clock + result->gpu_clock_before) / 2
+    );
+    // action->model->add_measurement(action->action->batch_size, result->exec.duration, action->action->expected_gpu_clock);
 
     action->set_result(result);
     action->telemetry.goodput = action->complete(util::now());
