@@ -49,6 +49,7 @@ struct ControllerActionTelemetry {
 
 	// Values set automatically by `set` methods on results
 	uint64_t result_received;
+	uint64_t result_processing;
 	int status;
 	unsigned gpu_clock_before;
 	unsigned gpu_clock;

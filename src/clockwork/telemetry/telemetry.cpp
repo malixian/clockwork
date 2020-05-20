@@ -201,12 +201,13 @@ void ControllerActionTelemetry::set(std::shared_ptr<workerapi::Infer> &infer) {
 	expected_duration = infer->expected_duration;
 	expected_exec_complete = infer->expected_exec_complete;
 	expected_gpu_clock = infer->expected_gpu_clock;
-	action_sent = util::now();
+	action_sent = infer->action_sent == 0 ? util::now() : infer->action_sent;
 }
 
 void ControllerActionTelemetry::set(std::shared_ptr<workerapi::LoadWeights> &load) {
 	action_id = load->id;
 	gpu_id = load->gpu_id;
+	worker_id = load->worker_id;
 	action_type = workerapi::loadWeightsAction;
 	batch_size = 1;
 	model_id = load->model_id;
@@ -215,12 +216,13 @@ void ControllerActionTelemetry::set(std::shared_ptr<workerapi::LoadWeights> &loa
 	expected_duration = load->expected_duration;
 	expected_exec_complete = load->expected_exec_complete;
 	expected_gpu_clock = 0;
-	action_sent = util::now();
+	action_sent = load->action_sent == 0 ? util::now() : load->action_sent;
 }
 
 void ControllerActionTelemetry::set(std::shared_ptr<workerapi::EvictWeights> &evict) {
 	action_id = evict->id;
 	gpu_id = evict->gpu_id;
+	worker_id = evict->worker_id;
 	action_type = workerapi::evictWeightsAction;
 	batch_size = 1;
 	model_id = evict->model_id;
@@ -229,11 +231,12 @@ void ControllerActionTelemetry::set(std::shared_ptr<workerapi::EvictWeights> &ev
 	expected_duration = 0;
 	expected_exec_complete = 0;
 	expected_gpu_clock = 0;
-	action_sent = util::now();
+	action_sent = evict->action_sent == 0 ? util::now() : evict->action_sent;
 }
 
 void ControllerActionTelemetry::set(std::shared_ptr<workerapi::ErrorResult> &result) {
-	result_received = util::now();
+	result_processing = util::now();
+	result_received = result->result_received == 0 ? result_processing : result->result_received;
 	status = result->status;
 	gpu_clock_before = 0;
 	gpu_clock = 0;
@@ -245,7 +248,8 @@ void ControllerActionTelemetry::set(std::shared_ptr<workerapi::ErrorResult> &res
 }
 
 void ControllerActionTelemetry::set(std::shared_ptr<workerapi::InferResult> &result) {
-	result_received = util::now();
+	result_processing = util::now();
+	result_received = result->result_received == 0 ? result_processing : result->result_received;
 	status = result->status;
 	gpu_clock_before = result->gpu_clock_before;
 	gpu_clock = result->gpu_clock;
@@ -257,7 +261,8 @@ void ControllerActionTelemetry::set(std::shared_ptr<workerapi::InferResult> &res
 }
 
 void ControllerActionTelemetry::set(std::shared_ptr<workerapi::LoadWeightsResult> &result) {
-	result_received = util::now();
+	result_processing = util::now();
+	result_received = result->result_received == 0 ? result_processing : result->result_received;
 	status = result->status;
 	gpu_clock_before = 0;
 	gpu_clock = 0;
@@ -269,7 +274,8 @@ void ControllerActionTelemetry::set(std::shared_ptr<workerapi::LoadWeightsResult
 }
 
 void ControllerActionTelemetry::set(std::shared_ptr<workerapi::EvictWeightsResult> &result) {
-	result_received = util::now();
+	result_processing = util::now();
+	result_received = result->result_received == 0 ? result_processing : result->result_received;
 	status = result->status;
 	gpu_clock = 0;
 	worker_action_received = result->action_received;
@@ -322,13 +328,14 @@ void ControllerActionTelemetryFileLogger::write_headers() {
 	f << "worker_copy_output_complete" << "\t";
 	f << "worker_action_received" << "\t";
 	f << "worker_result_sent" << "\t";
+	f << "controller_result_enqueue" << "\t";
 	f << "controller_action_duration" << "\t";
 
 	f << "goodput" << "\n";
 }
 
 uint64_t delta_from(uint64_t value, uint64_t start) {
-	return value == 0 ? 0 : value - start;
+	return value < start ? 0 : value - start;
 }
 
 void ControllerActionTelemetryFileLogger::log(ControllerActionTelemetry &t) {
@@ -345,6 +352,16 @@ void ControllerActionTelemetryFileLogger::log(ControllerActionTelemetry &t) {
 	f << t.expected_duration << "\t";
 	f << t.worker_duration << "\t";
 
+	// Make sure the worker received the action at least after the controller sent it
+	// This shouldn't ever happen, but just in case
+	if (t.worker_action_received != 0 && t.worker_action_received < t.action_sent) {
+		uint64_t delta = t.action_sent - t.worker_action_received;
+		t.worker_action_received += delta;
+		t.worker_exec_complete += delta;
+		t.worker_copy_output_complete += delta;
+		t.worker_result_sent += delta;
+	}
+
 	f << delta_from(t.expected_exec_complete, t.action_sent) << "\t";
 	f << delta_from(t.worker_exec_complete, t.action_sent) << "\t";
 
@@ -356,6 +373,7 @@ void ControllerActionTelemetryFileLogger::log(ControllerActionTelemetry &t) {
 	f << delta_from(t.worker_action_received, t.action_sent) << "\t";
 	f << delta_from(t.worker_result_sent, t.action_sent) << "\t";
 	f << (t.result_received - t.action_sent) << "\t";
+	f << (t.result_processing - t.action_sent) << "\t";
 
 	f << static_cast<uint64_t>(t.worker_duration * t.goodput) << "\n";
 }

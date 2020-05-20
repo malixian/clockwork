@@ -4,6 +4,7 @@
 #include "clockwork/controller/stress_test_controller.h"
 #include "clockwork/controller/infer_only_scheduler.h"
 #include "clockwork/controller/infer_only_scheduler_2.h"
+#include "clockwork/controller/infer_and_load_scheduler.h"
 #include "clockwork/telemetry/controller_request_logger.h"
 #include <csignal>
 #include <sstream>
@@ -54,6 +55,7 @@ void show_usage() {
     s << "  STRESS\n";
     s << "  INFER\n";
     s << "  INFER1    Older variant of INFER with greedy batching\n";
+    s << "  INFER2    Older variant of INFER with better batching\n";
     s << "WORKERS\n";
     s << "  Comma-separated list of worker host:port pairs.  e.g.:                        \n";
     s << "    volta03:12345,volta04:12345,volta05:12345                                   \n";
@@ -128,6 +130,34 @@ int main(int argc, char *argv[]) {
         controller->join();
     } else if (controller_type == "INFER1") {
         Scheduler* scheduler = new InferOnlyScheduler();
+        controller::ControllerWithStartupPhase* controller = new controller::ControllerWithStartupPhase(
+            client_requests_listen_port,
+            worker_host_port_pairs,
+            100000000UL, // 10s load stage timeout
+            new controller::ControllerStartup(), // in future the startup type might be customizable
+            scheduler,
+            ControllerRequestTelemetry::log_and_summarize(
+                "/local/clockwork_request_log.tsv",     // 
+                10000000000UL           // print request summary every 10s
+            )
+        );
+        controller->join();
+    } else if (controller_type == "INFER") {
+        Scheduler* scheduler = new scheduler::infer2::InferOnlyScheduler();
+        controller::ControllerWithStartupPhase* controller = new controller::ControllerWithStartupPhase(
+            client_requests_listen_port,
+            worker_host_port_pairs,
+            100000000UL, // 10s load stage timeout
+            new controller::ControllerStartup(), // in future the startup type might be customizable
+            scheduler,
+            ControllerRequestTelemetry::log_and_summarize(
+                "/local/clockwork_request_log.tsv",     // 
+                10000000000UL           // print request summary every 10s
+            )
+        );
+        controller->join();
+    } else if (controller_type == "INFER3") {
+        Scheduler* scheduler = new scheduler::infer3::Scheduler();
         controller::ControllerWithStartupPhase* controller = new controller::ControllerWithStartupPhase(
             client_requests_listen_port,
             worker_host_port_pairs,

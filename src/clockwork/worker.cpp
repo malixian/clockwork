@@ -172,7 +172,7 @@ void LoadModelFromDisk::success(std::shared_ptr<workerapi::LoadModelFromDiskResu
 	result->begin = adjust_timestamp(result->begin, -action->clock_delta);
 	result->end = adjust_timestamp(result->end, -action->clock_delta);
 	result->action_received = adjust_timestamp(action->received, -action->clock_delta);
-	result->result_sent = util::now() - action->clock_delta;
+	result->clock_delta = action->clock_delta;
 
 	worker->controller->sendResult(result);
 	delete this;
@@ -181,7 +181,7 @@ void LoadModelFromDisk::success(std::shared_ptr<workerapi::LoadModelFromDiskResu
 void LoadModelFromDisk::error(std::shared_ptr<workerapi::ErrorResult> result) {
 	// set_and_log_actionTelemetry(response_telemetry, runtime, 1, result->id, workerapi::loadModelFromDiskAction, result->status, util::hrt());
 	result->action_received = adjust_timestamp(action->received, -action->clock_delta);
-	result->result_sent = util::now() - action->clock_delta;
+	result->clock_delta = action->clock_delta;
 	worker->controller->sendResult(result);
 	delete this;
 }
@@ -201,7 +201,7 @@ void LoadWeights::success(std::shared_ptr<workerapi::LoadWeightsResult> result) 
 	result->begin = adjust_timestamp(result->begin, -action->clock_delta);
 	result->end = adjust_timestamp(result->end, -action->clock_delta);
 	result->action_received = adjust_timestamp(action->received, -action->clock_delta);
-	result->result_sent = util::now() - action->clock_delta;
+	result->clock_delta = action->clock_delta;
 	
 	worker->controller->sendResult(result);
 	delete this;
@@ -210,7 +210,7 @@ void LoadWeights::success(std::shared_ptr<workerapi::LoadWeightsResult> result) 
 void LoadWeights::error(std::shared_ptr<workerapi::ErrorResult> result) {
 	// set_and_log_actionTelemetry(response_telemetry, runtime, 1, result->id, workerapi::loadWeightsAction, result->status, util::hrt());
 	result->action_received = adjust_timestamp(action->received, -action->clock_delta);
-	result->result_sent = util::now() - action->clock_delta;
+	result->clock_delta = action->clock_delta;
 	worker->controller->sendResult(result);
 	delete this;
 }
@@ -229,7 +229,7 @@ void EvictWeights::success(std::shared_ptr<workerapi::EvictWeightsResult> result
 	result->begin = adjust_timestamp(result->begin, -action->clock_delta);
 	result->end = adjust_timestamp(result->end, -action->clock_delta);
 	result->action_received = adjust_timestamp(action->received, -action->clock_delta);
-	result->result_sent = util::now() - action->clock_delta;
+	result->clock_delta = action->clock_delta;
 	
 	worker->controller->sendResult(result);
 	delete this;
@@ -238,7 +238,7 @@ void EvictWeights::success(std::shared_ptr<workerapi::EvictWeightsResult> result
 void EvictWeights::error(std::shared_ptr<workerapi::ErrorResult> result) {
 	// set_and_log_actionTelemetry(response_telemetry, runtime, 1, result->id, workerapi::evictWeightsAction, result->status, util::hrt());
 	result->action_received = adjust_timestamp(action->received, -action->clock_delta);
-	result->result_sent = util::now() - action->clock_delta;
+	result->clock_delta = action->clock_delta;
 	worker->controller->sendResult(result);
 	delete this;
 }
@@ -261,7 +261,7 @@ void Infer::success(std::shared_ptr<workerapi::InferResult> result) {
 	result->copy_output.begin = adjust_timestamp(result->copy_output.begin, -action->clock_delta);
 	result->copy_output.end = adjust_timestamp(result->copy_output.end, -action->clock_delta);
 	result->action_received = adjust_timestamp(action->received, -action->clock_delta);
-	result->result_sent = util::now() - action->clock_delta;
+	result->clock_delta = action->clock_delta;
 	
 	worker->controller->sendResult(result);
 	delete this;
@@ -270,7 +270,7 @@ void Infer::success(std::shared_ptr<workerapi::InferResult> result) {
 void Infer::error(std::shared_ptr<workerapi::ErrorResult> result) {
 	// set_and_log_actionTelemetry(response_telemetry, runtime, 1, result->id, workerapi::inferAction, result->status, util::hrt());
 	result->action_received = adjust_timestamp(action->received, -action->clock_delta);
-	result->result_sent = util::now() - action->clock_delta;
+	result->clock_delta = action->clock_delta;
 	worker->controller->sendResult(result);
 	delete this;
 }

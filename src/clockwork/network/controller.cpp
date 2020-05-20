@@ -70,44 +70,51 @@ void WorkerConnection::aborted_receive(message_connection *tcp_conn, message_rx 
 }
 
 void WorkerConnection::completed_receive(message_connection *tcp_conn, message_rx *req) {
+	uint64_t now = util::now();
+
+	std::shared_ptr<workerapi::Result> ret;
+
 	if (auto error = dynamic_cast<error_result_rx*>(req)) {
 		auto result = std::make_shared<workerapi::ErrorResult>();
 		error->get(*result);
-		controller->sendResult(result);
+		ret = result;
 
 	} else if (auto load_model = dynamic_cast<load_model_from_disk_result_rx*>(req)) {
 		auto result = std::make_shared<workerapi::LoadModelFromDiskResult>();
 		load_model->get(*result);
-		controller->sendResult(result);
+		ret = result;
 
 	} else if (auto load_weights = dynamic_cast<load_weights_result_rx*>(req)) {
 		auto result = std::make_shared<workerapi::LoadWeightsResult>();
 		load_weights->get(*result);
-		controller->sendResult(result);
+		ret = result;
 		
 	} else if (auto infer = dynamic_cast<infer_result_rx*>(req)) {
 		auto result = std::make_shared<workerapi::InferResult>();
 		infer->get(*result);
-		controller->sendResult(result);
+		ret = result;
 		
 	} else if (auto evict = dynamic_cast<evict_weights_result_rx*>(req)) {
 		auto result = std::make_shared<workerapi::EvictWeightsResult>();
 		evict->get(*result);
-		controller->sendResult(result);
+		ret = result;
 
 	} else if (auto clear_cache = dynamic_cast<clear_cache_result_rx*>(req)) {
 		auto result = std::make_shared<workerapi::ClearCacheResult>();
 		clear_cache->get(*result);
-		controller->sendResult(result);
+		ret = result;
 		
 	} else if (auto get_worker_state = dynamic_cast<get_worker_state_result_rx*>(req)) {
 		auto result = std::make_shared<workerapi::GetWorkerStateResult>();
 		get_worker_state->get(*result);
-		controller->sendResult(result);
+		ret = result;
 
 	} else {
 		CHECK(false) << "Received an unsupported message_rx type";
 	}
+
+	ret->result_received = now;
+	controller->sendResult(ret);
 
 	delete req;
 }
@@ -127,6 +134,7 @@ void WorkerConnection::sendActions(std::vector<std::shared_ptr<workerapi::Action
 }
 
 void WorkerConnection::sendAction(std::shared_ptr<workerapi::Action> action) {
+	action->action_sent = util::now();
 	if (auto load_model = std::dynamic_pointer_cast<workerapi::LoadModelFromDisk>(action)) {
 		auto tx = new load_model_from_disk_action_tx();
 		tx->set(*load_model);
