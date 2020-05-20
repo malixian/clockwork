@@ -34,7 +34,12 @@ void printUsage() {
 			  << "\t simple-slo-factor" << std::endl
 			  << "\t\t 3 models with closed-loop concurrency of 1" << std::endl
 			  << "\t\t Updates each model's slo factor every 10 seconds" << std::endl
-			  << "\t simple-parametric num_models concurrency requests_per_model" << std::endl
+			  << "\t simple-parametric models clients concurrency requests" << std::endl
+			  << "\t\t Workload parameters:" << std::endl
+			  << "\t\t\t models: number of model copies" << std::endl
+			  << "\t\t\t clients: number of clients among which the models are partitioned" << std::endl
+			  << "\t\t\t concurrency: number of concurrent requests per client" << std::endl
+			  << "\t\t\t requests: total number of requests per client (for termination)" << std::endl
 			  << "\t poisson-open-loop num_models rate " << std::endl
 			  << "\t\t Rate should be provided in requests/second" << std::endl
 			  << "\t\t Rate is split across all models" << std::endl
@@ -119,8 +124,12 @@ int main(int argc, char *argv[])
 	else if (workload == "simple-slo-factor")
 		engine = workload::simple_slo_factor(client);
 	else if (workload == "simple-parametric")
-		engine = workload::simple_parametric(client,
-			std::stoul(argv[3]), std::stoul(argv[4]), std::stoul(argv[5]));
+		engine = workload::simple_parametric(
+			client,
+			std::stoul(argv[3]),	// total number of models
+			std::stoul(argv[4]),	// number of clients
+			std::stoul(argv[5]),	// concurrency per client
+			std::stoul(argv[6]));	// number of requests per client
 	else if (workload == "poisson-open-loop")
 		engine = workload::poisson_open_loop(client, std::stoul(argv[3]),
 			std::stod(argv[4]));

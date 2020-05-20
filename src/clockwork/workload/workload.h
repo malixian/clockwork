@@ -50,10 +50,9 @@ public:
 };
 
 class Workload {
-private:
+public:
 	std::vector<clockwork::Model*> models;
 
-public:
 	int user_id;
 	Engine* engine;
 
@@ -146,17 +145,25 @@ public:
 	const unsigned concurrency;
 	uint64_t num_requests;
 	uint64_t jitter;
+	unsigned idx = 0; // for models
 
 	ClosedLoop(int id, clockwork::Model* model, unsigned concurrency);
 
+	ClosedLoop(int id, std::vector<clockwork::Model*> models, unsigned concurrency);
+
 	ClosedLoop(int id, clockwork::Model* model, unsigned concurrency,
 		uint64_t num_requests, uint64_t jitter);
+
+	ClosedLoop(int id, std::vector<clockwork::Model*> models,
+		unsigned concurrency, uint64_t num_requests, uint64_t jitter);
 
 	virtual void Start(uint64_t now);
 	virtual void ActualStart();
 	virtual void InferComplete(uint64_t now, unsigned model_index);
 	virtual void InferError(uint64_t now, unsigned model_index, int status);
 	virtual void InferErrorInitializing(uint64_t now, unsigned model_index);
+
+	unsigned GetAndUpdateIdx();
 };
 
 template <typename TDISTRIBUTION> class OpenLoop : public Workload {
