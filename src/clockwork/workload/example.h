@@ -120,21 +120,36 @@ Engine* simple_slo_factor(clockwork::Client* client) {
 }
 
 Engine* simple_parametric(clockwork::Client* client, unsigned num_copies,
-	unsigned concurrency, unsigned num_requests) {
+	unsigned num_clients, unsigned concurrency, unsigned num_requests) {
 	Engine* engine = new Engine();
 
+	unsigned num_models_per_client = ceil(num_copies / (float)num_clients);
 	std::string modelpath = util::get_clockwork_modelzoo()["resnet50_v2"];
 	auto models = client->load_remote_models(modelpath, num_copies);
 
-	for (unsigned i = 0; i < models.size(); i++) {
-		std::cout << "Adding a ClosedLoop Engine for Model " << i << std::endl;
+	for (unsigned i = 0; i < num_clients; i++) {
+
+		// note that std::vector initialization ignores the last element
+		auto it1 = models.begin() + (i * num_models_per_client);
+		auto it2 = models.begin() + ((i + 1) * num_models_per_client);
+		std::vector<clockwork::Model*> models_subset(it1, std::min(it2, models.end()));
+
+		std::cout << "Adding ClosedLoop client " << i << " with models:";
+		for (auto const &model : models_subset) {
+			model->disable_inputs();
+			std::cout << " " << model->id();
+		}
+		std::cout << std::endl;
+
 		engine->AddWorkload(new ClosedLoop(
 			i, 				// client id
-			models[i],		// model
+			models_subset,	// subset of models
 			concurrency,	// concurrency
 			num_requests,	// max num requests
 			0				// jitter
 		));
+
+		if (it2 >= models.end()) { break; }
 	}
 
 	return engine;

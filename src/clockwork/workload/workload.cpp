@@ -127,7 +127,15 @@ void Workload::InferErrorInitializing(uint64_t now, unsigned model_index) {
 
 ClosedLoop::ClosedLoop(int id, clockwork::Model* model, unsigned concurrency) :
 	Workload(id, model), concurrency(concurrency), num_requests(UINT64_MAX),
-	jitter(0) {
+	jitter(0), idx(0) {
+	CHECK(concurrency != 0) << "ClosedLoop with concurrency 0 created";
+	CHECK(num_requests != 0) << "ClosedLoop with num_requests 0 created";
+}
+
+ClosedLoop::ClosedLoop(int id, std::vector<clockwork::Model*> models,
+	unsigned concurrency) :
+		Workload(id, models), concurrency(concurrency),
+		num_requests(UINT64_MAX), jitter(0), idx(0) {
 	CHECK(concurrency != 0) << "ClosedLoop with concurrency 0 created";
 	CHECK(num_requests != 0) << "ClosedLoop with num_requests 0 created";
 }
@@ -135,7 +143,15 @@ ClosedLoop::ClosedLoop(int id, clockwork::Model* model, unsigned concurrency) :
 ClosedLoop::ClosedLoop(int id, clockwork::Model* model, unsigned concurrency,
 	uint64_t num_requests, uint64_t jitter) :
 	Workload(id, model), concurrency(concurrency), num_requests(num_requests),
-	jitter(jitter) {
+	jitter(jitter), idx(0) {
+	CHECK(concurrency != 0) << "ClosedLoop with concurrency 0 created";
+	CHECK(num_requests != 0) << "ClosedLoop with num_requests 0 created";
+}
+
+ClosedLoop::ClosedLoop(int id, std::vector<clockwork::Model*> models,
+	unsigned concurrency, uint64_t num_requests, uint64_t jitter) :
+	Workload(id, models), concurrency(concurrency), num_requests(num_requests),
+	jitter(jitter), idx(0) {
 	CHECK(concurrency != 0) << "ClosedLoop with concurrency 0 created";
 	CHECK(num_requests != 0) << "ClosedLoop with num_requests 0 created";
 }
@@ -152,18 +168,24 @@ void ClosedLoop::Start(uint64_t now) {
 
 void ClosedLoop::ActualStart() {
 	for (unsigned i = 0; i < concurrency; i++) {
-		Infer();
+		Infer(GetAndUpdateIdx());
 	}
 }
 
 void ClosedLoop::InferComplete(uint64_t now, unsigned model_index) {
-	if ((num_requests--) > 0) { Infer(); } else { engine->running--; }
+	if ((num_requests--) > 0) { Infer(GetAndUpdateIdx()); } else { engine->running--; }
 }
 
 void ClosedLoop::InferError(uint64_t now, unsigned model_index, int status) {
-	if ((num_requests--) > 0) { Infer(); } else { engine->running--; }
+	if ((num_requests--) > 0) { Infer(GetAndUpdateIdx()); } else { engine->running--; }
 }
 
 void ClosedLoop::InferErrorInitializing(uint64_t now, unsigned model_index) {
-	if ((num_requests--) > 0) { Infer(); } else { engine->running--; }
+	if ((num_requests--) > 0) { Infer(GetAndUpdateIdx()); } else { engine->running--; }
+}
+
+unsigned ClosedLoop::GetAndUpdateIdx() {
+	unsigned ret_idx = idx;
+	idx = (idx + 1) % models.size();
+	return ret_idx;
 }
