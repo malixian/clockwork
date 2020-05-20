@@ -22,6 +22,9 @@ void printUsage() {
 			  << "[workload parameters (if required)]" << std::endl
 			  << "Available workloads with parameters:" << std::endl
 			  << "\t example" << std::endl
+			  << "\t fill_memory" << std::endl
+			  << "\t\t creates 500 copies of resnet50, more than can fit in memory" << std::endl
+			  << "\t\t 100 of them are closed loop, 400 are gentle open loop" << std::endl
 			  << "\t spam [modelname]" << std::endl
 			  << "\t\t default modelname is resnet50_v2" << std::endl
 			  << "\t\t 100 instances, each with 100 closed loop" << std::endl
@@ -73,7 +76,8 @@ void printUsage() {
 			  << "\t\t\t\t (the SLO factor of each FG model is updated every 7 seconds as follows: 2 4 8 16 32)" << std::endl
 			  << "\t\t\t\t (4 BG models with a relaxed SLO factor of 100 and respective ClosedLoop clients configured with a concurrency factor of 1)" << std::endl
 			  << "\tazure" << std::endl
-			  << "\tazure_small" << std::endl;
+			  << "\tazure_small" << std::endl
+			  << "\tazure_half" << std::endl;
 }
 
 int main(int argc, char *argv[])
@@ -108,6 +112,8 @@ int main(int argc, char *argv[])
 	}
 	else if (workload == "single-spam") 
 		engine = workload::single_spam(client);
+	else if (workload == "fill_memory") 
+		engine = workload::fill_memory(client);
 	else if (workload == "simple")
 		engine = workload::simple(client);
 	else if (workload == "simple-slo-factor")
@@ -147,6 +153,8 @@ int main(int argc, char *argv[])
 			std::stod(argv[14]));	// SLO factor for BG models
 	else if (workload == "azure")
 		engine = workload::azure(client);
+	else if (workload == "azure_half")
+		engine = workload::azure_half(client);
 	else if (workload == "azure_small")
 		engine = workload::azure_small(client);
 	else if (workload == "azure_single")

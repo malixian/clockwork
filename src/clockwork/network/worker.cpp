@@ -170,6 +170,8 @@ void Connection::aborted_receive(message_connection *tcp_conn, message_rx *req) 
 void Connection::completed_receive(message_connection *tcp_conn, message_rx *req) {
 	std::vector<std::shared_ptr<workerapi::Action>> actions;
 
+	uint64_t now = util::now();
+
 	if (auto load_model = dynamic_cast<load_model_from_disk_action_rx*>(req)) {
 		auto action = std::make_shared<workerapi::LoadModelFromDisk>();
 		load_model->get(*action);
@@ -212,7 +214,7 @@ void Connection::completed_receive(message_connection *tcp_conn, message_rx *req
 	if (verbose) std::cout << "Received " << actions[0]->str() << std::endl;
 
 	actions[0]->clock_delta = estimate_clock_delta();
-	actions[0]->received = util::now();
+	actions[0]->received = now;
 
 	stats.total_pending++;
 
@@ -231,6 +233,7 @@ void Connection::aborted_transmit(message_connection *tcp_conn, message_tx *req)
 void Connection::sendResult(std::shared_ptr<workerapi::Result> result) {
 	if (verbose) std::cout << "Sending " << result->str() << std::endl;
 	using namespace workerapi;
+	result->result_sent = util::now() - result->clock_delta;
 	if (auto load_model = std::dynamic_pointer_cast<LoadModelFromDiskResult>(result)) {
 		auto tx = new load_model_from_disk_result_tx();
 		tx->set(*load_model);
@@ -241,18 +244,22 @@ void Connection::sendResult(std::shared_ptr<workerapi::Result> result) {
 		auto tx = new load_weights_result_tx();
 		tx->set(*load_weights);
 		msg_tx_.send_message(*tx);
+
 	} else if (auto infer = std::dynamic_pointer_cast<InferResult>(result)) {
 		auto tx = new infer_result_tx_using_io_pool(worker->runtime->manager->host_io_pool);
 		tx->set(*infer);
 		msg_tx_.send_message(*tx);
+
 	} else if (auto evict_weights = std::dynamic_pointer_cast<EvictWeightsResult>(result)) {
 		auto tx = new evict_weights_result_tx();
 		tx->set(*evict_weights);
 		msg_tx_.send_message(*tx);
+
 	} else if (auto clear_cache = std::dynamic_pointer_cast<ClearCacheResult>(result)) {
 		auto tx = new clear_cache_result_tx();
 		tx->set(*clear_cache);
 		msg_tx_.send_message(*tx);
+
 	} else if (auto get_worker_state = std::dynamic_pointer_cast<GetWorkerStateResult>(result)) {
 		auto tx = new get_worker_state_result_tx();
 		tx->set(*get_worker_state);

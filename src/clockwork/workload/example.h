@@ -10,6 +10,45 @@
 namespace clockwork {
 namespace workload {
 
+Engine* fill_memory(clockwork::Client* client) {
+	Engine* engine = new Engine();
+
+	unsigned num_copies = 500;
+	std::string modelpath = util::get_clockwork_modelzoo()["resnet50_v2"];
+	auto models = client->load_remote_models(modelpath, num_copies);
+
+	unsigned i = 0;
+	for (; i < 1; i++) {
+		models[i]->disable_inputs();
+		engine->AddWorkload(new PoissonOpenLoop(
+			i,				// client id
+			models[i],  	// model
+			i,      		// rng seed
+			100				// requests/second
+		));
+	}
+	for (; i < 11; i++) {
+		models[i]->disable_inputs();
+		engine->AddWorkload(new PoissonOpenLoop(
+			i,				// client id
+			models[i],  	// model
+			i,      		// rng seed
+			10				// requests/second
+		));
+	}
+	for (; i < 411; i++) {
+		models[i]->disable_inputs();
+		engine->AddWorkload(new PoissonOpenLoop(
+			i,				// client id
+			models[i],  	// model
+			i,      		// rng seed
+			1				// requests/second
+		));
+	}
+
+	return engine;
+}
+
 Engine* simple(clockwork::Client* client) {
 	Engine* engine = new Engine();
 
@@ -363,6 +402,41 @@ Engine* azure_fast(clockwork::Client* client, unsigned trace_id = 1) {
 			1.0,			// scale factor; default 1
 			1.0,			// interval duration; default 60
 			-1				// interval to begin at; default 0; set to -1 for random
+		);
+
+		engine->AddWorkload(replay);
+	}
+
+	return engine;
+}
+
+Engine* azure_half(clockwork::Client* client, unsigned trace_id = 1) {
+	Engine* engine = new Engine();
+
+	auto trace_data = azure::load_trace(trace_id);
+
+	std::vector<Model*> models;
+	for (auto &p : util::get_clockwork_modelzoo()) {
+		std::cout << "Loading " << p.first << std::endl;
+		for (auto &model : client->load_remote_models(p.second, 16)) {
+			models.push_back(model);
+		}
+	}
+
+
+	for (unsigned i = 0; i < trace_data.size() / 10; i++) {
+		auto model = models[i % models.size()];
+		model->disable_inputs();
+		auto workload = trace_data[i];
+
+		Workload* replay = new PoissonTraceReplay(
+			i,				// client id, just give them all the same ID for this example
+			model,			// model
+			i,				// rng seed
+			workload,		// trace data
+			1,			// scale factor; default 1
+			60,			// interval duration; default 60
+			0				// interval to begin at; default 0; set to -1 for random
 		);
 
 		engine->AddWorkload(replay);

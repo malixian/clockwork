@@ -76,6 +76,7 @@ add_library( clockwork
 	src/clockwork/controller/scheduler.cpp
 	src/clockwork/controller/infer_only_scheduler.cpp
 	src/clockwork/controller/infer_only_scheduler_2.cpp
+	src/clockwork/controller/infer_and_load_scheduler.cpp
 	src/clockwork/config.cpp
 	src/clockwork/network/client.cpp
 	src/clockwork/workload/workload.cpp

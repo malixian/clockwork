@@ -88,7 +88,8 @@ public:
 
 	// The below are not sent over the network
 	int64_t clock_delta = 0; // Estimated clock delta between controller and this worker
-	uint64_t received;
+	uint64_t received = 0;
+	uint64_t action_sent = 0;
 
 	virtual std::string str() = 0;
 };
@@ -127,6 +128,9 @@ public:
 
 	int model_id;
 	unsigned gpu_id;
+	
+	// Not actually sent to workers; here for convenience
+	int worker_id = -1;
 	
 	virtual std::string str();
 };
@@ -170,6 +174,8 @@ public:
 	uint64_t action_received;
 	uint64_t result_sent;
 
+	// Not sent over the network
+	uint64_t result_received = 0;
 	int64_t clock_delta = 0; // Estimated clock delta between controller and this worker
 	
 	virtual std::string str() = 0;

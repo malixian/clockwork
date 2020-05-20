@@ -11,6 +11,7 @@
 #include "clockwork/task.h"
 #include "clockwork/memory.h"
 #include "clockwork/config.h"
+#include "clockwork/controller/infer_and_load_scheduler.h"
 #include <catch2/catch.hpp>
 #include <stdio.h>
 
@@ -157,4 +158,64 @@ TEST_CASE("Test batch lookup", "[batchlookup] [util]") {
         REQUIRE(lookup[15] == 8);
         REQUIRE(lookup[16] == 16);
     }
+}
+
+
+TEST_CASE("Test scheduler work tracker", "[scheduler] [worktracker]") {
+    clockwork::scheduler::infer3::Scheduler::WorkTracker tracker(4, 4);
+
+    tracker.addRequest(1, 70000000UL);
+    tracker.addRequest(2, 40000000UL);
+    tracker.addRequest(3, 50000000UL);
+
+    REQUIRE(tracker.loadModel(0) == 1);
+    REQUIRE(tracker.loadModel(0) == 3);
+    REQUIRE(tracker.loadModel(0) == 2);
+    REQUIRE(tracker.loadModel(0) == 0);
+}
+
+
+TEST_CASE("Test scheduler work tracker 2", "[scheduler] [worktracker]") {
+    clockwork::scheduler::infer3::Scheduler::WorkTracker tracker(4, 4);
+
+    tracker.addRequest(1, 30000000UL);
+    REQUIRE(tracker.loadModel(0) == 1);
+
+    for (unsigned i = 0; i < 100; i++) {
+        tracker.addRequest(1, 30000000UL);
+    }
+    tracker.addRequest(2, 30000000UL);
+    tracker.addRequest(3, 20000000UL);
+    tracker.addRequest(0, 40000000UL);
+
+    REQUIRE(tracker.loadModel(1) == 1);
+    REQUIRE(tracker.loadModel(2) == 1);
+    REQUIRE(tracker.loadModel(3) == 1);
+    REQUIRE(tracker.loadModel(0) == 0);
+    REQUIRE(tracker.loadModel(0) == 2);
+    REQUIRE(tracker.loadModel(0) == 3);
+}
+
+
+TEST_CASE("Test scheduler work tracker 3", "[scheduler] [worktracker]") {
+    clockwork::scheduler::infer3::Scheduler::WorkTracker tracker(4, 4);
+
+    tracker.loadModel(0);
+    tracker.loadModel(0);
+    tracker.loadModel(0);
+    tracker.loadModel(0);
+
+    tracker.addRequest(1, 30000000UL);
+
+    for (unsigned i = 0; i < 10; i++) {
+        tracker.addRequest(1, 30000000UL);
+    }
+    tracker.addRequest(2, 30000000UL);
+    tracker.addRequest(3, 20000000UL);
+    tracker.addRequest(0, 40000000UL);
+
+    REQUIRE(tracker.evictModel(0) == 3);
+    REQUIRE(tracker.evictModel(0) == 2);
+    REQUIRE(tracker.evictModel(0) == 0);
+    REQUIRE(tracker.evictModel(0) == 1);
 }
