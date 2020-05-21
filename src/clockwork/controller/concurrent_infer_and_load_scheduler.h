@@ -424,7 +424,7 @@ class Scheduler : public clockwork::Scheduler {
     void add_action(uint64_t action_id, GPU* gpu);
 
 
-    Scheduler(std::string actions_filename = "/local/clockwork_action_log.tsv", uint64_t default_slo = 100000000UL);
+    Scheduler(uint64_t default_slo = 100000000UL, std::string actions_filename = "/local/clockwork_action_log.tsv");
 
 
     // Called when model loading has completed

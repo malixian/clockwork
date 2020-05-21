@@ -250,10 +250,11 @@ int Scheduler::WorkTracker2::evictModel(int gpu_id) {
     return model_id;
 }
 
-Scheduler::Scheduler(std::string actions_filename, uint64_t default_slo) 
+Scheduler::Scheduler(uint64_t default_slo, std::string actions_filename) 
     : actions_filename(actions_filename),
       actions_in_use(ATOMIC_FLAG_INIT),
       default_slo(default_slo) {
+    std::cout << "Using default_slo=" << default_slo << std::endl;
 }
 
 Scheduler::RequestImpl::RequestImpl(clientapi::InferenceRequest request,

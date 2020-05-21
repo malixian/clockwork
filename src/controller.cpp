@@ -176,11 +176,15 @@ int main(int argc, char *argv[]) {
         );
         controller->join();
     } else if (controller_type == "INFER4") {
-        Scheduler* scheduler = new scheduler::infer4::Scheduler();
+        uint64_t default_slo = 100000000UL;
+        if (argc >= 4) {
+            default_slo = std::stoull(argv[3]);
+        }
+        Scheduler* scheduler = new scheduler::infer4::Scheduler(default_slo);
         controller::ControllerWithStartupPhase* controller = new controller::ControllerWithStartupPhase(
             client_requests_listen_port,
             worker_host_port_pairs,
-            100000000UL, // 10s load stage timeout
+            1000000000UL, // 10s load stage timeout
             new controller::ControllerStartup(), // in future the startup type might be customizable
             scheduler,
             ControllerRequestTelemetry::log_and_summarize(
