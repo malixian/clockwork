@@ -495,6 +495,7 @@ class Scheduler : public clockwork::Scheduler {
         GPU* gpu = nullptr;
         Model* model = nullptr;
         bool loaded = false;
+        bool loading = false;
         unsigned version = 0;
         ModelInstance(GPU* gpu, Model* model): gpu(gpu), model(model) {}
     };

@@ -310,7 +310,7 @@ void Scheduler::Model::check_timeouts(uint64_t free_at) {
         if (request->deadline >= free_at && !request->has_completed) break;
 
         queue.pop_front();
-        request->timeout();
+        // Don't time it out here -- let the checker thread do that
     }
 }
 
@@ -349,7 +349,7 @@ Scheduler::InferAction* Scheduler::Model::try_dequeue(
     while (queue.front()->id != strategy->request_id) {
         auto request = queue.front();
         queue.pop_front();
-        request->timeout();
+        // Don't time it out here - let the queue checker do that
     }
 
     CHECK(queue.size() >= strategy->batch_size) << "Scheduler logic error";
@@ -436,7 +436,7 @@ void Scheduler::InferAction::unbatch() {
 void Scheduler::InferAction::set_error(std::shared_ptr<workerapi::ErrorResult> &error) {
     this->error = error;
     for (auto &request : requests) {
-        request->set_error(clockworkError, error->message);
+        request->set_error(error->status, error->message);
     }
 }
 
@@ -490,12 +490,17 @@ void Scheduler::LoadWeightsAction::set_error(std::shared_ptr<workerapi::ErrorRes
     this->error = error;
     if (version = instance->version) {
         instance->version++;
+        instance->loading = false;
         instance->loaded = false;
     }
 }
 
 void Scheduler::LoadWeightsAction::set_result(std::shared_ptr<workerapi::LoadWeightsResult> &result) {
     this->result = result;
+    if (version == instance->version) {
+        instance->loaded = true;
+        instance->loading = false;
+    }
 }
 
 Scheduler::EvictWeightsAction::EvictWeightsAction(ModelInstance* instance) : instance(instance) {
@@ -591,6 +596,7 @@ void Scheduler::GPU::evict_pages(unsigned required_pages) {
 
         ModelInstance* instance = instances[model_id];
         instance->version++;
+        instance->loading = false;
         instance->loaded = false;
 
         EvictWeightsAction* evict = new EvictWeightsAction(instance);
@@ -610,7 +616,7 @@ void Scheduler::GPU::check_pending() {
     while (loading.size() > 0) {
         auto load = loading.front();
 
-        if (load.version == load.instance->version && load.instance->loaded) {
+        if (load.version == load.instance->version && (load.instance->loading || load.instance->loaded)) {
             if (load.available_at > available) break;
 
             // Ready to enqueue infer strategies for this model
@@ -638,7 +644,7 @@ void Scheduler::GPU::check_pending() {
         if (model_id == -1) break;
 
         ModelInstance* instance = instances[model_id];
-        CHECK(instance->loaded == false) << "Tracker asked to load model that is already loaded";
+        CHECK(instance->loaded == false && instance->loading == false) << "Tracker asked to load model that is already loaded";
 
         unsigned size = scheduler->models[model_id]->num_weights_pages;
         evict_pages(size);
@@ -649,7 +655,8 @@ void Scheduler::GPU::check_pending() {
         }
 
         instance->version++;
-        instance->loaded = true;
+        instance->loading = true;
+        instance->loaded = false;
         free_pages -= size;
 
         uint64_t expected_duration = instance->model->estimate_weights();
