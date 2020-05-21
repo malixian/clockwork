@@ -137,6 +137,7 @@ class Scheduler : public clockwork::Scheduler {
     class RequestImpl {
      public:
         uint64_t id;
+        uint64_t slo;
         uint64_t deadline;
         Model* model = nullptr;
         clientapi::InferenceRequest request;
@@ -154,6 +155,7 @@ class Scheduler : public clockwork::Scheduler {
             std::function<void(clientapi::InferenceResponse&)> callback);
         ~RequestImpl();
 
+        void set_model(Model* model, uint64_t default_slo);
         void set_result(char* output, size_t output_size);
         void set_error(int status, std::string message);
 
@@ -396,6 +398,8 @@ class Scheduler : public clockwork::Scheduler {
     std::vector<GPU*> gpus;
     std::vector<Model*> models;
 
+    uint64_t default_slo;
+
  private:
     // All requests to time out
     std::queue<Request> requests;
@@ -420,7 +424,7 @@ class Scheduler : public clockwork::Scheduler {
     void add_action(uint64_t action_id, GPU* gpu);
 
 
-    Scheduler(std::string actions_filename = "/local/clockwork_action_log.tsv");
+    Scheduler(std::string actions_filename = "/local/clockwork_action_log.tsv", uint64_t default_slo = 100000000UL);
 
 
     // Called when model loading has completed

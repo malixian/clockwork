@@ -250,9 +250,10 @@ int Scheduler::WorkTracker2::evictModel(int gpu_id) {
     return model_id;
 }
 
-Scheduler::Scheduler(std::string actions_filename) 
+Scheduler::Scheduler(std::string actions_filename, uint64_t default_slo) 
     : actions_filename(actions_filename),
-      actions_in_use(ATOMIC_FLAG_INIT) {
+      actions_in_use(ATOMIC_FLAG_INIT),
+      default_slo(default_slo) {
 }
 
 Scheduler::RequestImpl::RequestImpl(clientapi::InferenceRequest request,
@@ -268,9 +269,6 @@ Scheduler::RequestImpl::RequestImpl(clientapi::InferenceRequest request,
     response.batch_size = request.batch_size;
     response.output = nullptr;
     response.output_size = 0;
-    response.deadline = request.arrival + Scheduler::slo;
-
-    this->deadline = response.deadline - Scheduler::buffer;
 }
 
 Scheduler::RequestImpl::~RequestImpl() {
@@ -279,6 +277,16 @@ Scheduler::RequestImpl::~RequestImpl() {
 
 void Scheduler::RequestImpl::lock() {
     locked = true;
+}
+
+void Scheduler::RequestImpl::set_model(Model* model, uint64_t default_slo) {
+    this->model = model;
+    this->slo = default_slo;
+    if (request.slo_factor > 0) {
+        this->slo = model->b1_exec * request.slo_factor;
+    }
+    response.deadline = request.arrival + this->slo;
+    this->deadline = response.deadline - Scheduler::buffer;
 }
 
 void Scheduler::RequestImpl::set_result(char* output, size_t output_size) {
@@ -1162,7 +1170,7 @@ void Scheduler::handle_request(Request request) {
     }
 
     Model* model = models[model_id];
-    request->model = model;
+    request->set_model(model, default_slo);
     model->enqueue(request);
     requests.push(request);
 }
@@ -1197,11 +1205,6 @@ void Scheduler::run() {
         Request request;
         while (request_queue.try_pop(request)) {
             handle_request(request);
-        }
-
-        std::shared_ptr<workerapi::Result> result;
-        while (result_queue.try_pop(result)) {
-            handle_result(result);
         }
 
         // Drop any timed out requests
@@ -1239,7 +1242,7 @@ void Scheduler::resultFromWorker(std::shared_ptr<workerapi::Result> result)
     if (print_debug) std::cout << ("Worker  --> " + result->str() + "\n");
 
     result->result_received = util::now();
-    result_queue.push(result);
+    handle_result(result);
 }
 
 // The actual scheduler interface implementation, invoked by client network thread
