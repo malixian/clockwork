@@ -381,6 +381,7 @@ void Scheduler::Model::enqueue(Request request) {
     uint64_t size_for_tracker = batch_size_estimates[1];// / supported_batch_sizes[1];
 
     uint64_t slo = (request->deadline - util::now()) - estimate_weights() - batch_size_estimates[i]; // for execution
+    slo = std::min(request->deadline - util::now(), slo);
     {
         tbb::queuing_mutex::scoped_lock lock(scheduler->tracker->mutex);
         request->demand = scheduler->tracker->addRequest(id, size_for_tracker, slo);
@@ -786,7 +787,7 @@ bool Scheduler::GPU::try_load(uint64_t available) {
         tbb::queuing_mutex::scoped_lock lock;
 
         if (!lock.try_acquire(scheduler->tracker->mutex)) return false;
-        
+
         last_load = now;
 
 
