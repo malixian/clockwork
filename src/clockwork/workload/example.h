@@ -13,7 +13,7 @@ namespace workload {
 Engine* fill_memory(clockwork::Client* client) {
 	Engine* engine = new Engine();
 
-	unsigned num_copies = 500;
+	unsigned num_copies = 411;
 	std::string modelpath = util::get_clockwork_modelzoo()["resnet50_v2"];
 	auto models = client->load_remote_models(modelpath, num_copies);
 
@@ -24,7 +24,7 @@ Engine* fill_memory(clockwork::Client* client) {
 			i,				// client id
 			models[i],  	// model
 			i,      		// rng seed
-			100				// requests/second
+			1000				// requests/second
 		));
 	}
 	for (; i < 11; i++) {

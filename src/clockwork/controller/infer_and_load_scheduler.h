@@ -70,6 +70,7 @@ class Scheduler : public clockwork::Scheduler {
         struct GPU {
             int id;
             int64_t work = 0;
+            int model_count = 0;
             std::vector<bool> models;
         };
 
@@ -83,29 +84,343 @@ class Scheduler : public clockwork::Scheduler {
 
         WorkTracker(int num_gpus, int num_models);
 
-        Demand addRequest(int model_id, int64_t size);
+        Demand addRequest(int model_id, int64_t size, uint64_t slo);
         void requestCompleted(Demand &demand);
-        int loadModel(int gpu_id);
+        int loadModel(int gpu_id, bool requires_eviction=false);
         void loadModelComplete(int gpu_id, int model_id, bool success);
         int evictModel(int gpu_id);
     };
 
 
-    class Request {
+    class WorkTracker2 {
      public:
+        struct Demand {
+            int model_id;
+            int64_t size;
+        };
+
+     private:
+        static const int64_t capacity = Scheduler::slo; // For now just use the slo
+        struct ModelPriority;
+        struct Model {
+            int id;
+            int gpu_count = 0;
+            std::vector<bool> gpus;
+            std::vector<bool> loading;
+            int64_t outstanding = 0;
+            int64_t completed = 0;
+            std::vector<uint64_t> allocations;
+            std::vector<ModelPriority*> priorities;
+            uint64_t seqno = 0;
+        };
+
+        struct ModelPriority {
+            int64_t priority = 0;
+            bool is_empty = true;
+            int preference = 0;
+            Model* model;
+            ModelPriority(Model* model) : model(model) {}
+        };
+
+        struct CompareModelPriority {
+            bool operator() (ModelPriority* a, ModelPriority* b) {
+                if (a->is_empty) {
+                    if (b->is_empty) {
+                        return a->model->seqno > b->model->seqno;
+                    } else {
+                        return false;
+                    }
+                } else {
+                    if (b->is_empty) {
+                        return true;
+                    } else {
+                        return a->priority > b->priority;
+                    }
+                }
+            }
+        } sort_by_priority;
+
+        struct GPU {
+            int id;
+            int64_t outstanding = 1000000UL; // always assume 1ms outstanding work
+            unsigned model_count = 0;
+            std::vector<bool> models;
+            std::vector<ModelPriority*> modelorder;
+        };
+
+        struct Request {
+            int model_id;
+            int64_t size;
+            uint64_t time;
+
+            friend bool operator < (const Request& lhs, const Request &rhs) {
+                return lhs.time < rhs.time;
+            }
+            friend bool operator > (const Request& lhs, const Request &rhs) {
+                return lhs.time > rhs.time;
+            }
+        };
+
+        uint64_t seqno_seed = 0;
+        std::vector<Model> models;
+        std::vector<GPU> gpus;
+        const unsigned n_models;
+        const unsigned n_gpus;
+
+        std::priority_queue<Request, std::vector<Request>, std::greater<Request>> requests;
+
+        void updatePriority(Model &model) {
+            // Include all work for evict priority, but only outstanding work for load priority
+            bool is_empty = (model.outstanding + model.completed) == 0;
+            for (unsigned i = 0; i < n_gpus; i++) {
+                if (model.gpus[i]) {
+                    model.priorities[i]->priority = model.outstanding + model.completed;
+                } else {
+                    model.priorities[i]->priority = model.outstanding;                  
+                }
+                model.priorities[i]->is_empty = is_empty;
+            }
+            for (unsigned i = 0; i < n_gpus; i++) {
+                if (model.gpus[i]) {
+                    int64_t serving_capacity = (capacity * model.allocations[i]) / gpus[i].outstanding;
+                    auto &preference = model.priorities[i]->preference;
+                    for (unsigned j = 0; j < n_gpus; j++) {
+                        if (i != j) {
+                            model.priorities[j]->priority -= serving_capacity;
+                        }
+                        // if (!model.gpus[j] || model.priorities[j]->preference > preference) {
+                        //     model.priorities[j]->priority -= serving_capacity;
+                        // }
+                    }
+                }
+            }
+        }
+
+        void clearWork(Model &model) {
+            for (unsigned i = 0; i < n_gpus; i++) {
+                gpus[i].outstanding -= model.allocations[i];
+                model.allocations[i] = 0;
+            }
+        }
+
+        void distributeWork(Model &model) {
+            if (model.gpu_count == 0) return;
+
+            clearWork(model);
+
+            double total_weight = 0;
+            std::vector<double> weights(n_gpus, 0);
+            for (unsigned i = 0; i < n_gpus; i++) {
+                if (model.gpus[i]) {
+                    weights[i] = capacity / ((double) gpus[i].outstanding);
+                    total_weight += weights[i];
+                }
+            }
+
+            for (unsigned i = 0; i < n_gpus; i++) {
+                if (model.gpus[i]) {
+                    auto allocation = (model.outstanding + model.completed) * (weights[i] / total_weight);
+                    model.allocations[i] = allocation;
+                    gpus[i].outstanding += allocation;
+                }
+            }
+        }
+
+        void addGPU(Model &model, GPU &gpu) {
+            model.gpus[gpu.id] = true;
+            model.loading[gpu.id] = true;
+            gpu.models[model.id] = true;
+
+            model.priorities[gpu.id]->preference = model.gpu_count++;
+            distributeWork(model);
+            updatePriority(model);
+        }
+
+        void removeGPU(Model &model, GPU &gpu) {
+            model.gpus[gpu.id] = false;
+            model.loading[gpu.id] = false;
+            gpu.models[model.id] = false;
+
+            if (--model.gpu_count == 0) {
+                clearWork(model);
+                model.seqno = seqno_seed++;
+            } else {
+                distributeWork(model);
+
+                // Decrement preferences
+                int preference = model.priorities[gpu.id]->preference;
+                for (unsigned i = 0; i < n_gpus; i++) {
+                    if (model.gpus[i] && model.priorities[i]->preference > preference) {
+                        model.priorities[i]->preference--;
+                    }
+                }
+            }
+            updatePriority(model);
+        }
+
+        void checkRequests() {
+            uint64_t now = util::now();
+            while (!requests.empty() && requests.top().time < now) {
+                auto &request = requests.top();
+                auto &model = models[request.model_id];
+                model.completed -= request.size;
+
+                distributeWork(model);
+                updatePriority(model);
+                requests.pop();
+            }
+        }
+
+     public:
+
+        WorkTracker2(int num_gpus, int num_models) : n_models(num_models), n_gpus(num_gpus) {
+            gpus.resize(num_gpus);
+            for (unsigned i = 0; i < num_gpus; i++) {
+                gpus[i].id = i;
+                gpus[i].models.resize(num_models, false);
+                gpus[i].modelorder.reserve(num_models);
+            }
+
+            models.resize(num_models);
+            for (unsigned i = 0; i < num_models; i++) {
+                auto &model = models[i];
+                model.id = i;
+                model.gpus.resize(num_gpus, false);
+                model.loading.resize(num_gpus, false);
+                model.allocations.resize(num_gpus, 0);
+
+                model.priorities.resize(num_gpus);
+                for (unsigned j = 0; j < num_gpus; j++) {
+                    auto priority = new ModelPriority(&model);
+                    model.priorities[j] = priority;
+                    gpus[j].modelorder.push_back(priority);
+                }
+            }            
+        }
+
+        Demand addRequest(int model_id, int64_t size, uint64_t slo) {
+            // Complete any pending requests
+            checkRequests();
+
+            // First, normalize the work to the SLO
+            size = (size * capacity) / slo;
+
+            // Create the demand
+            Scheduler::WorkTracker2::Demand demand;
+            demand.size = size;
+            demand.model_id = model_id;
+
+            Scheduler::WorkTracker2::Request request;
+            request.size = size;
+            request.model_id = model_id;
+            request.time = util::now() + slo;
+            requests.push(request);
+
+            // Get the model
+            auto &model = models[model_id];
+            model.outstanding += size;
+            
+            // Update the model's priorities
+            distributeWork(model);
+            updatePriority(model);
+
+            return demand;
+        }
+
+        void requestCompleted(Demand &demand) {
+            auto &model = models[demand.model_id];
+            model.outstanding -= demand.size;
+            model.completed += demand.size;
+
+            distributeWork(model);
+            updatePriority(model);
+        }
+
+        int loadModel(int gpu_id, bool requires_eviction = false) {
+            // Complete any pending requests
+            checkRequests();
+
+            auto &gpu = gpus[gpu_id];
+
+            std::sort(gpu.modelorder.begin(), gpu.modelorder.end(), sort_by_priority);
+
+            unsigned seen = 0;
+            for (auto &priority : gpu.modelorder) {
+                if (requires_eviction && seen == gpu.model_count) break;
+
+                if (priority->priority < 0) break; // all demands satisfied
+
+                Model &model = *priority->model;
+                if (!model.gpus[gpu_id] && !model.loading[gpu_id]) {
+                    addGPU(model, gpu);
+                    gpu.model_count++;
+                    return model.id;
+                }
+
+                if (model.gpus[gpu_id]) {
+                    seen++;
+                }
+            }
+
+            return -1; // all models loaded on all gpus
+        }
+
+        void loadModelComplete(int gpu_id, int model_id, bool success) {
+            // Complete any pending requests
+            checkRequests();
+
+            auto &model = models[model_id];
+            auto &gpu = gpus[gpu_id];
+
+            model.loading[gpu_id] = false;
+
+            if (!success) {
+                removeGPU(model, gpu);
+            }
+        }
+
+        int evictModel(int gpu_id) {
+            // Complete any pending requests
+            checkRequests();
+
+            auto &gpu = gpus[gpu_id];
+
+            std::sort(gpu.modelorder.begin(), gpu.modelorder.end(), sort_by_priority);
+
+            for (int i = n_models - 1; i >= 0; i--) {
+                auto &priority = gpu.modelorder[i];
+                Model &model = *priority->model;
+                if (model.gpus[gpu_id] && !model.loading[gpu_id]) {
+                    removeGPU(model, gpus[gpu_id]);
+                    gpu.model_count--;
+                    return model.id;
+                }
+            }
+
+            return -1; // all models are unloaded on all gpus
+
+        }
+    };
+
+
+    class Model;
+    class RequestImpl {
+     public:
+        bool has_completed = false;
         uint64_t id;
+        Model* model = nullptr;
         clientapi::InferenceRequest request;
         clientapi::InferenceResponse response;
         std::function<void(clientapi::InferenceResponse&)> callback;
         uint64_t deadline;
         uint64_t departure;
 
-        WorkTracker::Demand demand;
+        WorkTracker2::Demand demand;
 
 
-        Request(clientapi::InferenceRequest request,
+        RequestImpl(clientapi::InferenceRequest request,
             std::function<void(clientapi::InferenceResponse&)> callback);
-        ~Request();
+        ~RequestImpl();
 
         void set_result(char* output, size_t output_size);
         void set_error(int status, std::string message);
@@ -113,9 +428,10 @@ class Scheduler : public clockwork::Scheduler {
         // Returns true if the result was successful and within the deadline
         void timeout();
         bool complete(uint64_t now);
+        void finalize();
     };
+    typedef std::shared_ptr<RequestImpl> Request;
 
-    class Model;
     class InferAction {
      public:
         Model* model;
@@ -123,7 +439,7 @@ class Scheduler : public clockwork::Scheduler {
         std::shared_ptr<workerapi::Infer> action = std::make_shared<workerapi::Infer>();
         std::shared_ptr<workerapi::ErrorResult> error = nullptr;
         std::shared_ptr<workerapi::InferResult> result = nullptr;
-        std::vector<Request*> requests;
+        std::vector<Request> requests;
 
         explicit InferAction(Model* model);
         ~InferAction();
@@ -192,9 +508,10 @@ class Scheduler : public clockwork::Scheduler {
         std::map<unsigned, uint64_t> estimates;
         std::map<unsigned, util::SlidingWindow*> estimators;
         util::SlidingWindow* weights_estimator;
+        uint64_t weights_estimate;
         uint64_t request_id_seed = 0;
 
-        std::deque<Request*> queue;
+        std::deque<Request> queue;
 
      public:
         Scheduler* scheduler;
@@ -206,15 +523,13 @@ class Scheduler : public clockwork::Scheduler {
         Model(BatchedModelState &state);
 
         // Enqueues the request to this model, then enqueues InferStrategies to all active ModelInstances
-        void enqueue(Request* request);
+        void enqueue(Request request);
 
         // Enqueues InferStrategies for all requests to this ModelInstance
         void enqueue(ModelInstance* instance);
 
         // For num_requests requests, what is the maximum batch size we could execute?
         unsigned batch_lookup(unsigned num_requests);
-        
-        void drop(Request* request);
 
         void check_timeouts(uint64_t free_at);
         InferAction* try_dequeue(GPU* gpu, uint64_t gpu_free_at, InferStrategy* strategy);
@@ -261,6 +576,7 @@ class Scheduler : public clockwork::Scheduler {
         util::WorkerTracker loadweights;
 
         unsigned free_pages;
+        bool eviction_required = false;
 
         std::vector<ModelInstance*> instances;
 
@@ -291,9 +607,10 @@ class Scheduler : public clockwork::Scheduler {
     };
 
     // Clockwork State
-    WorkTracker* tracker;
+    WorkTracker2* tracker;
     std::vector<GPU*> gpus;
     std::vector<Model*> models;
+    std::queue<Request> requests;
 
     // Threads
     std::string actions_filename;
@@ -302,7 +619,7 @@ class Scheduler : public clockwork::Scheduler {
 
     // Messages
     tbb::concurrent_queue<std::shared_ptr<workerapi::Result>> result_queue;
-    tbb::concurrent_queue<Request*> request_queue;
+    tbb::concurrent_queue<Request> request_queue;
 
     struct OutstandingAction { int type; GPU* gpu; void* action; };
     std::unordered_map<uint64_t, std::function<void(std::shared_ptr<workerapi::Result>&)>> outstanding_actions;
@@ -331,7 +648,7 @@ class Scheduler : public clockwork::Scheduler {
     // The actual scheduler interface implementation, invoked by client network thread
     virtual void clientInfer(clientapi::InferenceRequest &request, 
         std::function<void(clientapi::InferenceResponse&)> callback);
-    void handle_request(Request* request);
+    void handle_request(Request request);
 };
 
 }
