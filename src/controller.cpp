@@ -1,8 +1,12 @@
 #include "clockwork/network/controller.h"
 #include "clockwork/controller/direct_controller.h"
 #include "clockwork/controller/closed_loop_controller.h"
+#include "clockwork/controller/fifo_controller.h"
+#include "clockwork/controller/cache_aware_fifo_controller.h"
+#include "clockwork/controller/random_controller.h"
 #include "clockwork/controller/stress_test_controller.h"
 #include "clockwork/controller/infer_only_scheduler.h"
+#include "clockwork/controller/smart_scheduler.h"
 #include "clockwork/controller/infer_only_scheduler_2.h"
 #include "clockwork/controller/infer_and_load_scheduler.h"
 #include "clockwork/telemetry/controller_request_logger.h"
@@ -203,6 +207,22 @@ int main(int argc, char *argv[]) {
             logger
         );
         controller->join();
+    } else if (controller_type == "SMART") {
+       std::string telemetry_file_prefix = argv[3];
+		std::string request_telemetry_file = telemetry_file_prefix + "request.csv";
+
+		Scheduler* scheduler = new SmartScheduler();
+		ControllerStartup* startup = new controller::ControllerStartup();
+
+		logger = ControllerRequestTelemetry::log_and_summarize(
+			request_telemetry_file, 10000000000UL);
+
+		controller::ControllerWithStartupPhase* controller =
+			new controller::ControllerWithStartupPhase(
+				client_requests_listen_port, worker_host_port_pairs,
+				10000000000UL, startup, scheduler, logger);
+		controller->join();
+		
     } else {
         std::cout << "Invalid controller type " << controller_type << std::endl;
         show_usage();

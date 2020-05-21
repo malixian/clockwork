@@ -14,7 +14,9 @@ int main(int argc, char *argv[]) {
 	std::cout << "Starting Clockwork Worker" << std::endl;
 
 	std::string config_file_path;
+
 	for (int i = 1; i < argc; i++){
+		
 		if ((strcmp(argv[i], "--config") == 0))
 			config_file_path = argv[++i];
 	}

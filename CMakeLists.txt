@@ -73,6 +73,9 @@ add_library( clockwork
 	src/clockwork/controller/controller.cpp
 	src/clockwork/controller/closed_loop_controller.cpp
 	src/clockwork/controller/direct_controller.cpp
+	src/clockwork/controller/fifo_controller.cpp
+	src/clockwork/controller/cache_aware_fifo_controller.cpp
+	src/clockwork/controller/random_controller.cpp
 	src/clockwork/controller/scheduler.cpp
 	src/clockwork/controller/infer_only_scheduler.cpp
 	src/clockwork/controller/infer_only_scheduler_2.cpp

@@ -43,6 +43,7 @@ Intel Threading Building Blocks
 ```
 apt-get install libtbb-dev
 apt-get install libasio-dev
+apt-get install libconfig++
 ```
 
 # Building Clockwork

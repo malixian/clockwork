@@ -67,6 +67,16 @@ struct hash_pair {
 	}
 };
 
+struct hash_tuple {
+	template <class T1, class T2, class T3>
+	size_t operator()(const std::tuple<T1, T2, T3>& t) const {
+		auto hash1 = std::hash<T1>{}(std::get<0>(t) );
+		auto hash2 = std::hash<T2>{}(std::get<1>(t) );
+		auto hash3 = std::hash<T3>{}(std::get<2>(t) );
+		return hash1 ^ hash2 ^ hash3;
+	}
+};
+
 std::string get_clockwork_directory();
 
 std::string get_example_model_path(std::string model_name = "resnet18_tesla-m40");
