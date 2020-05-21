@@ -11,6 +11,7 @@
 #include "clockwork/telemetry/controller_action_logger.h"
 #include "clockwork/thread.h"
 #include "clockwork/api/worker_api.h"
+#include "tbb/mutex.h"
 #include "tbb/queuing_mutex.h"
 
 namespace clockwork {
@@ -120,9 +121,8 @@ class Scheduler : public clockwork::Scheduler {
         void removeGPU(Model &model, GPU &gpu);
         void checkRequests();
 
-        tbb::queuing_mutex mutex;
-
      public:
+        tbb::queuing_mutex mutex;
 
         WorkTracker2(int num_gpus, int num_models);
         Demand addRequest(int model_id, int64_t size, uint64_t slo);

@@ -135,8 +135,6 @@ n_models(num_models), n_gpus(num_gpus) {
 }
 
 Scheduler::WorkTracker2::Demand Scheduler::WorkTracker2::addRequest(int model_id, int64_t size, uint64_t slo) {
-    tbb::queuing_mutex::scoped_lock lock(mutex);
-
     // Complete any pending requests
     checkRequests();
 
@@ -166,8 +164,6 @@ Scheduler::WorkTracker2::Demand Scheduler::WorkTracker2::addRequest(int model_id
 }
 
 void Scheduler::WorkTracker2::requestCompleted(Demand &demand) {
-    tbb::queuing_mutex::scoped_lock lock(mutex);
-
     auto &model = models[demand.model_id];
     model.outstanding -= demand.size;
     model.completed += demand.size;
@@ -177,8 +173,6 @@ void Scheduler::WorkTracker2::requestCompleted(Demand &demand) {
 }
 
 int Scheduler::WorkTracker2::loadModel(int gpu_id, bool requires_eviction) {
-    tbb::queuing_mutex::scoped_lock lock(mutex);
-
     // Complete any pending requests
     checkRequests();
 
@@ -210,8 +204,6 @@ int Scheduler::WorkTracker2::loadModel(int gpu_id, bool requires_eviction) {
 }
 
 void Scheduler::WorkTracker2::loadModelComplete(int gpu_id, int model_id, bool success) {
-    tbb::queuing_mutex::scoped_lock lock(mutex);
-
     // Complete any pending requests
     checkRequests();
 
@@ -226,8 +218,6 @@ void Scheduler::WorkTracker2::loadModelComplete(int gpu_id, int model_id, bool s
 }
 
 int Scheduler::WorkTracker2::evictModel(int gpu_id) {
-    tbb::queuing_mutex::scoped_lock lock(mutex);
-
     // Complete any pending requests
     checkRequests();
 
@@ -310,7 +300,10 @@ bool Scheduler::RequestImpl::complete(uint64_t now) {
 
     callback(response);
 
-    model->scheduler->tracker->requestCompleted(demand);
+    {
+        tbb::queuing_mutex::scoped_lock lock(model->scheduler->tracker->mutex);
+        model->scheduler->tracker->requestCompleted(demand);
+    }
 
     return response.header.status == clockworkSuccess && response.departure <= response.deadline;
 }
@@ -326,7 +319,10 @@ void Scheduler::RequestImpl::timeout() {
 
     callback(response);
 
-    model->scheduler->tracker->requestCompleted(demand);
+    {
+        tbb::queuing_mutex::scoped_lock lock(model->scheduler->tracker->mutex);
+        model->scheduler->tracker->requestCompleted(demand);
+    }
 }
 
 void Scheduler::RequestImpl::finalize() {
@@ -385,7 +381,10 @@ void Scheduler::Model::enqueue(Request request) {
     uint64_t size_for_tracker = batch_size_estimates[1];// / supported_batch_sizes[1];
 
     uint64_t slo = (request->deadline - util::now()) - estimate_weights() - batch_size_estimates[i]; // for execution
-    request->demand = scheduler->tracker->addRequest(id, size_for_tracker, slo);
+    {
+        tbb::queuing_mutex::scoped_lock lock(scheduler->tracker->mutex);
+        request->demand = scheduler->tracker->addRequest(id, size_for_tracker, slo);
+    }
 
     // Enqueue the actual request to the model
     request->id = request_id_seed++;
@@ -779,22 +778,31 @@ void Scheduler::GPU::evict_pages(unsigned required_pages) {
 
 bool Scheduler::GPU::try_load(uint64_t available) {
     uint64_t now = util::now();
-    if (last_load + 500000UL > now) return false;
-    last_load = now;
+    if (last_load + 100000UL > now) return false;
+
+    ModelInstance* instance;
+    unsigned size;
+    {
+        tbb::queuing_mutex::scoped_lock lock;
+
+        if (!lock.try_acquire(scheduler->tracker->mutex)) return false;
+        
+        last_load = now;
 
 
-    int model_id = scheduler->tracker->loadModel(id, eviction_required);
-    if (model_id == -1) return false;
+        int model_id = scheduler->tracker->loadModel(id, eviction_required);
+        if (model_id == -1) return false;
 
-    ModelInstance* instance = instances[model_id];
-    CHECK(instance->loaded == false && instance->loading == false) << "Tracker asked to load model that is already loaded";
+        instance = instances[model_id];
+        CHECK(instance->loaded == false && instance->loading == false) << "Tracker asked to load model that is already loaded";
 
-    unsigned size = scheduler->models[model_id]->num_weights_pages;
-    evict_pages(size);
+        size = scheduler->models[model_id]->num_weights_pages;
+        evict_pages(size);
 
-    if (free_pages < size) {
-        scheduler->tracker->loadModelComplete(id, model_id, false);
-        return false;
+        if (free_pages < size) {
+            scheduler->tracker->loadModelComplete(id, model_id, false);
+            return false;
+        }
     }
 
     instance->version++;
@@ -957,7 +965,10 @@ void Scheduler::GPU::load_error(LoadWeightsAction* action, std::shared_ptr<worke
     action->set_error(error);
 
     // Track model status
-    scheduler->tracker->loadModelComplete(action->instance->gpu->id, action->instance->model->id, false);
+    {
+        tbb::queuing_mutex::scoped_lock lock(scheduler->tracker->mutex);
+        scheduler->tracker->loadModelComplete(action->instance->gpu->id, action->instance->model->id, false);
+    }
     free_pages += action->instance->model->num_weights_pages;
 
     // Update PCI state tracking
@@ -973,7 +984,10 @@ void Scheduler::GPU::load_success(LoadWeightsAction* action, std::shared_ptr<wor
     action->set_result(result);
 
     // Track model status
-    scheduler->tracker->loadModelComplete(action->instance->gpu->id, action->instance->model->id, true);
+    {
+        tbb::queuing_mutex::scoped_lock lock(scheduler->tracker->mutex);
+        scheduler->tracker->loadModelComplete(action->instance->gpu->id, action->instance->model->id, true);
+    }
 
     // Update PCI state tracking
     loadweights.success(result->id, result->end);
