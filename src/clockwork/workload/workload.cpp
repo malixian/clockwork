@@ -5,13 +5,15 @@
 
 using namespace clockwork::workload;
 
-void Engine::AddWorkload(Workload* workload) {
+void Engine::AddWorkload(Workload* workload, uint64_t start_after) {
 	workloads.push_back(workload);
 	workload->SetEngine(this);
+	workload->start_after = start_after;
 }
 
 void Engine::SetTimeout(uint64_t timeout, std::function<void(void)> callback) {
-	queue.push(element{now + timeout, callback});
+	if (timeout == 0) callback();
+	else queue.push(element{now + timeout, callback});
 }
 
 void Engine::InferComplete(Workload* workload, unsigned model_index) {
@@ -51,8 +53,8 @@ void Engine::Run(clockwork::Client* client) {
 
 	now = util::now();
 	for (auto &workload : workloads) {
-		workload->Start(now);
 		running++;
+		SetTimeout(workload->start_after, [this, workload]() { workload->Start(now); });
 	}
 	while (running > 0) {
 		// Process all pending results
@@ -63,11 +65,15 @@ void Engine::Run(clockwork::Client* client) {
 		}
 
 		// Run one next request if available
+		now = util::now();
 		if (!queue.empty() && queue.top().ready <= now) {
-			(queue.top().callback)();
+			auto next = queue.top();
 			queue.pop();
+			now = next.ready;
+			next.callback();
 		} else {
 			usleep(1);
+			now = util::now();
 		}
 	}
 }

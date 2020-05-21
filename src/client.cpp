@@ -82,7 +82,8 @@ void printUsage() {
 			  << "\t\t\t\t (4 BG models with a relaxed SLO factor of 100 and respective ClosedLoop clients configured with a concurrency factor of 1)" << std::endl
 			  << "\tazure" << std::endl
 			  << "\tazure_small" << std::endl
-			  << "\tazure_half" << std::endl;
+			  << "\tazure_half" << std::endl
+			  << "\tbursty_experiment" << std::endl;
 }
 
 int main(int argc, char *argv[])
@@ -170,6 +171,8 @@ int main(int argc, char *argv[])
 		engine = workload::azure_single(client);
 	else if (workload == "azure_fast")
 		engine = workload::azure_fast(client);
+	else if (workload == "bursty_experiment")
+		engine = workload::bursty_experiment(client);
 	else {
 		std::cout << "Unknown workload " << workload << std::endl << std::endl;
 		printUsage();
