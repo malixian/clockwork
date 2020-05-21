@@ -32,7 +32,7 @@ private:
 		}
 	};
 
-	uint64_t now;
+	uint64_t now = util::now();
 	tbb::concurrent_queue<std::function<void(void)>> runqueue;
 	std::priority_queue<element, std::vector<element>, std::greater<element>> queue;
 	std::vector<Workload*> workloads;
@@ -40,7 +40,7 @@ private:
 public:
 	std::atomic_int running = 0;
 
-	void AddWorkload(Workload* workload);
+	void AddWorkload(Workload* workload, uint64_t start_after = 0);
 	void SetTimeout(uint64_t timeout, std::function<void(void)> callback);
 	void InferComplete(Workload* workload, unsigned model_index);
 	void InferError(Workload* workload, unsigned model_index, int status);
@@ -55,6 +55,8 @@ public:
 
 	int user_id;
 	Engine* engine;
+	uint64_t start_after = 0;
+	uint64_t stop_after = UINT64_MAX;
 
 	Workload(int id);
 	Workload(int id, clockwork::Model* model);
