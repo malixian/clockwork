@@ -275,7 +275,7 @@ class Scheduler : public clockwork::Scheduler {
         void enqueue(ModelInstance* instance);
 
         // Gets actions to execute for this model
-        InferAction* try_dequeue(uint64_t gpu_free_at, unsigned gpu_clock, InferStrategy* strategy);
+        InferAction* try_dequeue(uint64_t gpu_free_at, unsigned gpu_clock, InferStrategy* strategy, bool &retry);
 
         // GPUs can add new measurements
         void add_measurement(unsigned batch_size, uint64_t duration, unsigned gpu_clock);

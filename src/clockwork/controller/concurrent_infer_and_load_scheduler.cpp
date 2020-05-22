@@ -446,9 +446,15 @@ void Scheduler::Model::check_timeouts(uint64_t free_at) {
 Scheduler::InferAction* Scheduler::Model::try_dequeue(
         uint64_t free_at,
         unsigned gpu_clock,
-        Scheduler::InferStrategy* strategy)
+        Scheduler::InferStrategy* strategy,
+        bool &retry)
 {    
-    tbb::queuing_mutex::scoped_lock lock(mutex);
+    tbb::queuing_mutex::scoped_lock lock;
+    if (!lock.try_acquire(mutex)) {
+        retry = true;
+        return nullptr;
+    }
+    retry = false;
 
     // Drop any timed out requests
     check_timeouts(free_at);
@@ -861,9 +867,12 @@ void Scheduler::GPU::check_pending() {
     uint64_t schedule_until = util::now() + schedule_ahead;
     while ((exec_at = exec.available()) < schedule_until && queue.size() > 0) {
         InferStrategy* strategy = queue.top();
-        queue.pop();
+        bool retry = false;
+        InferAction* action = strategy->instance->model->try_dequeue(exec_at, exec.clock(), strategy, retry);
 
-        InferAction* action = strategy->instance->model->try_dequeue(exec_at, exec.clock(), strategy);
+        if (retry) break;
+
+        queue.pop();
 
         delete strategy;
 
