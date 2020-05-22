@@ -7,13 +7,123 @@
 
 namespace clockwork {
 
-#define SCHEDULING_EPOCH 3000000ULL        // 5ms
+#define SCHEDULING_EPOCH (3000000ULL)     // 3ms
+#define SCHEDULE_AHEAD (20000000ULL)      // 10ms
 #define NETWORK_TRANSFER_DELAY 1000000ULL  // 1ms
-#define PCI_AVERAGE_SLACK 1000000ULL       // 0.5ms
-#define INFER_SLACK 500000ULL              // 0.5ms
-#define WEIGHTS_EVICT_LATENCY 1000000ULL   // 1ms
+#define PCI_AVERAGE_SLACK 1000000ULL      // 1ms
+#define INFER_SLACK 500000ULL             // 0.5ms
+#define WEIGHTS_EVICT_LATENCY 1000000ULL  // 1ms
 #define REPLICATION_SENSITIVITY \
   50  // it means we must be observing at least 50 drops to trigger replication
+#define CLK_FREQ_DEFAULT 1380  // MHz
+
+// ------ EXECUTION PROFILERS
+
+class SmartExecutionProfiler {
+ public:
+  float percentile;
+  unsigned window_size;
+  unsigned clk_freq;
+
+  std::vector<unsigned> batch_sizes;
+  std::map<unsigned, uint64_t> estimates;  // store latency * freq
+  std::map<unsigned, util::SlidingWindow>
+      sliding_windows;  // track latency * freq
+
+  void set_batch_sizes(std::vector<unsigned> &sizes);
+  void set_estimates(std::map<unsigned, uint64_t> latencies);
+  void set_window_size(unsigned size);
+
+  uint64_t get_latency_estimate(unsigned batch_size);
+  unsigned get_max_batch_size(uint64_t slack, unsigned limit);
+
+  void insert(unsigned batch, uint64_t latency, unsigned freq);
+
+  void update_estimate(unsigned batch);
+  void update_all_estimates();
+
+  SmartExecutionProfiler()
+      : percentile(99), window_size(100), clk_freq(CLK_FREQ_DEFAULT) {}
+};
+
+class SmartWeightsProfiler {
+ public:
+  uint64_t estimate;  // store the estimate in ns
+  uint64_t get_estimate() { return estimate; }
+};
+
+void SmartExecutionProfiler::set_batch_sizes(std::vector<unsigned> &sizes) {
+  this->batch_sizes = sizes;
+}
+
+void SmartExecutionProfiler::set_estimates(
+    std::map<unsigned, uint64_t> latencies) {
+  estimates.clear();
+  for (auto const &l : latencies) {
+    estimates.insert(std::make_pair(l.first, l.second * CLK_FREQ_DEFAULT));
+  }
+}
+
+void SmartExecutionProfiler::set_window_size(unsigned size) {
+  this->window_size = size;
+  for (auto const &s : batch_sizes) {
+    sliding_windows[s] = util::SlidingWindow(size);
+  }
+}
+
+uint64_t SmartExecutionProfiler::get_latency_estimate(unsigned batch_size) {
+  return estimates[batch_size] / clk_freq;
+}
+
+unsigned SmartExecutionProfiler::get_max_batch_size(uint64_t slack,
+                                                    unsigned limit) {
+  unsigned current_max = 1;
+  for (auto const &s : batch_sizes) {
+    if (s > limit) {
+      break;
+    }
+    if (get_latency_estimate(s) > slack) {
+      break;
+    }
+    current_max = s;
+  }
+  return current_max;
+}
+
+void SmartExecutionProfiler::insert(unsigned batch, uint64_t latency,
+                                    unsigned freq) {
+  clk_freq = freq;
+  auto it = sliding_windows.find(batch);
+  it->second.insert(latency * freq);
+  update_estimate(batch);
+}
+
+/* Assumptions:
+   -- sliding_windows.find(batch) != sliding_windows.end()
+   -- estimates.find(batch) != estimates.end() */
+void SmartExecutionProfiler::update_estimate(unsigned batch) {
+  util::SlidingWindow &sliding_window = sliding_windows[batch];
+
+  if (sliding_window.get_size() == 0) {
+    return;
+  }
+
+  unsigned rank = sliding_window.get_size() - 1;  // by default, get max value
+
+  if (sliding_window.get_size() >= window_size) {
+    rank = ceil(window_size * (percentile / 100.0)) - 1;
+  }
+
+  estimates[batch] = sliding_window.get_value(rank);
+}
+
+void SmartExecutionProfiler::update_all_estimates() {
+  for (auto const &s : batch_sizes) {
+    update_estimate(s);
+  }
+}
+
+// ------
 
 class SmartGPU {
  public:
@@ -113,11 +223,19 @@ class SmartScheduler : public Scheduler {
   // telemetry
 
   ControllerActionTelemetryLogger *logger = nullptr;
-
   std::map<unsigned, ControllerActionTelemetry *> action_telemetry_map;
   std::mutex mtx_telemetry;
 
-  // --
+  // Profilers
+
+  std::map<unsigned, SmartExecutionProfiler>
+      execution_profiler;  // model_id -> execution_profiler
+  std::map<unsigned, SmartWeightsProfiler>
+      weights_profiler;  // model_id -> weights_profiler
+  std::mutex mtx_profiler;
+
+  //
+
   std::atomic_uint64_t action_id_seed;
   std::atomic_uint64_t global_request_id;
 
@@ -170,13 +288,44 @@ class SmartScheduler : public Scheduler {
   void do_schedule();
   void decide_replication();
 
+  void init_estimates(unsigned model_id, BatchedModelState &state) {
+    execution_profiler[model_id] = SmartExecutionProfiler();
+    weights_profiler[model_id] = SmartWeightsProfiler();
+
+    execution_profiler[model_id].set_batch_sizes(state.supported_batch_sizes);
+    execution_profiler[model_id].set_estimates(state.exec_duration);
+
+    unsigned window_size = 100;
+    execution_profiler[model_id].set_window_size(window_size);
+    weights_profiler[model_id].estimate = state.weights_transfer_duration;
+  }
+
+  void set_estimates(unsigned model_id, unsigned batch_size,
+                     uint64_t exec_latency, unsigned freq) {
+    mtx_profiler.lock();
+    execution_profiler[model_id].insert(batch_size, exec_latency, freq);
+    mtx_profiler.unlock();
+  }
+
+  uint64_t get_latency_estimate(unsigned model_id, unsigned batch_size) {
+    mtx_profiler.lock();
+    uint64_t wcet_estimate =
+        execution_profiler[model_id].get_latency_estimate(batch_size);
+    mtx_profiler.unlock();
+    return wcet_estimate;
+  }
+
+  uint64_t get_weights_load_estimate(unsigned model_id) {
+    return weights_profiler[model_id].get_estimate();
+  }
+
   // runs after the very first initialization, we init the system state and
   // model stats using the passed info
   void start(std::vector<network::controller::WorkerConnection *> workers,
              ClockworkState &state) {
-
-	std::string action_telemetry_file = "./controller_action_log.csv";
-    logger = ControllerActionTelemetry::log_and_summarize(action_telemetry_file, 1000000000UL);
+    std::string action_telemetry_file = "./controller_action_log.csv";
+    logger = ControllerActionTelemetry::log_and_summarize(action_telemetry_file,
+                                                          1000000000UL);
 
     // initializing
     this->workers = workers;
@@ -200,14 +349,13 @@ class SmartScheduler : public Scheduler {
     }
 
     // -- parsing model stats
-    // DEBUG_PRINT("Initializing Model instances");
     for (auto &worker : state.workers) {
       for (auto &model : worker.models) {
-        // model.second.weights_transfer_duration +=
-        //     1000000;  // just adding 1ms to be safe
-        // model.second.exec_duration[1] += 1000000;
-        models[model.first] =
-            std::make_shared<SmartModel>(SmartModel(model.first, model.second));
+        unsigned model_id = model.first;
+        auto state = model.second;
+        models[model_id] =
+            std::make_shared<SmartModel>(SmartModel(model_id, state));
+        init_estimates(model_id, state);
       }
       break;  // assuming all the models are pre-loaded on all the workers
     }
@@ -311,18 +459,21 @@ void SmartScheduler::gpu_local_schedule(
   std::vector<std::shared_ptr<SmartInferRequest>> stash;
   std::set<uint64_t> conflicting_requests;
 
+  gpu_map[gpu_id]->gpu_idle_at = std::max<uint64_t>(
+      gpu_map[gpu_id]->gpu_idle_at, util::now() + NETWORK_TRANSFER_DELAY);
+
   // STEP: early proning --- drop the requests if their deadline is already
   // passed or we can't make it to the deadline or not enough slack to load
   // the model
   unsigned drop_count_tmp = 0;
   for (unsigned i = 0; i < local_request_queue.size(); i++) {
     unsigned model_id = local_request_queue[i]->request_ptr->model_id;
-    uint64_t execution_duration = models[model_id]->state.exec_duration[1];
+    uint64_t execution_duration = get_latency_estimate(model_id, 1);
 
     // we set the earliest, start and finish times while we're iterating over
     // the local_request_queue
     local_request_queue[i]->earliest = std::max<uint64_t>(
-        gpu_map[gpu_id]->gpu_idle_at + NETWORK_TRANSFER_DELAY,
+        gpu_map[gpu_id]->gpu_idle_at,
         models[model_id]->weights_available_at[gpu_id]);
     local_request_queue[i]->finish_time = local_request_queue[i]->deadline;
     local_request_queue[i]->start_time =
@@ -426,8 +577,8 @@ void SmartScheduler::gpu_local_schedule(
                       ->finish_time) &&
                  (stash[i]->deadline >=
                   stash[i]->start_time +
-                      models[stash[i]->request_ptr->model_id]
-                          ->state.exec_duration[1])) {  // start time after
+                      get_latency_estimate(stash[i]->request_ptr->model_id,
+                                           1))) {  // start time after
         // finish? or local_queue
         // empty? OK, put it at the tail
         // add to the tail
@@ -436,7 +587,7 @@ void SmartScheduler::gpu_local_schedule(
             local_request_queue[local_request_queue.size() - 1]->finish_time;
         stash[i]->finish_time =
             stash[i]->start_time +
-            models[stash[i]->request_ptr->model_id]->state.exec_duration[1];
+            get_latency_estimate(stash[i]->request_ptr->model_id, 1);
 
         local_request_queue.push_back(stash[i]);
         to_remove_from_stash.push_back(stash[i]->id);
@@ -449,22 +600,21 @@ void SmartScheduler::gpu_local_schedule(
       bool placed_in_a_hole = false;
       for (int j = local_request_queue.size() - 1; j > 0; j--) {
         if (local_request_queue[j - 1]->finish_time +
-                    models[stash[i]->request_ptr->model_id]
-                        ->state.exec_duration[1] <=
+                    get_latency_estimate(stash[i]->request_ptr->model_id, 1) <=
                 stash[i]->deadline &&
-            (stash[i]->earliest <= local_request_queue[j]->start_time -
-                                       models[stash[i]->request_ptr->model_id]
-                                           ->state.exec_duration[1]) &&
+            (stash[i]->earliest <=
+             local_request_queue[j]->start_time -
+                 get_latency_estimate(stash[i]->request_ptr->model_id, 1)) &&
             (local_request_queue[j]->start_time -
                  local_request_queue[j - 1]->finish_time >=
-             models[stash[i]->request_ptr->model_id]
-                 ->state.exec_duration[1])) {  // if the request fits
-                                               // between two
-                                               // scheduled requests
+             get_latency_estimate(stash[i]->request_ptr->model_id,
+                                  1))) {  // if the request fits
+                                          // between two
+                                          // scheduled requests
           stash[i]->finish_time = local_request_queue[j]->start_time;
           stash[i]->start_time =
               local_request_queue[j]->start_time -
-              models[stash[i]->request_ptr->model_id]->state.exec_duration[1];
+              get_latency_estimate(stash[i]->request_ptr->model_id, 1);
           local_request_queue.push_back(stash[i]);
           to_remove_from_stash.push_back(stash[i]->id);
           sort(local_request_queue.begin(), local_request_queue.end(),
@@ -476,12 +626,12 @@ void SmartScheduler::gpu_local_schedule(
       // STEP: Place at the head
       if (!placed_in_a_hole &&
           local_request_queue[0]->start_time >=
-              stash[i]->earliest + models[stash[i]->request_ptr->model_id]
-                                       ->state.exec_duration[1]) {
+              stash[i]->earliest +
+                  get_latency_estimate(stash[i]->request_ptr->model_id, 1)) {
         stash[i]->finish_time = local_request_queue[0]->start_time;
         stash[i]->start_time =
             local_request_queue[0]->start_time -
-            models[stash[i]->request_ptr->model_id]->state.exec_duration[1];
+            get_latency_estimate(stash[i]->request_ptr->model_id, 1);
         local_request_queue.push_back(stash[i]);
         to_remove_from_stash.push_back(stash[i]->id);
         sort(local_request_queue.begin(), local_request_queue.end(),
@@ -506,21 +656,20 @@ void SmartScheduler::gpu_local_schedule(
     if (local_request_queue.size() > 0) {
       local_request_queue[0]->start_time = std::max<uint64_t>(
           local_request_queue[0]->earliest,
-          gpu_map[gpu_id]->gpu_idle_at +
-              NETWORK_TRANSFER_DELAY);  // shift the first element to the
+          gpu_map[gpu_id]->gpu_idle_at);  // shift the first element to the
                                         // earliest time possible
       local_request_queue[0]->finish_time =
           local_request_queue[0]->start_time +
-          models[local_request_queue[0]->request_ptr->model_id]
-              ->state.exec_duration[1];
+          get_latency_estimate(local_request_queue[0]->request_ptr->model_id,
+                               1);
       for (unsigned i = 1; i < local_request_queue.size(); i++) {
         local_request_queue[i]->start_time =
             std::max<uint64_t>(local_request_queue[i]->earliest,
                                local_request_queue[i - 1]->finish_time);
         local_request_queue[i]->finish_time =
             local_request_queue[i]->start_time +
-            models[local_request_queue[i]->request_ptr->model_id]
-                ->state.exec_duration[1];
+            get_latency_estimate(local_request_queue[i]->request_ptr->model_id,
+                                 1);
       }
     }
 
@@ -564,15 +713,9 @@ void SmartScheduler::gpu_local_schedule(
 
   // STEP: create infer actions
   unsigned index;
-  bool flag = false;
-
-  gpu_map[gpu_id]->gpu_idle_at = std::max<uint64_t>(
-      gpu_map[gpu_id]->gpu_idle_at, util::now() + NETWORK_TRANSFER_DELAY);
-
   for (index = 0; index < local_request_queue.size(); index++) {
     if (local_request_queue[index]->start_time >
-        gpu_map[gpu_id]->gpu_idle_at + SCHEDULING_EPOCH) {
-      flag = true;
+        gpu_map[gpu_id]->gpu_idle_at + SCHEDULE_AHEAD) {
       break;
     }
     auto infer = std::make_shared<workerapi::Infer>();
@@ -600,6 +743,9 @@ void SmartScheduler::gpu_local_schedule(
           if (auto infer_result =
                   std::dynamic_pointer_cast<workerapi::InferResult>(result)) {
             set_telemetry_infer_result(infer_result);
+
+            set_estimates(model_id, 1, infer_result->exec.duration,
+                          infer_result->gpu_clock);
 
             mtx_inference_callbacks.lock();
             auto callback = inference_callbacks[request_id];
@@ -653,13 +799,8 @@ void SmartScheduler::gpu_local_schedule(
 
   if (actions.size() > 0) {
     workers[gpu_map[gpu_id]->worker_id]->sendActions(actions);
-  }
-
-  if (!flag) index--;
-
-  if (actions.size() > 0) {
     local_request_queue.erase(local_request_queue.begin(),
-                              local_request_queue.begin() + index + 1);
+                              local_request_queue.begin() + index);
   }
 
   // STEP: remove the scheduled requests from the request queue
@@ -766,7 +907,7 @@ void SmartScheduler::decide_replication() {
       for (auto &model_gpu_element : model_gpu_map[model_id]) {
         unsigned gpu_id = model_gpu_element;
         estimated_gpu_load[gpu_id] +=
-            (models[model_id]->state.exec_duration[1] * queued_load /
+            (get_latency_estimate(model_id, 1) * queued_load /
              (model_gpu_map[model_id].size() +
               1));  // distribute the load on all the gpus serving
                     // the target model
@@ -893,7 +1034,7 @@ void SmartScheduler::decide_replication() {
           gpu_map[gpu_id]->pci_idle_at + PCI_AVERAGE_SLACK;  // 1ms slack
       evict_load_actions.push_back(load_weights_action);
       gpu_map[gpu_id]->pci_idle_at +=
-          models[model_id]->state.weights_transfer_duration + PCI_AVERAGE_SLACK;
+          get_weights_load_estimate(model_id) + PCI_AVERAGE_SLACK;
       models[model_id]->weights_available_at[gpu_id] =
           gpu_map[gpu_id]->pci_idle_at;
       model_gpu_map[model_id].push_back(gpu_id);
@@ -983,7 +1124,7 @@ void SmartScheduler::do_schedule() {
             unsigned gpu_id = model_gpu_element;
 
             estimated_gpu_load[gpu_id] +=
-                (models[model_id]->state.exec_duration[1] * queued_load /
+                (get_latency_estimate(model_id, 1) * queued_load /
                  (model_gpu_map[model_id].size() +
                   1));  // distribute the load on all the gpus serving
                         // the target model
@@ -997,8 +1138,8 @@ void SmartScheduler::do_schedule() {
 
             if (to_load_model_id == model_id && future_gpu_id != UINT_MAX) {
               estimated_gpu_load[future_gpu_id] +=
-                  (models[model_id]->state.weights_transfer_duration +
-                   models[model_id]->state.exec_duration[1] * queued_load /
+                  (get_weights_load_estimate(model_id) +
+                   get_latency_estimate(model_id, 1) * queued_load /
                        (model_gpu_map[model_id].size() + 1));
             }
           }
@@ -1019,10 +1160,9 @@ void SmartScheduler::do_schedule() {
       }
       model_to_load.second = target_gpu_id;
       estimated_gpu_load[target_gpu_id] +=
-          models[model_queued_load[model_to_load.first]]
-              ->state.weights_transfer_duration +
+          get_weights_load_estimate(model_to_load.first) +
           model_queued_load[model_to_load.first] *
-              models[model_to_load.first]->state.exec_duration[1];
+              get_latency_estimate(model_to_load.first, 1);
     }
 
     // STEP: check if there is enough space on the target gpus, otherwise
@@ -1143,12 +1283,12 @@ void SmartScheduler::do_schedule() {
             gpu_map[gpu_id]->pci_idle_at + PCI_AVERAGE_SLACK;  // 1ms slack
         evict_load_actions.push_back(load_weights_action);
         gpu_map[gpu_id]->pci_idle_at +=
-            models[model_id]->state.weights_transfer_duration +
-            PCI_AVERAGE_SLACK;
+            get_weights_load_estimate(model_id) + PCI_AVERAGE_SLACK;
         models[model_id]->weights_available_at[gpu_id] =
             gpu_map[gpu_id]->pci_idle_at;
 
-		set_telemetry_load_weights(gpu_map[gpu_id]->worker_id, load_weights_action);
+        set_telemetry_load_weights(gpu_map[gpu_id]->worker_id,
+                                   load_weights_action);
 
         mtx_action_callbacks.lock();
         action_callbacks[load_weights_action->id] = on_complete;
