@@ -399,6 +399,7 @@ void Scheduler::Model::enqueue(Request request) {
     // Enqueue the actual request to the model
     request->id = request_id_seed++;
     queue.push_back(request);
+    requests_queued++;
 
     // Enqueue strategies to all loaded models
     for (auto &instance : instances) {
@@ -448,6 +449,7 @@ void Scheduler::Model::check_timeouts(uint64_t free_at) {
 
         request->set_error(clockworkControllerCouldNotStartInTime, "");
         queue.pop_front();
+        requests_queued--;
         // Don't time it out here -- let the checker thread do that
     }
 }
@@ -512,6 +514,7 @@ Scheduler::InferAction* Scheduler::Model::try_dequeue(
         auto &request = queue.front();
         request->set_error(clockworkControllerSkipped, "");
         queue.pop_front();
+        requests_queued--;
         // Don't time it out here - let the queue checker do that
     }
 
@@ -523,6 +526,7 @@ Scheduler::InferAction* Scheduler::Model::try_dequeue(
         request->lock();
         action->requests.push_back(request);
         queue.pop_front();
+        requests_queued--;
     }
     action->set_expectations(free_at, exec_time, gpu_clock);
     action->batch();
@@ -729,6 +733,8 @@ void Scheduler::GPU::send_action(InferAction* action) {
 
     // Record the telemetry
     action->telemetry.set(infer);
+    action->telemetry.requests_queued = action->model->requests_queued;
+    action->telemetry.copies_loaded = action->model->copies_loaded;
 
     // Send the action
     worker->sendAction(infer);
@@ -755,6 +761,8 @@ void Scheduler::GPU::send_action(LoadWeightsAction* action) {
 
     // Record the telemetry
     action->telemetry.set(load);
+    action->telemetry.requests_queued = action->instance->model->requests_queued;
+    action->telemetry.copies_loaded = action->instance->model->copies_loaded;
 
     if (print_debug || print_loads) std::cout << ("Worker <--  " + load->str() + "\n");
 }
@@ -775,6 +783,8 @@ void Scheduler::GPU::send_action(EvictWeightsAction* action) {
 
     // Record the telemetry
     action->telemetry.set(evict);
+    action->telemetry.requests_queued = action->instance->model->requests_queued;
+    action->telemetry.copies_loaded = action->instance->model->copies_loaded;
 
     if (print_debug || print_loads) std::cout << ("Worker <--  " + evict->str() + "\n");    
 }

@@ -247,6 +247,7 @@ class Scheduler : public clockwork::Scheduler {
         std::vector<ModelInstance*> instances;
         uint64_t b1_exec;
         std::atomic_int copies_loaded = 0;
+        std::atomic_int requests_queued = 0;
 
      private:
         tbb::queuing_mutex mutex;
