@@ -427,16 +427,20 @@ Engine* azure_fast(clockwork::Client* client, unsigned trace_id = 1) {
 	return engine;
 }
 
-Engine* bursty_experiment(clockwork::Client* client, unsigned trace_id = 1) {
+Engine* bursty_experiment(
+		clockwork::Client* client, 
+		unsigned trace_id = 1, 
+		bool mul = false,
+		unsigned num_models = 3600,
+		unsigned intervals = 30,
+		unsigned interval_duration_seconds = 20,
+		unsigned num_gpus = 8,
+		unsigned work_per_gpu = 1000
+	) {
 	Engine* engine = new Engine();
 
-	unsigned num_models = 3600;
 	std::string modelpath = util::get_clockwork_modelzoo()["resnet50_v2"];
-
-	unsigned intervals = 30;
-	double interval_duration_seconds = 20;
-	unsigned num_gpus = 8;
-	unsigned total_request_rate = 1000 * num_gpus;
+	unsigned total_request_rate = work_per_gpu * num_gpus;
 
 	std::vector<std::vector<unsigned>> interval_rates;
 	for (unsigned i = 0; i < num_models; i++) {
@@ -444,7 +448,12 @@ Engine* bursty_experiment(clockwork::Client* client, unsigned trace_id = 1) {
 	}
 
 	for (unsigned i = 0; i < intervals; i++) {
-		unsigned models_this_interval = std::min((unsigned) round(std::pow(2, i/2.0)), num_models);
+		unsigned models_this_interval;
+		if (mul) {
+			models_this_interval = std::min((unsigned) round(std::pow(2, i/2.0)), num_models);
+		} else {
+			models_this_interval = (i + 1) * num_models / intervals;
+		}
 		std::cout << "Interval " << i << " " << models_this_interval << " models" << std::endl;
 
 		for (int j = 0; j < 60 * total_request_rate; j++) {
@@ -570,19 +579,54 @@ Engine* bursty_experiment_simple(clockwork::Client* client, unsigned trace_id = 
 	return engine;
 }
 
-Engine* azure_half(clockwork::Client* client, unsigned trace_id = 1) {
+Engine* azure_parameterized(clockwork::Client* client,
+		unsigned trace_id = 1,
+		double scale_factor = 1.0,
+		unsigned interval_duration_seconds = 60,
+		bool randomise = false,
+		bool use_all_models = true,
+		unsigned num_models = 3100
+	) {
 	Engine* engine = new Engine();
+
+	std::cout << "Running azure_parameterized"
+			  << " trace_id=" << trace_id
+			  << " scale_factor=" << scale_factor
+			  << " interval_duration_seconds=" << interval_duration_seconds
+			  << " randomise=" << randomise
+			  << " use_all_models=" << use_all_models
+			  << " num_models=" << num_models
+			  << std::endl;
 
 	auto trace_data = azure::load_trace(trace_id);
 
+	if (num_models > 3100) {
+		std::cout << "WARNING: 3100 is about the GPU memory limit for models. "
+				  << "Got " << num_models
+				  << ".  You might get cuda device memory exhaustion errors."
+				  << std::endl;
+	}
+
 	std::vector<Model*> models;
-	for (auto &p : util::get_clockwork_modelzoo()) {
-		std::cout << "Loading " << p.first << std::endl;
-		for (auto &model : client->load_remote_models(p.second, 50)) {
+	auto modelzoo = util::get_clockwork_modelzoo();	
+	if (use_all_models) {
+		unsigned models_remaining = modelzoo.size();
+		for (auto &p : modelzoo) {
+			unsigned num_copies = num_models / models_remaining;
+			num_models -= num_copies;
+			models_remaining--;
+			std::cout << "Loading " << p.first << " x" << num_copies << std::endl;
+			for (auto &model : client->load_remote_models(p.second, num_copies)) {
+				models.push_back(model);
+			}
+		}
+	} else {
+		std::string model = "resnet50_v2";
+		std::cout << "Loading " << model << " x" << num_models << std::endl;
+		for (auto &model : client->load_remote_models(modelzoo[model], num_models)) {
 			models.push_back(model);
 		}
 	}
-
 
 	for (unsigned i = 0; i < trace_data.size(); i++) {
 	// for (unsigned i = 0; i < models.size(); i++) {
@@ -595,15 +639,84 @@ Engine* azure_half(clockwork::Client* client, unsigned trace_id = 1) {
 			model,			// model
 			i,				// rng seed
 			workload,		// trace data
-			1,			// scale factor; default 1
-			60,			// interval duration; default 60
-			0				// interval to begin at; default 0; set to -1 for random
+			scale_factor,			// scale factor; default 1
+			interval_duration_seconds,			// interval duration; default 60
+			randomise ? -1 : 0				// interval to begin at; default 0; set to -1 for random
 		);
 
 		engine->AddWorkload(replay);
 	}
 
 	return engine;
+}
+
+Engine* azure2(clockwork::Client* client,
+		unsigned num_workers = 1,
+		bool use_all_models = true,
+		double load_factor = 1.0,
+		unsigned memory_load_factor = 4, // 1, 2, 3, or 4
+		unsigned interval_duration_seconds = 60,
+		unsigned trace_id = 1,
+		bool randomise_start = false
+	) {
+	std::cout << "Running azure2 workload with"
+			  << " num_workers=" << num_workers
+			  << " use_all_models=" << use_all_models
+			  << " load_factor=" << load_factor
+			  << " memory_load_factor=" << memory_load_factor
+			  << " interval_duration_seconds=" << interval_duration_seconds
+			  << " trace_id=" << trace_id
+			  << " randomise_start=" << randomise_start
+			  << std::endl;
+
+	unsigned estimated_max_models = 3100;
+	double estimated_load_factor_per_worker = 0.125;
+
+	unsigned copies_per_model;
+	if (memory_load_factor == 1) {
+		if (use_all_models)
+			copies_per_model = 3;
+		else
+			copies_per_model = 201;
+	} else if (memory_load_factor == 2) {
+		if (use_all_models)
+			copies_per_model = 6;
+		else
+			copies_per_model = 402;
+	} else if (memory_load_factor == 3) {
+		if (use_all_models) {
+			copies_per_model = num_workers * 6;
+			if (copies_per_model > 50)
+				copies_per_model = 50;
+		}
+		else
+			copies_per_model = num_workers * 402;
+	} else if (memory_load_factor == 4) {
+		if (use_all_models)
+			copies_per_model = 50;
+		else
+			copies_per_model = 3600;
+	}
+
+	auto modelzoo = util::get_clockwork_modelzoo();
+	unsigned num_models = use_all_models ? modelzoo.size() : 1;
+	unsigned total_models = num_models * copies_per_model;
+
+	std::cout << "Using " << total_models << " models (" << copies_per_model << " copies of " << num_models << " models)" << std::endl;
+
+	double scale_factor = load_factor * estimated_load_factor_per_worker * num_workers;
+	std::cout << "Replaying trace " << trace_id << " at scale_factor=" << scale_factor << " to achieve load_factor " << load_factor << " on " << num_workers << " workers" << std::endl;
+
+	std::cout << interval_duration_seconds << " second intervals" << std::endl;
+
+	return azure_parameterized(client,
+			trace_id,
+			scale_factor,
+			interval_duration_seconds,
+			randomise_start,
+			use_all_models,
+			total_models
+		);
 }
 
 }

@@ -80,9 +80,20 @@ void printUsage() {
 			  << "\t\t\t\t (2 FG models with PoissonOpenLoop clients sending requests at 200 rps)" << std::endl
 			  << "\t\t\t\t (the SLO factor of each FG model is updated every 7 seconds as follows: 2 4 8 16 32)" << std::endl
 			  << "\t\t\t\t (4 BG models with a relaxed SLO factor of 100 and respective ClosedLoop clients configured with a concurrency factor of 1)" << std::endl
-			  << "\tazure" << std::endl
-			  << "\tazure_small" << std::endl
-			  << "\tazure_half" << std::endl
+			  << "\t azure" << std::endl
+			  << "\t\t Description: replay an azure workload trace.  Can be run with no arguments, in which case default values are used.  The defaults will load 3100 models and replay a trace that will give approximately the total load the system can handle." << std::endl
+			  << "\t\t Workload parameters:" << std::endl
+			  << "\t\t\t num_workers: (int, default 1) the number of workers you're using" << std::endl
+			  << "\t\t\t use_all_models: (bool, default 1) load all models or just resnet50_v2" << std::endl
+			  << "\t\t\t load_factor: (float, default 1.0) the workload will generate approximately this much load to the system.  e.g. 0.5 will load by approximately 1/2; 2.0 will overload by a factor of 2" << std::endl
+			  << "\t\t\t memory_load_factor: (1, 2, 3, or 4; default 4):" << std::endl
+			  << "\t\t\t\t 1: loads enough models to fit in 1 GPU's memory" << std::endl
+			  << "\t\t\t\t 2: loads enough models to exceed 1 worker's (2 GPUs) memory by a factor of 2" << std::endl
+			  << "\t\t\t\t 3: loads enough models to fit in all GPUs aggregate memory" << std::endl
+			  << "\t\t\t\t 4: loads the maximum possible models (upper limit of 50 copies)" << std::endl
+			  << "\t\t\t interval: (int, default 60) interval duration in seconds" << std::endl
+			  << "\t\t\t trace: (int, 1 to 13 inclusive, default 1) trace ID to replay" << std::endl
+			  << "\t\t\t randomise: (bool, default false) randomize each client's starting point in the trace" << std::endl
 			  << "\tbursty_experiment" << std::endl;
 }
 
@@ -161,10 +172,26 @@ int main(int argc, char *argv[])
 			std::stoul(argv[12]),	// copies for BG models
 			std::stoul(argv[13]),	// concurrency for BG model clients
 			std::stod(argv[14]));	// SLO factor for BG models
-	else if (workload == "azure")
-		engine = workload::azure(client);
-	else if (workload == "azure_half")
-		engine = workload::azure_half(client);
+	else if (workload == "azure") {
+		int i = 2;
+		unsigned num_workers = argc > ++i ? atoi(argv[i]) : 1;
+		bool use_all_models = argc > ++i ? (atoi(argv[i])!=0) : false;
+		double load_factor = argc > ++i ? atof(argv[i]) : 1.0;
+		unsigned memory_load_factor = argc > ++i ? atoi(argv[i]) : 4;
+		unsigned interval_duration_seconds = argc > ++i ? atoi(argv[i]) : 60;
+		unsigned trace_id = argc > ++i ? atoi(argv[i]) : 1;
+		bool randomise_start = argc > ++i ? atoi(argv[i]) != 0 : false;
+		engine = workload::azure2(client,
+			num_workers,
+			use_all_models,
+			load_factor,
+			memory_load_factor,
+			interval_duration_seconds,
+			trace_id,
+			randomise_start
+		);
+	} else if (workload == "azure_half")
+		engine = workload::azure_parameterized(client);
 	else if (workload == "azure_small")
 		engine = workload::azure_small(client);
 	else if (workload == "azure_single")
