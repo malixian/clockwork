@@ -491,15 +491,21 @@ Scheduler::InferAction* Scheduler::Model::try_dequeue(
     // *  there is insufficient time to execute both
     unsigned candidate_batchsize = batch_lookup(request_id_seed - strategy->request_id - 1);
     if (strategy->batch_size < candidate_batchsize) {
-        // if (completion_time + estimate(candidate_batchsize, gpu_clock) > strategy->deadline) {
-            return nullptr;
-        // }
+        uint64_t candidate_exec_time = estimate(candidate_batchsize, gpu_clock);
+        uint64_t candidate_completion_time = free_at + candidate_exec_time;
+
+        // We can't bump up to the candidate batch size
+        if (candidate_completion_time > strategy->deadline) return nullptr;
+
+        strategy->batch_size = candidate_batchsize;
+        exec_time = candidate_exec_time;
+        completion_time = candidate_completion_time;
     }
 
-    // We are good to go.  Drop any requests that came before this strategy and can't be included
-    while (queue.size() > 0 && 
-            queue.front()->id != strategy->request_id) {
-            // && queue.front()->deadline < completion_time) {
+    // Drop any requests that came before this strategy and can't be included
+    while (queue.size() > 0 
+            // && queue.front()->id != strategy->request_id) {
+            && queue.front()->deadline < completion_time) {
         auto &request = queue.front();
         request->set_error(clockworkControllerSkipped, "");
         queue.pop_front();
