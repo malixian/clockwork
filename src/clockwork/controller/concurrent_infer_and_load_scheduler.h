@@ -138,6 +138,8 @@ class Scheduler : public clockwork::Scheduler {
      public:
         uint64_t id;
         uint64_t slo;
+        uint64_t exec_slo;
+        uint64_t weights_slo;
         uint64_t deadline;
         Model* model = nullptr;
         clientapi::InferenceRequest request;
@@ -155,7 +157,8 @@ class Scheduler : public clockwork::Scheduler {
             std::function<void(clientapi::InferenceResponse&)> callback);
         ~RequestImpl();
 
-        void set_model(Model* model, uint64_t default_slo);
+        void set_model(Model* model);
+        void set_slo(uint64_t default_slo);
         void set_result(char* output, size_t output_size);
         void set_error(int status, std::string message);
 
@@ -336,6 +339,7 @@ class Scheduler : public clockwork::Scheduler {
         unsigned free_pages;
         bool eviction_required = false;
         uint64_t last_load = 0;
+        uint64_t last_exec = 0;
 
         std::queue<Loading> loading;
         std::priority_queue<InferStrategy*, std::deque<InferStrategy*>, InferStrategy::Comparator> queue;

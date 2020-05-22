@@ -270,14 +270,23 @@ void Scheduler::RequestImpl::lock() {
     locked = true;
 }
 
-void Scheduler::RequestImpl::set_model(Model* model, uint64_t default_slo) {
+void Scheduler::RequestImpl::set_model(Model* model) {
     this->model = model;
-    this->slo = default_slo;
+}
+
+void Scheduler::RequestImpl::set_slo(uint64_t default_slo) {
+    slo = default_slo;
     if (request.slo_factor > 0) {
-        this->slo = model->b1_exec * request.slo_factor;
+        slo = model->b1_exec * request.slo_factor;
     }
-    response.deadline = request.arrival + this->slo;
-    this->deadline = response.deadline - Scheduler::buffer;
+    response.deadline = request.arrival + slo;
+
+    exec_slo = std::min(slo, slo - Scheduler::buffer);
+    exec_slo = std::max(exec_slo, Scheduler::schedule_ahead + Scheduler::buffer);
+    deadline = request.arrival + exec_slo;
+
+    weights_slo = std::min(slo, slo - (model->estimate_weights() + model->b1_exec));
+    weights_slo = std::max(weights_slo, Scheduler::schedule_ahead + Scheduler::buffer);
 }
 
 void Scheduler::RequestImpl::set_result(char* output, size_t output_size) {
@@ -379,12 +388,9 @@ void Scheduler::Model::enqueue(Request request) {
     // Add the request to the load tracker
     unsigned i = supported_batch_sizes.size()-1;
     uint64_t size_for_tracker = batch_size_estimates[1];// / supported_batch_sizes[1];
-
-    uint64_t slo = (request->deadline - util::now()) - estimate_weights() - batch_size_estimates[i]; // for execution
-    slo = std::min(request->deadline - util::now(), slo);
     {
         tbb::queuing_mutex::scoped_lock lock(scheduler->tracker->mutex);
-        request->demand = scheduler->tracker->addRequest(id, size_for_tracker, slo);
+        request->demand = scheduler->tracker->addRequest(id, size_for_tracker, request->weights_slo);
     }
 
     // Enqueue the actual request to the model
@@ -450,9 +456,11 @@ Scheduler::InferAction* Scheduler::Model::try_dequeue(
         bool &retry)
 {    
     tbb::queuing_mutex::scoped_lock lock;
-    if (!lock.try_acquire(mutex)) {
-        retry = true;
-        return nullptr;
+
+    if (retry) {
+        if (!lock.try_acquire(mutex)) return nullptr;
+    } else {
+        lock.acquire(mutex);
     }
     retry = false;
 
@@ -867,7 +875,8 @@ void Scheduler::GPU::check_pending() {
     uint64_t schedule_until = util::now() + schedule_ahead;
     while ((exec_at = exec.available()) < schedule_until && queue.size() > 0) {
         InferStrategy* strategy = queue.top();
-        bool retry = false;
+
+        bool retry = last_exec + 200000UL > util::now();
         InferAction* action = strategy->instance->model->try_dequeue(exec_at, exec.clock(), strategy, retry);
 
         if (retry) break;
@@ -878,6 +887,7 @@ void Scheduler::GPU::check_pending() {
 
         if (action != nullptr) {
             send_action(action);
+            last_exec = util::now();
             active = true;
         }
     }
@@ -1195,7 +1205,8 @@ void Scheduler::handle_request(Request request) {
     }
 
     Model* model = models[model_id];
-    request->set_model(model, default_slo);
+    request->set_model(model);
+    request->set_slo(default_slo);
     model->enqueue(request);
     requests.push(request);
 }
