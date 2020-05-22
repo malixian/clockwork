@@ -189,6 +189,7 @@ private:
 	struct Work { int id; uint64_t size; };
 	int clock_;
 	uint64_t work_begin = 0;
+	uint64_t lag; // allowable lag
 	std::deque<Work> outstanding;
 	uint64_t total_outstanding = 0;
 
@@ -212,11 +213,17 @@ private:
 
 public:
 
-	WorkerTracker(int clock) : clock_(clock) {}
+	WorkerTracker(int clock, uint64_t lag = 100000000UL) : clock_(clock), lag(lag) {}
 
 	// Returns the time outstanding work will complete
 	uint64_t available() {
-		return std::max(work_begin + total_outstanding / clock_, now());
+		uint64_t now = util::now();
+		uint64_t work_begin = this->work_begin;
+		if (outstanding.size() > 0 && (work_begin + (outstanding.front().size / clock_) + lag < now)) {
+			// Outstanding work has mysteriously not completed
+			work_begin = now - lag - outstanding.front().size / clock_;
+		}
+		return std::max(work_begin + total_outstanding / clock_, now);
 	}
 
 	int clock() {

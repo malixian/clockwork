@@ -339,7 +339,9 @@ void ControllerActionTelemetryFileLogger::write_headers() {
 	f << "controller_result_enqueue" << "\t";
 	f << "controller_action_duration" << "\t";
 
-	f << "goodput" << "\n";
+	f << "goodput" << "\t";
+	f << "requests_queued" << "\t";
+	f << "copies_loaded" << "\n";
 }
 
 uint64_t delta_from(uint64_t value, uint64_t start) {
@@ -383,7 +385,9 @@ void ControllerActionTelemetryFileLogger::log(ControllerActionTelemetry &t) {
 	f << (t.result_received - t.action_sent) << "\t";
 	f << (t.result_processing - t.action_sent) << "\t";
 
-	f << static_cast<uint64_t>(t.worker_duration * t.goodput) << "\n";
+	f << static_cast<uint64_t>(t.worker_duration * t.goodput) << "\t";
+	f << t.requests_queued << "\t";
+	f << t.copies_loaded << "\n";
 }
 
 void ControllerActionTelemetryFileLogger::shutdown(bool awaitCompletion) {

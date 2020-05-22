@@ -59,6 +59,10 @@ struct ControllerActionTelemetry {
 	uint64_t worker_copy_output_complete;
 	uint64_t worker_result_sent;
 
+	// Set manually
+	unsigned requests_queued = 0;
+	unsigned copies_loaded = 0;
+
 	void set(std::shared_ptr<workerapi::Infer> &infer);
 	void set(std::shared_ptr<workerapi::LoadWeights> &load);
 	void set(std::shared_ptr<workerapi::EvictWeights> &evict);
