@@ -16,7 +16,10 @@ void RequestTelemetryFileLogger::write_headers() {
 	f << "slo_factor" << "\t";
 	f << "latency" << "\t";
 	f << "deadline" << "\t";
-	f << "deadline_met" << "\n";
+	f << "deadline_met" <<"\t";
+	f << "arrival_count" <<"\t";
+	f << "departure_count" << "\t";
+	f << "is_coldstart" << "\n";
 }
 
 void RequestTelemetryFileLogger::log(ControllerRequestTelemetry &t) {
@@ -41,7 +44,10 @@ void RequestTelemetryFileLogger::log(ControllerRequestTelemetry &t) {
 		deadline_met = t.result == clockworkSuccess && t.departure <= t.deadline;
 	}
 	f << deadline << "\t";
-	f << deadline_met << "\n";
+	f << deadline_met << "\t";
+	f << t.arrival_count << "\t";
+	f << t.departure_count << "\t";
+	f << (t.departure_count > t.arrival_count && t.arrival_count == 0) << "\n";
 }
 
 void RequestTelemetryFileLogger::shutdown(bool awaitCompletion) {
@@ -187,6 +193,8 @@ void ControllerRequestTelemetry::set(clientapi::InferenceResponse &response) {
 	departure = response.departure;
 	result = response.header.status;
 	deadline = response.deadline;
+	arrival_count = response.arrival_count;
+	departure_count = response.departure_count;
 }
 
 void ControllerActionTelemetry::set(std::shared_ptr<workerapi::Infer> &infer) {

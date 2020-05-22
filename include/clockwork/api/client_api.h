@@ -85,6 +85,8 @@ struct InferenceResponse {
 	// Not sent over the network; used by controller
 	uint64_t deadline = 0;
 	uint64_t departure = 0;
+	unsigned arrival_count = 0;
+	unsigned departure_count = 0;
 
 	std::string str();
 };

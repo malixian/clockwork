@@ -35,6 +35,8 @@ struct ControllerRequestTelemetry {
 	uint64_t departure;
 	uint64_t deadline;
 	float slo_factor;
+	int arrival_count;
+	int departure_count;
 	int result;
 
 	void set(clientapi::InferenceRequest &request);

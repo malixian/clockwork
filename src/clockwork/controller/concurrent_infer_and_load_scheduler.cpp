@@ -272,6 +272,7 @@ void Scheduler::RequestImpl::lock() {
 
 void Scheduler::RequestImpl::set_model(Model* model) {
     this->model = model;
+    response.arrival_count = model->copies_loaded;
 }
 
 void Scheduler::RequestImpl::set_slo(uint64_t default_slo) {
@@ -293,6 +294,7 @@ void Scheduler::RequestImpl::set_result(char* output, size_t output_size) {
     response.header.status = clockworkSuccess;
     response.output = output;
     response.output_size = output_size;
+    response.departure_count = model->copies_loaded;
 }
 
 void Scheduler::RequestImpl::set_error(int status, std::string message) {
@@ -325,6 +327,7 @@ void Scheduler::RequestImpl::timeout() {
     if (response.header.status == 0)
         response.header.status = clockworkTimeout;
     response.departure = util::now();
+    response.departure_count = model->copies_loaded;
 
     callback(response);
 
@@ -786,6 +789,7 @@ void Scheduler::GPU::evict_pages(unsigned required_pages) {
         instance->version++;
         instance->loading = false;
         instance->loaded = false;
+        instance->model->copies_loaded--;
 
         EvictWeightsAction* evict = new EvictWeightsAction(instance);
         evict->set_expectations();
@@ -1020,6 +1024,7 @@ void Scheduler::GPU::load_success(LoadWeightsAction* action, std::shared_ptr<wor
 
     // Update PCI tracking
     action->instance->model->add_weights_measurement(result->duration);
+    action->instance->model->copies_loaded++;
 
     // // Enable new requests
     loading.push({action->instance, action->instance->version, 0});
