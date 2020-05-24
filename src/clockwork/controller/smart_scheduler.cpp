@@ -192,6 +192,15 @@ void SmartScheduler::RequestBatch::add_to_batch(Request request) {
 unsigned SmartScheduler::RequestBatch::get_model_id() { return model_id; }
 
 // --- SmartScheduler
+SmartScheduler::SmartScheduler(uint64_t default_slo, unsigned max_gpus,
+                               uint64_t max_exec_time, unsigned max_batch_size,
+                               std::string action_telemetry_file)
+    : default_slo(default_slo),
+      max_gpus(max_gpus),
+      max_exec_time(max_exec_time),
+      max_batch_size(max_batch_size),
+      action_telemetry_file(action_telemetry_file) {}
+
 bool SmartScheduler::is_model_hot_somewhere(unsigned model_id) {
   return (global_cached_models.find(model_id) != global_cached_models.end())
              ? true
@@ -284,7 +293,6 @@ void SmartScheduler::start(
   action_id_seed = 1000;
   global_request_id = 1000;
   global_batch_id_seed = 1000;
-  slo = system_wide_slo * 0.95;  // aim for 5ms under the set slo
 
   // -- gpu -> worker_idx, gpu_idx
   unsigned gpu_id = 0;
@@ -293,6 +301,12 @@ void SmartScheduler::start(
       gpus[gpu_id] =
           GPU(gpu_id, worker.id, gpu.id, gpu.weights_cache_total_pages);
       gpu_id++;
+      if (max_gpus == gpu_id) {
+        break;
+      }
+    }
+    if (max_gpus == gpu_id) {
+      break;
     }
   }
 
@@ -331,7 +345,16 @@ void SmartScheduler::clientInfer(
   mtx_request_queue.lock();
   uint64_t request_id = ++global_request_id;
   uint64_t arrived = util::now();
-  uint64_t deadline = arrived + slo;
+
+  uint64_t slo_goal;
+  if (request.slo_factor > 0) {
+    slo_goal = get_latency_estimate(request.model_id, 1) * request.slo_factor;
+  } else {
+    slo_goal = default_slo;
+  }
+  slo_goal = ((slo_goal > 20000000) ? (slo_goal - 5000000)
+                              : (slo_goal - 2 * network_transfer_latency)); // aim for a tighter slo
+  uint64_t deadline = arrived + slo_goal;
 
   request_queue.push_back(Request(request_id, request.header.user_request_id,
                                   request.model_id, arrived, deadline));
@@ -382,8 +405,9 @@ bool SmartScheduler::compare_values(const std::pair<unsigned, uint64_t> &a,
   return (a.second < b.second);
 }
 
-bool SmartScheduler::compare_values_decreasing(const std::pair<unsigned, unsigned> &a,
-                               const std::pair<unsigned, unsigned> &b) {
+bool SmartScheduler::compare_values_decreasing(
+    const std::pair<unsigned, unsigned> &a,
+    const std::pair<unsigned, unsigned> &b) {
   return (a.second > b.second);
 }
 
@@ -766,11 +790,10 @@ void SmartScheduler::do_schedule() {
 
     // prioritizing models with the highest load
     std::vector<std::pair<unsigned, unsigned>> sorted_model_incoming_loads;
-    for (auto &item : models_incoming_load){
-    	sorted_model_incoming_loads.push_back(item);
+    for (auto &item : models_incoming_load) {
+      sorted_model_incoming_loads.push_back(item);
     }
-    sort(sorted_model_incoming_loads.begin(),
-    sorted_model_incoming_loads.end(),
+    sort(sorted_model_incoming_loads.begin(), sorted_model_incoming_loads.end(),
          compare_values_decreasing);
 
     // assign the least loaded gpu to each model load candidate
@@ -1183,8 +1206,8 @@ unsigned SmartScheduler::get_best_batchsize(unsigned model_id,
                                             unsigned queue_size) {
   unsigned best_batch_size = 1;
   for (auto &b : execution_profiler[model_id].batch_sizes) {
-    if ((queue_size >= b) && (b > best_batch_size) &&
-        (get_latency_estimate(model_id, b) <= max_allowed_batch_exec_time)) {
+    if ((queue_size >= b) && (b <= max_batch_size) && (b > best_batch_size) &&
+        (get_latency_estimate(model_id, b) <= max_exec_time)) {
       best_batch_size = b;
     }
   }
