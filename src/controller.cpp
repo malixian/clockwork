@@ -244,20 +244,33 @@ int main(int argc, char *argv[]) {
         );
         controller->join();
     } else if (controller_type == "SMART") {
-       std::string telemetry_file_prefix = argv[3];
-		std::string request_telemetry_file = telemetry_file_prefix + "request.csv";
 
-		Scheduler* scheduler = new SmartScheduler();
-		ControllerStartup* startup = new controller::ControllerStartup();
+		int i = 2;
+        int max_gpus = argc > ++i ? std::stoull(argv[i]) : 100;
+        uint64_t default_slo = argc > ++i ? std::stoull(argv[i]) : 100000000UL;
+        uint64_t max_exec_time = argc > ++i ? std::stoull(argv[i]) : 250000000UL;
+        int max_batch_size = argc > ++i ? atoi(argv[i]) : 8;
+		std::string action_telemetry_file = argc > ++i ? argv[i] : "/local/clockwork_controller_action_log.csv";
+        Scheduler* scheduler = new SmartScheduler(
+            default_slo,
+            max_gpus,
+            max_exec_time,
+            max_batch_size,
+			action_telemetry_file
+        );
 
-		logger = ControllerRequestTelemetry::log_and_summarize(
-			request_telemetry_file, 10000000000UL);
-
-		controller::ControllerWithStartupPhase* controller =
-			new controller::ControllerWithStartupPhase(
-				client_requests_listen_port, worker_host_port_pairs,
-				10000000000UL, startup, scheduler, logger);
-		controller->join();
+		controller::ControllerWithStartupPhase* controller = new controller::ControllerWithStartupPhase(
+            client_requests_listen_port,
+            worker_host_port_pairs,
+            1000000000UL, // 10s load stage timeout
+            new controller::ControllerStartup(), // in future the startup type might be customizable
+            scheduler,
+            ControllerRequestTelemetry::log_and_summarize(
+                "/local/clockwork_request_log.tsv",     // 
+                10000000000UL           // print request summary every 10s
+            )
+        );
+        controller->join();
 		
     } else {
         std::cout << "Invalid controller type " << controller_type << std::endl;

@@ -170,7 +170,11 @@ class SmartScheduler : public Scheduler {
   std::mutex mtx_profiler;
 
   // slo
-  uint64_t slo;
+  uint64_t default_slo;
+  unsigned max_gpus;
+  uint64_t max_exec_time;
+  unsigned max_batch_size;
+  std::string action_telemetry_file;
 
   // Seeds
   std::atomic_uint64_t action_id_seed;
@@ -220,6 +224,8 @@ class SmartScheduler : public Scheduler {
 
   // scheduler thread
   std::thread scheduler_thread;
+
+  SmartScheduler(uint64_t default_slo, unsigned max_gpus, uint64_t max_exec_time, unsigned max_batch_size, std::string action_telemetry_file);
 
   void add_active_model(uint64_t action_id, unsigned gpu_id, unsigned model_id);
   void remove_active_model(uint64_t action_id);
