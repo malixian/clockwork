@@ -42,7 +42,7 @@ public:
 	bool print;
 	NetworkClient *client;
 
-	bool inputs_enabled_ = true;
+	bool inputs_enabled_ = false;
 	int user_id_;
 	const int model_id_;
 	const std::string source_;

@@ -80,6 +80,11 @@ void printUsage() {
 			  << "\t\t\t\t (2 FG models with PoissonOpenLoop clients sending requests at 200 rps)" << std::endl
 			  << "\t\t\t\t (the SLO factor of each FG model is updated every 7 seconds as follows: 2 4 8 16 32)" << std::endl
 			  << "\t\t\t\t (4 BG models with a relaxed SLO factor of 100 and respective ClosedLoop clients configured with a concurrency factor of 1)" << std::endl
+			  << "\t comparison_experiment" << std::endl
+			  << "\t\t Description: runs multiple copies of resnet50_v2" << std::endl
+			  << "\t\t Workload parameters:" << std::endl
+			  << "\t\t\t num_models: (int, default 15) the number of models you're using" << std::endl
+			  << "\t\t\t total_requests: (int, default 1000) the total requests across all models, per second" << std::endl
 			  << "\t azure" << std::endl
 			  << "\t\t Description: replay an azure workload trace.  Can be run with no arguments, in which case default values are used.  The defaults will load 3100 models and replay a trace that will give approximately the total load the system can handle." << std::endl
 			  << "\t\t Workload parameters:" << std::endl
@@ -175,7 +180,7 @@ int main(int argc, char *argv[])
 	else if (workload == "azure") {
 		int i = 2;
 		unsigned num_workers = argc > ++i ? atoi(argv[i]) : 1;
-		bool use_all_models = argc > ++i ? (atoi(argv[i])!=0) : false;
+		bool use_all_models = argc > ++i ? (atoi(argv[i])!=0) : true;
 		double load_factor = argc > ++i ? atof(argv[i]) : 1.0;
 		unsigned memory_load_factor = argc > ++i ? atoi(argv[i]) : 4;
 		unsigned interval_duration_seconds = argc > ++i ? atoi(argv[i]) : 60;
@@ -190,6 +195,11 @@ int main(int argc, char *argv[])
 			trace_id,
 			randomise_start
 		);
+	} else if (workload == "comparison_experiment") {
+		int i = 2;
+		unsigned num_models = argc > ++i ? atoi(argv[i]) : 15;
+		unsigned total_requests = argc > ++i ? atoi(argv[i]) : 1000;
+		engine = workload::comparison_experiment(client, num_models, total_requests);
 	} else if (workload == "azure_half")
 		engine = workload::azure_parameterized(client);
 	else if (workload == "azure_small")

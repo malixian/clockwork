@@ -186,10 +186,11 @@ public:
 
 class WorkerTracker {
 private:
-	struct Work { int id; uint64_t size; };
+	struct Work { int id; uint64_t size; uint64_t work_begin; };
 	int clock_;
 	uint64_t work_begin = 0;
 	uint64_t lag; // allowable lag
+	uint64_t future; // time into the future to schedule
 	std::deque<Work> outstanding;
 	uint64_t total_outstanding = 0;
 
@@ -209,11 +210,14 @@ private:
 				}
 			}
 		}
+		if (outstanding.size() > 0) {
+			work_begin = std::max(work_begin, outstanding.front().work_begin);
+		}
 	}
 
 public:
 
-	WorkerTracker(int clock, uint64_t lag = 100000000UL) : clock_(clock), lag(lag) {}
+	WorkerTracker(int clock, uint64_t lag = 100000000UL, uint64_t future=0UL) : clock_(clock), lag(lag), future(future) {}
 
 	// Returns the time outstanding work will complete
 	uint64_t available() {
@@ -223,7 +227,7 @@ public:
 			// Outstanding work has mysteriously not completed
 			work_begin = now - lag - outstanding.front().size / clock_;
 		}
-		return std::max(work_begin + total_outstanding / clock_, now);
+		return std::max(work_begin + total_outstanding / clock_, now + future);
 	}
 
 	int clock() {
@@ -234,12 +238,12 @@ public:
 		this->clock_ = clock;
 	}
 
-	void add(int id, uint64_t work_size) {
+	void add(int id, uint64_t work_size, uint64_t work_begin = 0) {
 		if (outstanding.empty()) {
-			work_begin = now();
+			this->work_begin = std::max(work_begin, now());
 		}
 		uint64_t size = work_size * clock_;
-		outstanding.push_back({id, size});
+		outstanding.push_back({id, size, work_begin});
 		total_outstanding += size;
 	}
 
