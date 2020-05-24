@@ -66,14 +66,25 @@ std::vector<std::vector<unsigned>> read_trace_data(std::string filename) {
 	std::ifstream f(filename);
 
 	std::vector<std::vector<unsigned>> results;
+	std::vector<std::pair<int, int>> sizes;
 
 	std::string line;
 	std::getline(f, line); // Skip headers
 	while (std::getline(f, line)) {
-		results.push_back(process_trace_line(line, 4));
+		auto traceline = process_trace_line(line, 4);
+		int size = std::accumulate(traceline.begin(), traceline.end(), 0);
+		sizes.push_back(std::make_pair(size, results.size()));
+		results.push_back(traceline);
 	}
 
-	return results;
+	std::sort(sizes.begin(), sizes.end());
+
+	std::vector<std::vector<unsigned>> ordered;
+	for (int i = sizes.size()-1; i >= 0; i--) {
+		ordered.push_back(results[sizes[i].second]);
+	}
+
+	return ordered;
 }
 
 std::vector<std::vector<unsigned>> load_trace(int workload_id = 1) {

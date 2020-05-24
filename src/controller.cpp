@@ -61,6 +61,13 @@ void show_usage() {
     s << "  INFER\n";
     s << "  INFER1    Older variant of INFER with greedy batching\n";
     s << "  INFER2    Older variant of INFER with better batching\n";
+    s << "  INFER4    Up-to-date scheduler with loads and infers, supports the following options:\n";
+    s << "       generate_inputs    (bool, default false)  Should inputs and outputs be generated if not present.  Set to true to test network capacity\n";
+    s << "       max_gpus           (int, default 100)  Set to a lower number to limit the number of GPUs.\n";
+    s << "       schedule_ahead     (int, default 10000000)  How far ahead, in nanoseconds, should the scheduler schedule.  If generate_inputs is set to true, the default value for this is 15ms, otherwise 5ms.\n";
+    s << "       default_slo        (int, default 100000000)  The default SLO to use if client's don't specify slo_factor.  Default 100ms\n";
+    s << "       max_exec        (int, default 25000000)  Don't use batch sizes >1, whose exec time exceeds this number.  Default 25ms \n";
+    s << "       max_batch        (int, default 8)  Don't use batch sizes that exceed this number.  Default 8. \n";
     s << "WORKERS\n";
     s << "  Comma-separated list of worker host:port pairs.  e.g.:                        \n";
     s << "    volta03:12345,volta04:12345,volta05:12345                                   \n";
@@ -176,11 +183,21 @@ int main(int argc, char *argv[]) {
         );
         controller->join();
     } else if (controller_type == "INFER4") {
-        uint64_t default_slo = 100000000UL;
-        if (argc >= 4) {
-            default_slo = std::stoull(argv[3]);
-        }
-        Scheduler* scheduler = new scheduler::infer4::Scheduler(default_slo);
+        int i = 2;
+        bool generate_inputs = argc > ++i ? atoi(argv[i]) != 0 : false;
+        int max_gpus = argc > ++i ? std::stoull(argv[i]) : 100;
+        uint64_t schedule_ahead = argc > ++i ? std::stoull(argv[i]) : (generate_inputs ? 15000000UL : 10000000UL);
+        uint64_t default_slo = argc > ++i ? std::stoull(argv[i]) : 100000000UL;
+        uint64_t max_exec_time = argc > ++i ? std::stoull(argv[i]) : 250000000UL;
+        int max_batch_size = argc > ++i ? atoi(argv[i]) : 8;
+        Scheduler* scheduler = new scheduler::infer4::Scheduler(
+            default_slo,
+            schedule_ahead, schedule_ahead,
+            generate_inputs,
+            max_gpus,
+            max_exec_time,
+            max_batch_size
+        );
         controller::ControllerWithStartupPhase* controller = new controller::ControllerWithStartupPhase(
             client_requests_listen_port,
             worker_host_port_pairs,

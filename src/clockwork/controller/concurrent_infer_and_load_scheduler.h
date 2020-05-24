@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <string>
 #include <sstream>
+#include <set>
 #include "clockwork/controller/scheduler.h"
 #include "clockwork/telemetry/controller_action_logger.h"
 #include "clockwork/thread.h"
@@ -25,62 +26,84 @@ class Scheduler : public clockwork::Scheduler {
     static const bool print_debug = false;
     static const bool print_loads = false;
 
-
-    static const uint64_t slo = 100000000UL; // 100ms SLO
-    static const uint64_t buffer = 5000000UL; // Aim for an SLO this much prior to actual SLO
+    // Non-configurable parameters
     static const uint64_t default_clock = 1380; // default gpu clock speed
+    static const uint64_t buffer = 5000000UL; // Aim for an SLO this much prior to actual SLO
     static const int estimate_window_size = 10; // Estimate execution time using last 10 measurements
     static const float estimate_percentile; // Percentile to use for estimation; 0.99 (effectively max)
-    static const uint64_t latest_delta = 3000000UL; // Actions can run up to 3ms behind schedule before the worker will drop them
-    static const uint64_t schedule_ahead = 10000000UL; // schedule 10ms into the future
-    static const uint64_t max_allowable_exec_time = 18000000UL; // for batching, never consider batch sizes that exceed 18ms exec time (too big)
+    static const uint64_t lag = 10000000UL; // how much can worker lag behind expected completion time before we stop scheduling
+    static const uint64_t future = 1000000UL; // used for setting earliest timestamp; expect 1ms lag getting to worker
+    static const int max_loads = 2; // max number of outstanding loads
+    static const uint64_t max_loadweights_slo = 25000000UL;
 
+    // Scheduler parameters configurable by ./controller binary
+
+    const uint64_t default_slo;
+    const uint64_t latest_delta; // Actions can run up to 10ms behind schedule before the worker will drop them
+    const uint64_t schedule_ahead; // schedule 10ms into the future
+    const uint64_t max_allowable_exec_time; // disallow batches with execution times greater than this
+    const unsigned max_batch_size;
+    const bool generate_inputs; // if clients send 0-size inputs, do we want to generate real ones, or send 0-size?
+    const int max_gpus; // max number of gpus to use
+
+    Scheduler(
+        uint64_t default_slo, // 100ms
+        uint64_t latest_delta, // 10ms
+        uint64_t schedule_ahead, // 10ms
+        bool generate_inputs, // if clients send no input, should we generate real inputs, or forward the size-0?
+        int max_gpus, // max GPUs to use
+        uint64_t max_allowable_exec_time = 18000000UL, // 18ms
+        unsigned max_batch_size = 8, // max supported batchsize of 8
+        std::string actions_filename = "/local/clockwork_action_log.tsv");
 
 
     class WorkTracker2 {
      public:
+
+        uint64_t last_print;
+        uint64_t print_every = 1000000000UL;
         struct Demand {
             int model_id;
-            int64_t size;
+            int64_t exec_size;
+            int64_t loadweights_size;
         };
 
      private:
-        static const int64_t capacity = Scheduler::slo; // For now just use the slo
+        const int64_t capacity; // For now just use the slo
         struct ModelPriority;
         struct Model {
             int id;
             int gpu_count = 0;
             std::vector<bool> gpus;
             std::vector<bool> loading;
-            int64_t outstanding = 0;
-            int64_t completed = 0;
+
+            int64_t outstanding_exec = 0;
+            int64_t outstanding_loadweights = 0;
+
+            int64_t completed_exec = 0;
+            int64_t completed_loadweights = 0;
+            int64_t timedout_loadweights = 0;
+
             std::vector<uint64_t> allocations;
             std::vector<ModelPriority*> priorities;
-            uint64_t seqno = 0;
+            std::vector<uint64_t> last_used;
         };
 
         struct ModelPriority {
             int64_t priority = 0;
-            bool is_empty = true;
             int preference = 0;
+            bool is_empty = true;
+            uint64_t last_used = 0;
             Model* model;
             ModelPriority(Model* model) : model(model) {}
         };
 
         struct CompareModelPriority {
-            bool operator() (ModelPriority* a, ModelPriority* b) {
-                if (a->is_empty) {
-                    if (b->is_empty) {
-                        return a->model->seqno > b->model->seqno;
-                    } else {
-                        return false;
-                    }
+            bool operator() (const ModelPriority* a, const ModelPriority* b) const {
+                if (a->priority == b->priority) {
+                    return a->last_used > b->last_used;
                 } else {
-                    if (b->is_empty) {
-                        return true;
-                    } else {
-                        return a->priority > b->priority;
-                    }
+                    return a->priority > b->priority;
                 }
             }
         } sort_by_priority;
@@ -88,14 +111,15 @@ class Scheduler : public clockwork::Scheduler {
         struct GPU {
             int id;
             int64_t outstanding = 1000000UL; // always assume 1ms outstanding work
-            unsigned model_count = 0;
+            double weight = 0.01;
             std::vector<bool> models;
-            std::vector<ModelPriority*> modelorder;
+            std::set<ModelPriority*, CompareModelPriority> cached;
+            std::set<ModelPriority*, CompareModelPriority> not_cached;
         };
 
         struct Request {
             int model_id;
-            int64_t size;
+            int64_t loadweights_size;
             uint64_t time;
 
             friend bool operator < (const Request& lhs, const Request &rhs) {
@@ -114,19 +138,22 @@ class Scheduler : public clockwork::Scheduler {
 
         std::priority_queue<Request, std::vector<Request>, std::greater<Request>> requests;
 
+        void attach(Model &model);
+        void detach(Model &model);
         void updatePriority(Model &model);
         void clearWork(Model &model);
         void distributeWork(Model &model);
         void addGPU(Model &model, GPU &gpu);
+        void addGPUcomplete(Model &model, GPU &gpu);
         void removeGPU(Model &model, GPU &gpu);
         void checkRequests();
 
      public:
         tbb::queuing_mutex mutex;
 
-        WorkTracker2(int num_gpus, int num_models);
-        Demand addRequest(int model_id, int64_t size, uint64_t slo);
-        void requestCompleted(Demand &demand);
+        WorkTracker2(int num_gpus, int num_models, uint64_t capacity);
+        Demand addRequest(int model_id, int64_t size, uint64_t start_exec_by, uint64_t start_loadweights_by);
+        void requestCompleted(Demand &demand, int gpu_id);
         int loadModel(int gpu_id, bool requires_eviction = false);
         void loadModelComplete(int gpu_id, int model_id, bool success);
         int evictModel(int gpu_id);
@@ -136,6 +163,7 @@ class Scheduler : public clockwork::Scheduler {
     class Model;
     class RequestImpl {
      public:
+        Scheduler* scheduler;
         uint64_t id;
         uint64_t slo;
         uint64_t exec_slo;
@@ -153,7 +181,8 @@ class Scheduler : public clockwork::Scheduler {
         std::function<void(clientapi::InferenceResponse&)> callback;
 
      public:
-        RequestImpl(clientapi::InferenceRequest request,
+        RequestImpl(Scheduler* scheduler,
+            clientapi::InferenceRequest request,
             std::function<void(clientapi::InferenceResponse&)> callback);
         ~RequestImpl();
 
@@ -166,12 +195,15 @@ class Scheduler : public clockwork::Scheduler {
 
         // Returns true if the result was successful and within the deadline
         void timeout();
-        bool complete(uint64_t now);
+        bool complete(uint64_t now, int gpu_id);
         void finalize();
     };
     typedef std::shared_ptr<RequestImpl> Request;
 
     class InferAction {
+    private:
+        Scheduler* scheduler;
+        bool generated_inputs = false;
      public:
         Model* model;
         ControllerActionTelemetry telemetry;
@@ -180,7 +212,7 @@ class Scheduler : public clockwork::Scheduler {
         std::shared_ptr<workerapi::InferResult> result = nullptr;
         std::vector<Request> requests;
 
-        explicit InferAction(Model* model);
+        explicit InferAction(Scheduler* scheduler, Model* model);
         ~InferAction();
 
         void batch();
@@ -190,12 +222,13 @@ class Scheduler : public clockwork::Scheduler {
         void set_result(std::shared_ptr<workerapi::InferResult> &result);
 
         // Returns the fraction of successful requests
-        float complete(uint64_t now);
+        float complete(uint64_t now, int gpu_id);
     };
 
     class ModelInstance;
     class LoadWeightsAction {
      public:
+        Scheduler* scheduler;
         ModelInstance* instance;
         unsigned version;
         ControllerActionTelemetry telemetry;
@@ -203,7 +236,7 @@ class Scheduler : public clockwork::Scheduler {
         std::shared_ptr<workerapi::ErrorResult> error = nullptr;
         std::shared_ptr<workerapi::LoadWeightsResult> result = nullptr;
 
-        explicit LoadWeightsAction(ModelInstance* instance);
+        explicit LoadWeightsAction(Scheduler* scheduler, ModelInstance* instance);
 
         void set_expectations(uint64_t exec_start, uint64_t duration);
         void set_error(std::shared_ptr<workerapi::ErrorResult> &error);
@@ -244,6 +277,8 @@ class Scheduler : public clockwork::Scheduler {
         unsigned id;
         Scheduler* scheduler;
         unsigned num_weights_pages;
+        size_t input_size;
+        size_t output_size;
         std::vector<ModelInstance*> instances;
         uint64_t b1_exec;
         std::atomic_int copies_loaded = 0;
@@ -256,20 +291,22 @@ class Scheduler : public clockwork::Scheduler {
         std::vector<unsigned> batch_lookup_;
         unsigned max_batch_size;
 
-        std::map<unsigned, uint64_t> estimates;
+        std::atomic_flag estimates_in_use;
+        std::vector<uint64_t> estimates;
         std::map<unsigned, util::SlidingWindow*> estimators;
 
         std::atomic_flag weights_in_use;
         util::SlidingWindow* weights_estimator;
         uint64_t weights_estimate;
 
-        uint64_t request_id_seed = 0;
+        std::atomic_uint64_t request_id_seed_ = 0;
 
+        tbb::concurrent_queue<Request> incoming;
         std::deque<Request> queue;
 
      public:
 
-        Model(BatchedModelState &state);
+        Model(Scheduler* scheduler, BatchedModelState &state);
 
         uint64_t estimate_weights();
 
@@ -342,6 +379,7 @@ class Scheduler : public clockwork::Scheduler {
         bool eviction_required = false;
         uint64_t last_load = 0;
         uint64_t last_exec = 0;
+        int loads = 0;
 
         std::queue<Loading> loading;
         std::priority_queue<InferStrategy*, std::deque<InferStrategy*>, InferStrategy::Comparator> queue;
@@ -382,7 +420,7 @@ class Scheduler : public clockwork::Scheduler {
         void send_action(LoadWeightsAction* action);
         void send_action(EvictWeightsAction* action);
         bool try_load(uint64_t available);
-        void evict_pages(unsigned required_pages);
+        std::vector<EvictWeightsAction*> evict_pages(unsigned required_pages);
 
         void handle_result(std::shared_ptr<workerapi::Result> result);
         void infer_error(InferAction* action, std::shared_ptr<workerapi::ErrorResult> &error);
@@ -403,8 +441,6 @@ class Scheduler : public clockwork::Scheduler {
     // Non-mutable so thread-safe
     std::vector<GPU*> gpus;
     std::vector<Model*> models;
-
-    uint64_t default_slo;
 
  private:
     // All requests to time out
@@ -428,10 +464,6 @@ class Scheduler : public clockwork::Scheduler {
 
     // Called by GPU threads to register an action
     void add_action(uint64_t action_id, GPU* gpu);
-
-
-    Scheduler(uint64_t default_slo = 100000000UL, std::string actions_filename = "/local/clockwork_action_log.tsv");
-
 
     // Called when model loading has completed
     virtual void start(std::vector<network::controller::WorkerConnection*> workers,
