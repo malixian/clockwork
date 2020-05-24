@@ -703,6 +703,7 @@ Engine* azure_parameterized(clockwork::Client* client,
 				  << std::endl;
 	}
 
+	srand(0);
 	std::vector<Model*> models;
 	auto modelzoo = util::get_clockwork_modelzoo();	
 	if (use_all_models) {
@@ -713,7 +714,9 @@ Engine* azure_parameterized(clockwork::Client* client,
 			models_remaining--;
 			std::cout << "Loading " << p.first << " x" << num_copies << std::endl;
 			for (auto &model : client->load_remote_models(p.second, num_copies)) {
-				models.push_back(model);
+				// Pseudo-randomly insert each model
+				unsigned position = models.size() % rand();
+				models.insert(models.begin() + position, model);
 			}
 		}
 	} else {
