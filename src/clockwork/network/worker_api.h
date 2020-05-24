@@ -40,6 +40,8 @@ public:
   	msg.set_model_path(action.model_path);
   	msg.set_earliest(action.earliest);
   	msg.set_latest(action.latest);
+    msg.set_max_batch_size(action.max_batch_size);
+    msg.set_max_exec_duration(action.max_exec_duration);
   }
 };
 
@@ -53,6 +55,8 @@ public:
   	action.model_path = msg.model_path();
   	action.earliest = msg.earliest();
   	action.latest = msg.latest();
+    action.max_batch_size = msg.max_batch_size();
+    action.max_exec_duration = msg.max_exec_duration();
   }
 };
 

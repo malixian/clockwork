@@ -101,6 +101,8 @@ public:
 	std::string model_path;
 	uint64_t earliest;
 	uint64_t latest;
+	unsigned max_batch_size = 32;
+	uint64_t max_exec_duration = 1000000000UL;
 
 	virtual std::string str();
 };

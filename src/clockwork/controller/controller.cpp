@@ -287,8 +287,9 @@ void LoadingStage::Worker::check() {
 LoadingStage::LoadingStage(
 	ClockworkState &state, 
 	std::vector<network::controller::WorkerConnection*> worker_connections,
-	uint64_t timeout) : timeout(timeout), state(state)
-{
+	uint64_t timeout, unsigned max_batch_size, uint64_t max_exec_duration) : 
+		timeout(timeout), state(state), max_batch_size(max_batch_size), 
+		max_exec_duration(max_exec_duration) {
 	// Determine model_id_seed
 	for (auto &worker : state.workers) {
 		for (auto &p : worker.models) {
@@ -321,6 +322,8 @@ void LoadingStage::on_request(std::shared_ptr<LoadModelRequest> &request) {
 		load_model->no_of_copies = request->request.no_of_copies;
 		load_model->earliest = 0;
 		load_model->latest = ULONG_MAX;
+		load_model->max_batch_size = max_batch_size;
+		load_model->max_exec_duration = max_exec_duration;
 
 		p->add_action(i, load_model);
 		workers[i].add_action(load_model);
@@ -443,7 +446,7 @@ ClockworkState ControllerStartup::run(uint64_t timeout, std::vector<network::con
 	// Create and run loader
 
 	std::cout << "(Startup-3) Awaiting LoadModel requests from clients" << std::endl;
-	state = LoadingStage(state, workers, timeout).run(load_model_request_queue, worker_results_queue);
+	state = LoadingStage(state, workers, timeout, max_batch_size, max_exec_duration).run(load_model_request_queue, worker_results_queue);
 	std::cout << "(Startup-6) LoadModelStage complete.  Printing loaded models: " << std::endl;
 	std::cout << state.str() << std::endl;
 

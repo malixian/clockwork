@@ -70,8 +70,12 @@ float CudaAsyncTask::async_duration() {
 }
 
 
-LoadModelFromDiskTask::LoadModelFromDiskTask(MemoryManager* manager, int model_id, std::string model_path, uint64_t earliest, uint64_t latest, int no_of_copies) :
-		manager(manager), model_id(model_id), model_path(model_path), earliest(earliest), latest(latest), no_of_copies(no_of_copies) {
+LoadModelFromDiskTask::LoadModelFromDiskTask(MemoryManager* manager, 
+	int model_id, std::string model_path, uint64_t earliest, uint64_t latest, 
+	int no_of_copies, unsigned max_batch_size, uint64_t max_exec_duration) :
+		manager(manager), model_id(model_id), model_path(model_path), 
+		earliest(earliest), latest(latest), no_of_copies(no_of_copies), 
+		max_batch_size(max_batch_size), max_exec_duration(max_exec_duration) {
 }
 
 LoadModelFromDiskTask::~LoadModelFromDiskTask() {}
@@ -111,7 +115,8 @@ void LoadModelFromDiskTask::run(cudaStream_t stream) {
 	}
 
 	try {
-		auto duplicates = model::BatchedModel::loadMultipleFromDiskMultiGPU(model_path, gpu_ids, no_of_copies);
+		auto duplicates = model::BatchedModel::loadMultipleFromDiskMultiGPU(
+			model_path, gpu_ids, no_of_copies, max_batch_size, max_exec_duration);
 
 		for (auto &gpu_id : gpu_ids) {
 			auto &models = duplicates[gpu_id];

@@ -42,7 +42,9 @@ LoadModelFromDiskAction::LoadModelFromDiskTaskImpl::LoadModelFromDiskTaskImpl(Lo
 			load_model->action->model_path,
 			load_model->action->earliest,
 			load_model->action->latest,
-			load_model->action->no_of_copies),
+			load_model->action->no_of_copies,
+			load_model->action->max_batch_size,
+			load_model->action->max_exec_duration),
 		load_model(load_model) {
 }
 
@@ -85,7 +87,8 @@ void LoadModelFromDiskAction::LoadModelFromDiskTaskImpl::cancel() {
 	load_model->handle_error(error);
 }
 
-LoadModelFromDiskAction::LoadModelFromDiskAction(ClockworkRuntime* runtime, std::shared_ptr<workerapi::LoadModelFromDisk> action) :
+LoadModelFromDiskAction::LoadModelFromDiskAction(ClockworkRuntime* runtime, 
+	std::shared_ptr<workerapi::LoadModelFromDisk> action) :
 	runtime(runtime), action(action), task(nullptr) {
 }
 

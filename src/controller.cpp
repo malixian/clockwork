@@ -202,11 +202,11 @@ int main(int argc, char *argv[]) {
             client_requests_listen_port,
             worker_host_port_pairs,
             1000000000UL, // 10s load stage timeout
-            new controller::ControllerStartup(), // in future the startup type might be customizable
+            new controller::ControllerStartup(max_batch_size, max_exec_time), // in future the startup type might be customizable
             scheduler,
             ControllerRequestTelemetry::log_and_summarize(
                 "/local/clockwork_request_log.tsv",     // 
-                10000000000UL           // print request summary every 10s
+                10000000000UL
             )
         );
         controller->join();

@@ -350,7 +350,9 @@ std::vector<ModelData> loadModelData(std::string base_filename) {
 	return modeldata;
 }
 
-std::map<unsigned, std::vector<BatchedModel*>> BatchedModel::loadMultipleFromDiskMultiGPU(std::string base_filename, std::vector<unsigned> gpu_ids, int num_copies) {
+std::map<unsigned, std::vector<BatchedModel*>> BatchedModel::loadMultipleFromDiskMultiGPU(
+		std::string base_filename, std::vector<unsigned> gpu_ids, int num_copies,
+		unsigned max_batch_size, uint64_t max_exec_size) {
 	std::string clockwork_weights_filename = base_filename + ".clockwork_params";
 
 	// Load shared weights
@@ -373,15 +375,18 @@ std::map<unsigned, std::vector<BatchedModel*>> BatchedModel::loadMultipleFromDis
 			std::vector<std::pair<unsigned, model::Model*>> models;
 
 			for (ModelData &d : modeldata) {
-				auto model = new model::Model(
-					Memfile::readFrom(d.so_memfile.filename), 
-					d.serialized_spec,
-					weights.size(),
-					ptrs[i],
-					gpu_id
-				);
-				model->exec_measurement = d.exec_measurement;
-				models.push_back(std::make_pair(d.batch_size, model));
+				if (d.batch_size <= max_batch_size && 
+					(d.batch_size == 1 || d.exec_measurement <= max_exec_size)) {
+					auto model = new model::Model(
+						Memfile::readFrom(d.so_memfile.filename), 
+						d.serialized_spec,
+						weights.size(),
+						ptrs[i],
+						gpu_id
+					);
+					model->exec_measurement = d.exec_measurement;
+					models.push_back(std::make_pair(d.batch_size, model));
+				}
 			}
 
 			auto batched = new model::BatchedModel(

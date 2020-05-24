@@ -96,12 +96,14 @@ private:
 	MemoryManager* manager;
 	uint64_t earliest, latest;
 	int no_of_copies;
+	unsigned max_batch_size;
+	uint64_t max_exec_duration;
 
 public:
 	int model_id;
 	std::string model_path;
 
-	LoadModelFromDiskTask(MemoryManager* manager, int model_id, std::string model_path, uint64_t earliest, uint64_t latest, int no_of_copies = 1);
+	LoadModelFromDiskTask(MemoryManager* manager, int model_id, std::string model_path, uint64_t earliest, uint64_t latest, int no_of_copies = 1, unsigned max_batch_size = 32, uint64_t max_exec_duration = 1000000000UL);
 	~LoadModelFromDiskTask();
 
 	// Task

@@ -139,6 +139,8 @@ message LoadModelFromDiskActionProto {
   required uint64 earliest = 4;
   required uint64 latest = 5;
   required int32 no_of_copies = 6;
+  required uint32 max_batch_size = 7;
+  required uint64 max_exec_duration = 8;
 }
 
 message LoadModelFromDiskResultProto {

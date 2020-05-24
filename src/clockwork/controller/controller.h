@@ -128,12 +128,16 @@ public:
 
 	std::unordered_map<unsigned, PendingAction> actions;
 	std::vector<Worker> workers;
+	unsigned max_batch_size;
+	uint64_t max_exec_duration;
 
 
 	LoadingStage(
 		ClockworkState &state, 
 		std::vector<network::controller::WorkerConnection*> worker_connections,
-		uint64_t timeout = 10000000000UL
+		uint64_t timeout = 10000000000UL, 
+		unsigned max_batch_size = 32, 
+		uint64_t max_exec_duration = 1000000000UL
 	);
 
 	void on_request(std::shared_ptr<LoadModelRequest> &request);
@@ -194,6 +198,12 @@ public:
 			thread.join();
 		}
 	};
+
+	unsigned max_batch_size;
+	uint64_t max_exec_duration;
+
+	ControllerStartup(unsigned max_batch_size = 32, uint64_t max_exec_duration = 1000000000UL)
+		: max_batch_size(max_batch_size), max_exec_duration(max_exec_duration) {}
 
 	void bounceLSRequest(std::shared_ptr<startup::LSRequest> &request);
 	void bounceInferRequest(std::shared_ptr<startup::InferRequest> &request);
