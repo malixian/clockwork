@@ -1113,7 +1113,7 @@ void Scheduler::GPU::check_pending() {
     }
 
     if (!active) {
-        // usleep(10);
+        usleep(50);
     }
 }
 
@@ -1345,10 +1345,12 @@ void Scheduler::initialize_gpus(std::vector<network::controller::WorkerConnectio
                 ClockworkState &state) 
 {
     unsigned total_pages = 0;
+    unsigned workers_remaining = state.workers.size();
+    unsigned gpus_remaining = max_gpus;
     for (WorkerState &worker : state.workers) {
-        for (GPUState &gpustate : worker.gpus) {
-            if (gpus.size() == Scheduler::max_gpus) break;
-
+        int num_gpus = std::min((unsigned) worker.gpus.size(), gpus_remaining / workers_remaining);
+        for (unsigned i = 0; i < num_gpus; i++) {
+            GPUState &gpustate = worker.gpus[i];
             GPU* gpu = new GPU(
                 gpus.size(),
                 this,
@@ -1361,6 +1363,8 @@ void Scheduler::initialize_gpus(std::vector<network::controller::WorkerConnectio
 
             total_pages += gpu->pages;
         }
+        gpus_remaining -= num_gpus;
+        workers_remaining--;
     }
     std::cout << "Created " << gpus.size() << " GPUs on " << state.workers.size() << " Workers" << std::endl;
 }
