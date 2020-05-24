@@ -11,11 +11,11 @@ class SmartScheduler : public Scheduler {
  public:
   static const uint64_t system_wide_slo = 100000000ULL;
   static const unsigned latency_profiling_window = 100;
-  static const uint64_t scheduling_epoch = 3000000ULL;
-  static const uint64_t schedule_ahead_length = 10000000ULL;
+  static const uint64_t scheduling_epoch = 1000000ULL;
+  static const uint64_t schedule_ahead_length = 5000000ULL;
   static const uint64_t network_transfer_latency = 1000000ULL;
-  static const uint64_t pci_slack = 5000000ULL;
-  static const uint64_t infer_slack = 1000000ULL;
+  static const uint64_t pci_slack = 1000000ULL;
+  static const uint64_t infer_slack = 500000ULL;
   static const uint64_t weights_evict_latency = 1000000ULL;
   // it means we must be observing at least 50 drops to trigger replication
   static const unsigned replication_sensitivity = 50;
@@ -23,6 +23,7 @@ class SmartScheduler : public Scheduler {
   static const uint64_t wait_time_before_replication = 100000000ULL;
   static const unsigned clk_freq_default = 1380UL;  // MHz
   static const unsigned gpu_cache_pages = 1408UL;
+  static const unsigned max_allowed_batch_exec_time = 20000000;
 
   class ExecutionProfiler;
   class WeightsProfiler;
@@ -81,22 +82,27 @@ class SmartScheduler : public Scheduler {
   class Request {
    public:
     uint64_t id;
-    clientapi::InferenceRequest request;
+    // clientapi::InferenceRequest request;
+	uint64_t user_request_id;
+	unsigned model_id;
+	unsigned batch_size;
     uint64_t arrived;
     uint64_t deadline;
     uint64_t earliest;
     uint64_t start_time;
     uint64_t finish_time;
-    Request() {}
-    Request(uint64_t id, uint64_t arrived, uint64_t deadline,
-            clientapi::InferenceRequest request);
+    // Request() {}
+    // Request(uint64_t id, uint64_t arrived, uint64_t deadline,
+    //         clientapi::InferenceRequest request);
+	Request(uint64_t id, uint64_t user_request_id, unsigned model_id, uint64_t arrived, uint64_t deadline);
 
     unsigned get_model_id();
 
-    ~Request();
+    // ~Request();
   };
 
   class RequestBatch {
+   public:
     uint64_t id;
     unsigned model_id;
     unsigned batch_size;
@@ -105,9 +111,18 @@ class SmartScheduler : public Scheduler {
     uint64_t deadline;
     uint64_t start_time;
     uint64_t finish_time;
-    RequestBatch() {}
+    RequestBatch(uint64_t id, unsigned model_id, unsigned batch_size)
+        : id(id),
+          model_id(model_id),
+          batch_size(batch_size),
+          earliest(0),
+          deadline(0),
+          start_time(0),
+          finish_time(0) {}
+
     RequestBatch(uint64_t id, unsigned model_id, Request request);
     void add_to_batch(Request request);
+	unsigned get_model_id();
   };
 
   class GPU {
@@ -122,7 +137,10 @@ class SmartScheduler : public Scheduler {
     std::set<unsigned> loaded_models;
     std::vector<unsigned> lru_loaded_models;
 
-    GPU() {}
+    GPU() {
+      gpu_idle_at = 0;
+      pci_idle_at = 0;
+    }
     GPU(unsigned id, unsigned worker_id, unsigned gpu_index,
         unsigned total_pages)
         : id(id),
@@ -157,6 +175,7 @@ class SmartScheduler : public Scheduler {
   // Seeds
   std::atomic_uint64_t action_id_seed;
   std::atomic_uint64_t global_request_id;
+  std::atomic_uint64_t global_batch_id_seed;
 
   // workers and gpus
   std::vector<network::controller::WorkerConnection *> workers;
@@ -175,6 +194,9 @@ class SmartScheduler : public Scheduler {
   // global request_queue
   std::vector<Request> request_queue;
   std::mutex mtx_request_queue;
+
+  std::map<uint64_t, std::vector<Request>> batch_storage;
+  std::mutex mtx_batch_storage;
 
   // local request queue per gpu
   std::map<unsigned, std::vector<Request>> gpu_request_queue;
@@ -206,6 +228,8 @@ class SmartScheduler : public Scheduler {
   bool is_model_hot_somewhere(unsigned model_id);
   void unset_global_cache_state(unsigned model_id);
   void set_global_cache_state(unsigned model_id);
+
+  unsigned get_best_batchsize(unsigned model_id, unsigned queue_size);
 
   void get_models_to_load();
   void do_schedule();
@@ -255,18 +279,19 @@ class SmartScheduler : public Scheduler {
   unsigned find_least_loaded_gpu(
       std::map<unsigned, uint64_t> &estimated_gpu_load);
 
-  void caclulate_model_load_evict_plan(
+  void calculate_model_load_evict_plan(
       std::map<unsigned, unsigned> &models_to_load,
       std::set<unsigned> &queued_request_models,
       std::map<unsigned, std::map<unsigned, std::vector<unsigned>>>
           &model_load_evict_plan);
 
   static bool request_finish_time_compare(Request &lhs, Request &rhs);
+  static bool batch_finish_time_compare(RequestBatch &lhs, RequestBatch &rhs);
 
   static bool compare_values(const std::pair<unsigned, uint64_t> &a,
                              const std::pair<unsigned, uint64_t> &b);
-  static bool compare_values_decreasing(std::pair<unsigned, unsigned> a,
-                                        std::pair<unsigned, unsigned> b);
+  static bool compare_values_decreasing(const std::pair<unsigned, unsigned> &a,
+                                        const std::pair<unsigned, unsigned> &b);
 
   void set_telemetry_infer(unsigned worker_id,
                            std::shared_ptr<workerapi::Infer> &action);
