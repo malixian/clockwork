@@ -100,10 +100,16 @@ class Scheduler : public clockwork::Scheduler {
 
         struct CompareModelPriority {
             bool operator() (const ModelPriority* a, const ModelPriority* b) const {
-                if (a->priority == b->priority) {
+                if (a->is_empty && b->is_empty) {
                     return a->last_used > b->last_used;
+                } else if (!a->is_empty && !b->is_empty) {
+                    if (a->priority == b->priority) {
+                        return a->last_used > b->last_used;
+                    } else {
+                        return a->priority > b->priority;
+                    }
                 } else {
-                    return a->priority > b->priority;
+                    return b->is_empty;
                 }
             }
         } sort_by_priority;
@@ -153,7 +159,9 @@ class Scheduler : public clockwork::Scheduler {
 
         WorkTracker2(int num_gpus, int num_models, uint64_t capacity);
         Demand addRequest(int model_id, int64_t size, uint64_t start_exec_by, uint64_t start_loadweights_by);
+        void requestExecuting(Demand &demand, int gpu_id);
         void requestCompleted(Demand &demand, int gpu_id);
+        void requestCancelled(Demand &demand, int gpu_id);
         int loadModel(int gpu_id, bool requires_eviction = false);
         void loadModelComplete(int gpu_id, int model_id, bool success);
         int evictModel(int gpu_id);

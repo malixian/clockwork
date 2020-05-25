@@ -64,15 +64,6 @@ void Scheduler::WorkTracker2::detach(Model &model) {
 }
 
 void Scheduler::WorkTracker2::updatePriority(Model &model) {
-    // // Simple case: no requests
-    // if (model.outstanding_loadweights == 0 && model.outstanding_exec == 0) {
-    //     for (unsigned i = 0; i < n_gpus; i++) {
-    //         model.priorities[i]->is_empty = true;
-    //         model.priorities[i]->priority = 0;
-    //     }
-    //     return;
-    // }
-
     // Calculate each GPU's weight
     double total_weight = 0;
     for (unsigned i = 0; i < n_gpus; i++) {
@@ -84,58 +75,29 @@ void Scheduler::WorkTracker2::updatePriority(Model &model) {
     // Load priority is calculated differently to evict priority
     // First, load priority.  Load priority is simply whether we can satisfy outstanding_loadweights
     int64_t load_priority = model.outstanding_loadweights;
-    for (unsigned i = 0; i < n_gpus; i++) {
-        if (model.gpus[i]) continue; // Skip models we are loaded on
 
-        int64_t required = model.outstanding_loadweights * (gpus[i].weight / total_weight);
-        int64_t served = (capacity * required) / gpus[i].outstanding;
-        load_priority -= served;
-    }
-    for (unsigned i = 0; i < n_gpus; i++) {
-        if (!model.gpus[i]) {
-            model.priorities[i]->priority = load_priority;
-            model.priorities[i]->is_empty = false;
-            model.priorities[i]->last_used = model.last_used[i];
+    // Subtract served load
+    if (total_weight > 0 && load_priority > 0) {
+        for (unsigned i = 0; i < n_gpus; i++) {
+            if (model.gpus[i]) continue; // Skip models we are loaded on
+
+            int64_t required = model.outstanding_loadweights * (gpus[i].weight / total_weight);
+            int64_t served = (capacity * required) / gpus[i].outstanding;
+            load_priority -= served;
         }
     }
 
-    // Now evict priority.  Evict priority considers all outstanding_exec.  Don't want to evict executable work!
-    // For evict priority, we consider the ability of the other (N-1) gpus to service the work
+    bool is_empty = model.outstanding_loadweights == 0 && model.outstanding_exec == 0;
+
     for (unsigned i = 0; i < n_gpus; i++) {
-        if (!model.gpus[i]) continue; // Skip models we aren't loaded on
-
-        // // Start with all outstanding exec work
-        // int64_t priority = model.outstanding_exec;
-        // int preference = model.priorities[i]->preference;
-
-        // // Subtract served work by other GPUs
-        // for (unsigned j = 0; j < n_gpus; j++) {
-        //     if (model.gpus[j] && model.priorities[j]->preference < preference) {
-        //         int64_t required = model.outstanding_exec * (gpus[j].weight / (total_weight - gpus[i].weight));
-        //         int64_t served = (capacity * required) / gpus[j].outstanding;
-        //         priority -= served;
-        //     }
-        // }
-        model.priorities[i]->priority = model.last_used[i];
-        model.priorities[i]->is_empty = false;
+        if (model.gpus[i]) {
+            model.priorities[i]->priority = model.last_used[i];
+        } else {
+            model.priorities[i]->priority = load_priority;
+        }
+        model.priorities[i]->is_empty = is_empty;
         model.priorities[i]->last_used = model.last_used[i];
     }
-
-    // if (last_print + print_every < util::now()) {
-    //     std::vector<unsigned> to_print = {0, 1, 11};
-    //     for (unsigned model_id : to_print) {
-    //         auto m = models[model_id];
-    //         std::cout << "model " << m.id << std::endl;
-    //         for (unsigned i = 0; i < n_gpus; i++) {
-    //             std::cout << "  gpu-" << i << " priority=" << m.priorities[i]->priority;
-    //             if (m.gpus[i]) {
-    //                 std::cout << " loaded";
-    //             }
-    //             std::cout << std::endl;
-    //         }
-    //     }
-    //     last_print = util::now();
-    // }
 }
 
 void Scheduler::WorkTracker2::clearWork(Model &model) {
@@ -154,9 +116,9 @@ void Scheduler::WorkTracker2::distributeWork(Model &model) {
     model.completed_loadweights -= loadweights_delta;
     model.timedout_loadweights -= loadweights_delta;
 
-    if (model.gpu_count == 0) return;
-
     clearWork(model);
+
+    if (model.gpu_count == 0) return;
 
     // For demand tracking we use exec
 
@@ -219,12 +181,7 @@ void Scheduler::WorkTracker2::removeGPU(Model &model, GPU &gpu) {
     }
 
 
-    if (--model.gpu_count == 0) {
-        clearWork(model);
-    } else {
-        distributeWork(model);
-    }
-
+    distributeWork(model);
     updatePriority(model);
 
     attach(model);
@@ -309,10 +266,36 @@ Scheduler::WorkTracker2::Demand Scheduler::WorkTracker2::addRequest(
     return demand;
 }
 
+void Scheduler::WorkTracker2::requestExecuting(Demand &demand, int gpu_id) {
+    auto &model = models[demand.model_id];
+    model.completed_loadweights += demand.loadweights_size;
+    demand.loadweights_size = 0;
+    if (gpu_id >= 0) model.last_used[gpu_id] = seqno_seed++;
+
+    detach(model);
+    distributeWork(model);
+    updatePriority(model);
+    attach(model);
+}
+
 void Scheduler::WorkTracker2::requestCompleted(Demand &demand, int gpu_id) {
     auto &model = models[demand.model_id];
     model.completed_exec += demand.exec_size;
+    demand.exec_size = 0;
+    if (gpu_id >= 0) model.last_used[gpu_id] = seqno_seed++;
+
+    detach(model);
+    distributeWork(model);
+    updatePriority(model);
+    attach(model);
+}
+
+void Scheduler::WorkTracker2::requestCancelled(Demand &demand, int gpu_id) {
+    auto &model = models[demand.model_id];
+    model.completed_exec += demand.exec_size;
     model.completed_loadweights += demand.loadweights_size;
+    demand.exec_size = 0;
+    demand.loadweights_size = 0;
     if (gpu_id >= 0) model.last_used[gpu_id] = seqno_seed++;
 
     detach(model);
@@ -450,7 +433,7 @@ void Scheduler::RequestImpl::timeout() {
 
     {
         tbb::queuing_mutex::scoped_lock lock(model->scheduler->tracker->mutex);
-        model->scheduler->tracker->requestCompleted(demand, -1);
+        model->scheduler->tracker->requestCancelled(demand, -1);
     }
 }
 
@@ -640,7 +623,11 @@ Scheduler::InferAction* Scheduler::Model::try_dequeue(
             for (auto it = queue.rbegin(); it != queue.rend(); it++) {
                 if ((*it)->deadline > completion_time) break;
                 available_requests++;
-                if (available_requests == strategy->batch_size) break;
+                if (available_requests == strategy->batch_size) {
+                    // Have to inherit new deadline
+                    strategy->deadline = (*it)->deadline;
+                    break;
+                }
             }
 
             // Truly insufficient requests
@@ -674,7 +661,8 @@ Scheduler::InferAction* Scheduler::Model::try_dequeue(
             // Don't time it out here - let the queue checker do that
         }
 
-        CHECK(queue.size() >= strategy->batch_size) << "Controller logic error";
+        // This shouldn't happen
+        if (queue.size() < strategy->batch_size) return nullptr;
 
         action = new InferAction(scheduler, this);
         for (unsigned i = 0; i < strategy->batch_size; i++) {
@@ -910,6 +898,14 @@ void Scheduler::GPU::send_action(InferAction* action) {
     // Send the action
     worker->sendAction(infer);
 
+    // Immediately mark the requests as executing for load balancer
+    {
+        tbb::queuing_mutex::scoped_lock lock(scheduler->tracker->mutex);
+        for (auto &request : action->requests) {
+            scheduler->tracker->requestExecuting(request->demand, id);
+        }
+    }
+
     if (print_debug) std::cout << ("Worker <--  " + infer->str() + "\n");
 }
 
@@ -955,7 +951,7 @@ void Scheduler::GPU::send_action(EvictWeightsAction* action) {
     // Record the telemetry
     action->telemetry.set(evict);
     action->telemetry.requests_queued = action->instance->model->requests_queued;
-    action->telemetry.copies_loaded = action->instance->model->copies_loaded;
+    action->telemetry.copies_loaded = action->instance->model->copies_loaded+1;
 
     if (print_debug || print_loads) std::cout << ("Worker <--  " + evict->str() + "\n");    
 }
