@@ -1008,13 +1008,16 @@ bool Scheduler::GPU::try_load(uint64_t available) {
 
         if (free_pages < size) {
             scheduler->tracker->loadModelComplete(id, model_id, false);
-            return false;
         }
     }
 
     // Send the evict actions
     for (auto &evict : evict_actions) {
         send_action(evict);
+    }
+
+    if (free_pages < size) {
+        return false;
     }
 
     instance->version++;
