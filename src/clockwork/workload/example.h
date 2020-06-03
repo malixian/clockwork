@@ -35,6 +35,26 @@ Engine* comparison_experiment(clockwork::Client* client,
 	return engine;
 }
 
+Engine* comparison_experiment_closed(clockwork::Client* client,
+								int num_models=15,
+								int concurrency=16) {
+	Engine* engine = new Engine();
+
+	std::string modelpath = util::get_clockwork_modelzoo()["resnet50_v2"];
+	auto models = client->load_remote_models(modelpath, num_models);
+
+	for (int i = 0; i < num_models; i++) {
+		models[i]->disable_inputs();
+		engine->AddWorkload(new ClosedLoop(
+			i, 			// client id, just use the same for this
+			models[i],	// model
+			concurrency			// concurrency
+		));
+	}
+
+	return engine;
+}
+
 Engine* fill_memory(clockwork::Client* client) {
 	Engine* engine = new Engine();
 
@@ -451,55 +471,50 @@ Engine* azure_fast(clockwork::Client* client, unsigned trace_id = 1) {
 }
 
 Engine* bursty_experiment2(
-		clockwork::Client* client, 
-		unsigned trace_id = 1, 
-		bool mul = false,
-		unsigned num_models = 3600,
-		unsigned intervals = 30,
-		unsigned interval_duration_seconds = 20,
-		unsigned num_gpus = 8,
-		unsigned work_per_gpu = 1000
+		clockwork::Client* client,
+		unsigned start_at = 1,
+		unsigned increment = 1,
+		unsigned stop_at = 3600,
+		unsigned interval_duration_seconds = 1, // seconds
+		unsigned lead_in = 300, // lead-in intervals
+		unsigned total_request_rate = 1000
 	) {
 	Engine* engine = new Engine();
 
-	std::string modelpath = util::get_clockwork_modelzoo()["resnet50_v2"];
-	unsigned total_request_rate = work_per_gpu * num_gpus;
+	std::vector<std::vector<unsigned>> interval_rates(stop_at);
 
-	std::vector<std::vector<unsigned>> interval_rates;
+	unsigned num_models = stop_at;
+
 	for (unsigned i = 0; i < num_models; i++) {
-		interval_rates.push_back(std::vector<unsigned>(intervals, 0));
+		interval_rates[i].resize(lead_in + (stop_at - start_at) / increment, 0);
 	}
-
-	for (unsigned i = 0; i < intervals; i++) {
-		unsigned models_this_interval;
-		if (mul) {
-			models_this_interval = std::min((unsigned) round(std::pow(2, i/2.0)), num_models);
-		} else {
-			models_this_interval = (i + 1) * num_models / intervals;
-		}
-		std::cout << "Interval " << i << " " << models_this_interval << " models" << std::endl;
-
+	unsigned interval = lead_in;
+	while (start_at <= stop_at) {
 		for (int j = 0; j < 60 * total_request_rate; j++) {
-			unsigned model = j % models_this_interval;
-			interval_rates[model][i]++;
+			unsigned model = j % start_at;
+			interval_rates[model][interval]++;
 		}
+		start_at += increment;
+		interval++;
 	}
 
 	for (unsigned i = 0; i < 5; i++) {
 		std::cout << "Model " << i;
-		for (unsigned j = 0; j < intervals; j++) {
-			std::cout << " " << interval_rates[i][j];
+		for (auto rate : interval_rates[i]) {
+			std::cout << " " << rate;
 		}
 		std::cout << std::endl;
 	}
 	std::cout << "..." << std::endl;
 	for (unsigned i = num_models - 6; i < num_models; i++) {
 		std::cout << "Model " << i;
-		for (unsigned j = 0; j < intervals; j++) {
-			std::cout << " " << interval_rates[i][j];
+		for (auto rate : interval_rates[i]) {
+			std::cout << " " << rate;
 		}
 		std::cout << std::endl;
 	}
+
+	std::string modelpath = util::get_clockwork_modelzoo()["resnet50_v2"];
 
 	std::vector<Model*> models;
 	while (models.size() < num_models) {
@@ -509,6 +524,8 @@ Engine* bursty_experiment2(
 			models.push_back(model);
 		}
 	}
+
+	Model* hipri = client->load_remote_model(modelpath);
 
 	for (unsigned i = 0; i < models.size(); i++) {
 		auto model = models[i];
@@ -527,6 +544,13 @@ Engine* bursty_experiment2(
 
 		engine->AddWorkload(replay);
 	}
+
+	engine->AddWorkload(new PoissonOpenLoop(
+		models.size(),		// client id
+		hipri,  	// model
+		models.size(),      		// rng seed
+		200			// requests/second
+	));
 
 	return engine;
 }
@@ -792,7 +816,7 @@ Engine* azure2(clockwork::Client* client,
 			copies_per_model = num_workers * 402;
 	} else if (memory_load_factor == 4) {
 		if (use_all_models)
-			copies_per_model = 50;
+			copies_per_model = 66;
 		else
 			copies_per_model = 3600;
 	}

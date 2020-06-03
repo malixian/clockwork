@@ -85,6 +85,11 @@ void printUsage() {
 			  << "\t\t Workload parameters:" << std::endl
 			  << "\t\t\t num_models: (int, default 15) the number of models you're using" << std::endl
 			  << "\t\t\t total_requests: (int, default 1000) the total requests across all models, per second" << std::endl
+			  << "\t comparison_experiment2" << std::endl
+			  << "\t\t Description: closed-loop version of comparison experiment" << std::endl
+			  << "\t\t Workload parameters:" << std::endl
+			  << "\t\t\t num_models: (int, default 15) the number of models you're using" << std::endl
+			  << "\t\t\t concurrency: (int, default 16) closed loop workload concurrency" << std::endl
 			  << "\t azure" << std::endl
 			  << "\t\t Description: replay an azure workload trace.  Can be run with no arguments, in which case default values are used.  The defaults will load 3100 models and replay a trace that will give approximately the total load the system can handle." << std::endl
 			  << "\t\t Workload parameters:" << std::endl
@@ -200,6 +205,11 @@ int main(int argc, char *argv[])
 		unsigned num_models = argc > ++i ? atoi(argv[i]) : 15;
 		unsigned total_requests = argc > ++i ? atoi(argv[i]) : 1000;
 		engine = workload::comparison_experiment(client, num_models, total_requests);
+	} else if (workload == "comparison_experiment2") {
+		int i = 2;
+		unsigned num_models = argc > ++i ? atoi(argv[i]) : 15;
+		unsigned concurrency = argc > ++i ? atoi(argv[i]) : 16;
+		engine = workload::comparison_experiment_closed(client, num_models, concurrency);
 	} else if (workload == "azure_half")
 		engine = workload::azure_parameterized(client);
 	else if (workload == "azure_small")
@@ -209,7 +219,7 @@ int main(int argc, char *argv[])
 	else if (workload == "azure_fast")
 		engine = workload::azure_fast(client);
 	else if (workload == "bursty_experiment")
-		engine = workload::bursty_experiment(client);
+		engine = workload::bursty_experiment2(client);
 	else {
 		std::cout << "Unknown workload " << workload << std::endl << std::endl;
 		printUsage();
