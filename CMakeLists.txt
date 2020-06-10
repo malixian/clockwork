@@ -146,7 +146,6 @@ add_library( clockwork_dummy
 #   src/clockwork/alternatives/greedyruntime.cpp
 #   src/clockwork/alternatives/worker.cpp
 )
-
 target_link_libraries( clockwork PUBLIC
 	clockwork_proto
 	cuda
@@ -157,6 +156,20 @@ target_link_libraries( clockwork PUBLIC
 	config++
 	rt
 	stdc++fs
+    ${Boost_SYSTEM_LIBRARY}
+    ${Boost_FILESYSTEM_LIBRARY}
+)
+
+target_link_libraries( clockwork_dummy PUBLIC
+    clockwork_proto
+    cuda
+    cudart
+    tvm_runtime
+    tbb
+    nvidia-ml
+    config++
+    rt
+    stdc++fs
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
@@ -320,11 +333,10 @@ target_link_libraries(
     ${Boost_FILESYSTEM_LIBRARY}
 )
 
-# Standalone dummy clockwork worker
 add_executable (worker_dummy src/worker.cpp )
 target_link_libraries(
     worker_dummy
-    clockwork
+    clockwork_dummy
     clockwork_proto
     Threads::Threads
     dl
@@ -353,6 +365,21 @@ target_link_libraries(
     ${Boost_FILESYSTEM_LIBRARY}
 )
 
+add_executable (controller_dummy src/controller.cpp )
+target_link_libraries(
+    controller_dummy
+    clockwork_dummy
+    clockwork_proto
+    Threads::Threads
+    dl
+    cuda
+    cudart
+    tvm_runtime
+    stdc++fs
+    ${Boost_SYSTEM_LIBRARY}
+    ${Boost_FILESYSTEM_LIBRARY}
+)
+
 
 # Standalone clockwork workload generating client
 add_executable (client src/client.cpp )
@@ -360,6 +387,21 @@ target_link_libraries(
     client
 	clockwork
 	clockwork_proto
+    Threads::Threads
+    dl
+    cuda
+    cudart
+    tvm_runtime
+    stdc++fs
+    ${Boost_SYSTEM_LIBRARY}
+    ${Boost_FILESYSTEM_LIBRARY}
+)
+
+add_executable (client_dummy src/client.cpp )
+target_link_libraries(
+    client_dummy
+    clockwork_dummy
+    clockwork_proto
     Threads::Threads
     dl
     cuda
