@@ -1,8 +1,8 @@
-#include "clockwork/worker_dummy.h"
+#include "clockwork/worker.h"
 #include <algorithm>
 
 namespace clockwork {
-/*
+
 void set_and_log_actionTelemetry(
 		std::shared_ptr<ActionTelemetry> telemetry, ClockworkRuntime* runtime,
 		int telemetry_type, int action_id, int action_type, int status,
@@ -14,33 +14,33 @@ void set_and_log_actionTelemetry(
 	telemetry->timestamp = timestamp;
 
 	runtime->action_telemetry_logger->log(telemetry);
-}*/
+}
 
 // TODO: actually instantiate the clockwork runtime properly and set the controller
-ClockworkDummyWorker::ClockworkDummyWorker() : 
+ClockworkWorker::ClockworkWorker() : 
 		runtime(new ClockworkRuntime()) {
 }
 
-ClockworkDummyWorker::ClockworkDummyWorker(ClockworkWorkerConfig &config) :
+ClockworkWorker::ClockworkWorker(ClockworkWorkerConfig &config) :
 		runtime(new ClockworkRuntime(config)) {
 }
-ClockworkDummyWorker::~ClockworkDummyWorker() {
+ClockworkWorker::~ClockworkWorker() {
 	this->shutdown(false);
     delete runtime;
 }
 
-void ClockworkDummyWorker::shutdown(bool await_completion) {
+void ClockworkWorker::shutdown(bool await_completion) {
 	runtime->shutdown(false);
 	if (await_completion) {
 		join();
 	}
 }
 
-void ClockworkDummyWorker::join() {
+void ClockworkWorker::join() {
 	runtime->join();
 }
 
-void ClockworkDummyWorker::sendActions(std::vector<std::shared_ptr<workerapi::Action>> &actions) {
+void ClockworkWorker::sendActions(std::vector<std::shared_ptr<workerapi::Action>> &actions) {
 	for (std::shared_ptr<workerapi::Action> action : actions) {
 		switch (action->action_type) {
 			case workerapi::loadModelFromDiskAction: loadModel(action); break;
@@ -54,7 +54,7 @@ void ClockworkDummyWorker::sendActions(std::vector<std::shared_ptr<workerapi::Ac
 	}
 }
 
-void ClockworkDummyWorker::invalidAction(std::shared_ptr<workerapi::Action> action) {
+void ClockworkWorker::invalidAction(std::shared_ptr<workerapi::Action> action) {
 	auto result = std::make_shared<workerapi::ErrorResult>();
 
 	result->id = action->id;
@@ -72,7 +72,7 @@ uint64_t adjust_timestamp(uint64_t timestamp, int64_t clock_delta) {
 	else return std::min(timestamp, timestamp + clock_delta);
 }
 
-void ClockworkDummyWorker::loadModel(std::shared_ptr<workerapi::Action> action) {
+void ClockworkWorker::loadModel(std::shared_ptr<workerapi::Action> action) {
 	auto load_model = std::static_pointer_cast<workerapi::LoadModelFromDisk>(action);
 	if (load_model != nullptr) {
 		// It is a hack to do this here, but easiest / safest place to do it for now
@@ -86,7 +86,7 @@ void ClockworkDummyWorker::loadModel(std::shared_ptr<workerapi::Action> action) 
 	}
 }
 
-void ClockworkDummyWorker::loadWeights(std::shared_ptr<workerapi::Action> action) {
+void ClockworkWorker::loadWeights(std::shared_ptr<workerapi::Action> action) {
 	auto load_weights = std::static_pointer_cast<workerapi::LoadWeights>(action);
 	if (load_weights != nullptr) {
 		// It is a hack to do this here, but easiest / safest place to do it for now
@@ -100,7 +100,7 @@ void ClockworkDummyWorker::loadWeights(std::shared_ptr<workerapi::Action> action
 	}
 }
 
-void ClockworkDummyWorker::evictWeights(std::shared_ptr<workerapi::Action> action) {
+void ClockworkWorker::evictWeights(std::shared_ptr<workerapi::Action> action) {
 	auto evict_weights = std::static_pointer_cast<workerapi::EvictWeights>(action);
 	if (evict_weights != nullptr) {
 		// It is a hack to do this here, but easiest / safest place to do it for now
@@ -114,7 +114,7 @@ void ClockworkDummyWorker::evictWeights(std::shared_ptr<workerapi::Action> actio
 	}
 }
 
-void ClockworkDummyWorker::infer(std::shared_ptr<workerapi::Action> action) {
+void ClockworkWorker::infer(std::shared_ptr<workerapi::Action> action) {
 	auto infer = std::static_pointer_cast<workerapi::Infer>(action);
 	if (infer != nullptr) {
 		// It is a hack to do this here, but easiest / safest place to do it for now
@@ -128,7 +128,7 @@ void ClockworkDummyWorker::infer(std::shared_ptr<workerapi::Action> action) {
 	}
 }
 
-void ClockworkDummyWorker::clearCache(std::shared_ptr<workerapi::Action> action) {
+void ClockworkWorker::clearCache(std::shared_ptr<workerapi::Action> action) {
 	auto clear_cache = std::static_pointer_cast<workerapi::ClearCache>(action);
 	if (clear_cache != nullptr) {
 		for (unsigned i = 0; i < runtime->num_gpus; i++) {
@@ -144,7 +144,7 @@ void ClockworkDummyWorker::clearCache(std::shared_ptr<workerapi::Action> action)
 	}
 }
 
-void ClockworkDummyWorker::getWorkerState(std::shared_ptr<workerapi::Action> action) {
+void ClockworkWorker::getWorkerState(std::shared_ptr<workerapi::Action> action) {
 	auto get_worker_state = std::static_pointer_cast<workerapi::GetWorkerState>(action);
 	if (get_worker_state != nullptr) {
 		auto result = std::make_shared<workerapi::GetWorkerStateResult>();
@@ -158,15 +158,12 @@ void ClockworkDummyWorker::getWorkerState(std::shared_ptr<workerapi::Action> act
 	}
 }
 
-LoadModelFromDisk::LoadModelFromDisk(ClockworkDummyWorker* worker, std::shared_ptr<workerapi::LoadModelFromDisk> action) : 
-		LoadModelFromDiskAction(worker->runtime, action), worker(worker){
-
-		}
-		/*,
+LoadModelFromDisk::LoadModelFromDisk(ClockworkWorker* worker, std::shared_ptr<workerapi::LoadModelFromDisk> action) : 
+		LoadModelFromDiskAction(worker->runtime, action), worker(worker),
 		action_telemetry(std::make_shared<ActionTelemetry>()),
 		response_telemetry(std::make_shared<ActionTelemetry>()) {
-	 set_and_log_actionTelemetry(action_telemetry, runtime, 0, action->id, workerapi::loadModelFromDiskAction, 0, util::hrt());
-}*/
+	// set_and_log_actionTelemetry(action_telemetry, runtime, 0, action->id, workerapi::loadModelFromDiskAction, 0, util::hrt());
+}
 
 void LoadModelFromDisk::success(std::shared_ptr<workerapi::LoadModelFromDiskResult> result) {
 	// set_and_log_actionTelemetry(response_telemetry, runtime, 1, result->id, workerapi::loadModelFromDiskAction, actionSuccess, util::hrt());
@@ -190,13 +187,12 @@ void LoadModelFromDisk::error(std::shared_ptr<workerapi::ErrorResult> result) {
 }
 
 
-LoadWeights::LoadWeights(ClockworkDummyWorker* worker, std::shared_ptr<workerapi::LoadWeights> action) :
-		LoadWeightsAction(worker->runtime, action), worker(worker){}
-		/*,
+LoadWeights::LoadWeights(ClockworkWorker* worker, std::shared_ptr<workerapi::LoadWeights> action) :
+		LoadWeightsAction(worker->runtime, action), worker(worker),
 		action_telemetry(std::make_shared<ActionTelemetry>()),
 		response_telemetry(std::make_shared<ActionTelemetry>()) {
 	// set_and_log_actionTelemetry(action_telemetry, runtime, 0, action->id, workerapi::loadWeightsAction, 0, util::hrt());
-}*/
+}
 
 void LoadWeights::success(std::shared_ptr<workerapi::LoadWeightsResult> result) {
 	// set_and_log_actionTelemetry(response_telemetry, runtime, 1, result->id, workerapi::loadWeightsAction, actionSuccess, util::hrt());
@@ -219,12 +215,12 @@ void LoadWeights::error(std::shared_ptr<workerapi::ErrorResult> result) {
 	delete this;
 }
 
-EvictWeights::EvictWeights(ClockworkDummyWorker* worker, std::shared_ptr<workerapi::EvictWeights> action) :
-		EvictWeightsAction(worker->runtime, action), worker(worker){}/*,
+EvictWeights::EvictWeights(ClockworkWorker* worker, std::shared_ptr<workerapi::EvictWeights> action) :
+		EvictWeightsAction(worker->runtime, action), worker(worker),
 		action_telemetry(std::make_shared<ActionTelemetry>()),
 		response_telemetry(std::make_shared<ActionTelemetry>()) {
 	// set_and_log_actionTelemetry(action_telemetry, runtime, 0, action->id, workerapi::evictWeightsAction, 0, util::hrt());
-}*/
+}
 
 void EvictWeights::success(std::shared_ptr<workerapi::EvictWeightsResult> result) {
 	// set_and_log_actionTelemetry(response_telemetry, runtime, 1, result->id, workerapi::evictWeightsAction, actionSuccess, util::hrt());
@@ -247,13 +243,12 @@ void EvictWeights::error(std::shared_ptr<workerapi::ErrorResult> result) {
 	delete this;
 }
 
-Infer::Infer(ClockworkDummyWorker* worker, std::shared_ptr<workerapi::Infer> action) :
-		InferAction(worker->runtime, action), worker(worker){}
-		/*,
+Infer::Infer(ClockworkWorker* worker, std::shared_ptr<workerapi::Infer> action) :
+		InferAction(worker->runtime, action), worker(worker),
 		action_telemetry(std::make_shared<ActionTelemetry>()),
 		response_telemetry(std::make_shared<ActionTelemetry>())   {
 	// set_and_log_actionTelemetry(action_telemetry, runtime, 0, action->id, workerapi::inferAction, 0, util::hrt());
-}*/
+}
 
 void Infer::success(std::shared_ptr<workerapi::InferResult> result) {
 	// set_and_log_actionTelemetry(response_telemetry, runtime, 1, result->id, workerapi::inferAction, actionSuccess, util::hrt());
