@@ -55,6 +55,7 @@ add_library( clockwork
 	src/clockwork/cache.cpp
 	src/clockwork/util.cpp
 	src/clockwork/action.cpp
+    src/clockwork/action_dummy.cpp
 	src/clockwork/runtime.cpp
     src/clockwork/runtime_dummy.cpp
 	src/clockwork/memory.cpp

@@ -27,16 +27,16 @@ tasks, and checking async task completion.
 
 namespace clockwork {
 
-class ClockworkRuntime;
+class ClockworkRuntimeDummy;
 
-class BaseExecutor {
+class BaseExecutor_noTelemetry {
 public:
 	const TaskType type;
 	std::atomic_bool alive;
 	std::vector<std::thread> threads;
 	single_reader_priority_queue<Task> queue;
 
-	BaseExecutor(TaskType type) : type(type), alive(true) {}
+	BaseExecutor_noTelemetry(TaskType type) : type(type), alive(true) {}
 
 	void enqueue(Task* task);
 	void shutdown();
@@ -45,26 +45,26 @@ public:
 	virtual void executorMain(unsigned executor_id) = 0;
 };
 
-class CPUExecutor : public BaseExecutor {
+class CPUExecutor_noTelemetry : public BaseExecutor_noTelemetry {
 public:
-	CPUExecutor(TaskType type);
+	CPUExecutor_noTelemetry(TaskType type);
 
 	void executorMain(unsigned executor_id);
 };
 
-class SingleThreadExecutor : public BaseExecutor {
+class SingleThreadExecutor : public BaseExecutor_noTelemetry {
 private:
 	unsigned gpu_id;
 	tbb::concurrent_queue<AsyncTask*> runqueue;
 
 public:
 	SingleThreadExecutor(TaskType type, unsigned gpu_id);
-	void enqueue(AsyncTask* task);
+	void enqueueRun(AsyncTask* task);
 	void executorMain(unsigned executor_id);
 };
 
 
-class ClockworkRuntime {
+class ClockworkRuntimeDummy {
 public:
 	unsigned num_gpus;
 	MemoryManager* manager;// TODO WEI
@@ -72,23 +72,23 @@ public:
 
 	std::vector<SingleThreadExecutor*> executors;	// Type 3
 
-	CPUExecutor* load_model_executor;	// Type 0
+	CPUExecutor_noTelemetry* load_model_executor;	// Type 0
 
 	std::vector<CudaEventPool *> event_pools;// TODO WEI
 
 	//TaskTelemetryLogger* task_telemetry_logger; 
 	//ActionTelemetryLogger* action_telemetry_logger; 
 
-	ClockworkRuntime() {
+	ClockworkRuntimeDummy() {
 		ClockworkWorkerConfig config;
 		initialize(config);
 	}
 
-	ClockworkRuntime(ClockworkWorkerConfig &config) {
+	ClockworkRuntimeDummy(ClockworkWorkerConfig &config) {
 		initialize(config);
 	}
 
-	virtual ~ClockworkRuntime() {
+	virtual ~ClockworkRuntimeDummy() {
 		delete manager;
 		delete load_model_executor;
 
@@ -123,7 +123,7 @@ protected:
 
 		}
 
-		load_model_executor = new CPUExecutor(CPU); // Type 0
+		load_model_executor = new CPUExecutor_noTelemetry(CPU); // Type 0
 
 		std::string task_file_path = config.telemetry_log_dir + "/" + config.task_telemetry_log_file;
 		std::string action_file_path = config.telemetry_log_dir + "/" + config.action_telemetry_log_file;

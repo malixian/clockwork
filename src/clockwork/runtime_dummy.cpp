@@ -1,33 +1,33 @@
 #include "clockwork/api/worker_api.h"
 #include "clockwork/runtime_dummy.h"
-#include "clockwork/action.h"
+#include "clockwork/action_dummy.h"
 #include "clockwork/thread.h"
 
 namespace clockwork {
 
-void BaseExecutor::enqueue(Task* task) {
+void BaseExecutor_noTelemetry::enqueue(Task* task) {
 	if (!queue.enqueue(task, task->eligible())) {
 		throw TaskError(actionErrorShuttingDown, "Cannot enqueue task to executor that is shutting down");
 	}
 }
 
-void BaseExecutor::shutdown() {
+void BaseExecutor_noTelemetry::shutdown() {
 	queue.shutdown();
 	alive.store(false);
 }
 
-void BaseExecutor::join() {
+void BaseExecutor_noTelemetry::join() {
 	for (unsigned i = 0; i < threads.size(); i++) {
 		threads[i].join();
 	}
 }
 
-CPUExecutor::CPUExecutor(TaskType type) : BaseExecutor(type) {
-	threads.push_back(std::thread(&CPUExecutor::executorMain, this, 0));
+CPUExecutor_noTelemetry::CPUExecutor_noTelemetry(TaskType type) : BaseExecutor_noTelemetry(type) {
+	threads.push_back(std::thread(&CPUExecutor_noTelemetry::executorMain, this, 0));
 	for (auto &thread : threads) threading::initGPUThread(0, thread);
 }
 
-void CPUExecutor::executorMain(unsigned executor_id) {
+void CPUExecutor_noTelemetry::executorMain(unsigned executor_id) {
 	std::cout << TaskTypeName(type) << "-" << executor_id << " started" << std::endl;
 
 	while (alive.load()) {
@@ -49,12 +49,12 @@ void CPUExecutor::executorMain(unsigned executor_id) {
 }
 
 SingleThreadExecutor::SingleThreadExecutor(TaskType type, unsigned gpu_id):
-	BaseExecutor(type), gpu_id(gpu_id) {
+	BaseExecutor_noTelemetry(type), gpu_id(gpu_id) {
 	threads.push_back(std::thread(&SingleThreadExecutor::executorMain, this, 0));
 	for (auto &thread : threads) threading::initGPUThread(gpu_id, thread);
 }
 
-void SingleThreadExecutor::enqueue(AsyncTask* task) {
+void SingleThreadExecutor::enqueueRun(AsyncTask* task) {
 	runqueue.push(task);
 }
 
@@ -112,7 +112,7 @@ void SingleThreadExecutor::executorMain(unsigned executor_id) {
 	}
 }
 
-void ClockworkRuntime::shutdown(bool await_completion) {
+void ClockworkRuntimeDummy::shutdown(bool await_completion) {
 	/* 
 	Stop executors.  They'll finish current tasks, prevent enqueueing
 	new tasks, and cancel tasks that haven't been started yet
@@ -127,7 +127,7 @@ void ClockworkRuntime::shutdown(bool await_completion) {
 	}
 }
 
-void ClockworkRuntime::join() {
+void ClockworkRuntimeDummy::join() {
 	/*
 	Wait for executors to be finished
 	*/

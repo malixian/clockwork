@@ -1,7 +1,7 @@
 #ifndef _CLOCKWORK_WORKER_H_
 #define _CLOCKWORK_WORKER_H_
 
-#include "clockwork/action.h"
+#include "clockwork/action_dummy.h"
 #include "clockwork/runtime_dummy.h"
 #include "clockwork/api/worker_api.h"
 
@@ -14,7 +14,7 @@ namespace clockwork {
 
 class ClockworkDummyWorker : public workerapi::Worker {
 public:
-	ClockworkRuntime* runtime;// something that keeps records of gpus
+	ClockworkRuntimeDummy* runtime;// something that keeps records of gpus
 	workerapi::Controller* controller;
 
 	// TODO: actually instantiate the clockwork runtime properly and set the controller
@@ -38,7 +38,7 @@ private:
 };
 
 
-class LoadModelFromDisk : public LoadModelFromDiskAction {
+class LoadModelFromDisk : public LoadModelFromDiskActionDummy {
 public:
 	ClockworkDummyWorker* worker;
 /*
@@ -51,7 +51,7 @@ public:
 	void error(std::shared_ptr<workerapi::ErrorResult> result);
 };
 
-class LoadWeights : public LoadWeightsAction {
+class LoadWeights : public LoadWeightsActionDummy {
 public:
 	ClockworkDummyWorker* worker;
 /*
@@ -64,7 +64,7 @@ public:
 	void error(std::shared_ptr<workerapi::ErrorResult> result);
 };
 
-class EvictWeights : public EvictWeightsAction {
+class EvictWeights : public EvictWeightsActionDummy {
 public:
 	ClockworkDummyWorker* worker;
 /*
@@ -77,7 +77,7 @@ public:
 	void error(std::shared_ptr<workerapi::ErrorResult> result);
 };
 
-class Infer : public InferAction {
+class Infer : public InferActionDummy {
 public:
 	ClockworkDummyWorker* worker;
 /*
