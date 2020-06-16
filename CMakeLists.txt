@@ -56,8 +56,10 @@ add_library( clockwork
 	src/clockwork/util.cpp
 	src/clockwork/action.cpp
 	src/clockwork/runtime.cpp
+    src/clockwork/runtime_dummy.cpp
 	src/clockwork/memory.cpp
 	src/clockwork/worker.cpp
+    src/clockwork/worker_dummy.cpp
 	src/clockwork/thread.cpp
 	src/clockwork/model/memfile.cpp
 	src/clockwork/model/model.cpp
@@ -69,6 +71,7 @@ add_library( clockwork
 	src/clockwork/network/network.cpp
 	src/clockwork/network/client_api.cpp
 	src/clockwork/network/worker.cpp
+    src/clockwork/network/worker_dummy.cpp
 	src/clockwork/network/controller.cpp
 	src/clockwork/controller/controller.cpp
 	src/clockwork/controller/closed_loop_controller.cpp
@@ -97,55 +100,7 @@ add_library( clockwork
 #	src/clockwork/alternatives/worker.cpp
 )
 
-add_library( clockwork_dummy
-    src/clockwork/client.cpp
-    src/clockwork/task.cpp
-    src/clockwork/modeldef.cpp
-    src/clockwork/common.cpp
-    src/clockwork/cache.cpp
-    src/clockwork/util.cpp
-    src/clockwork/action.cpp
-    src/clockwork/runtime.cpp
-    src/clockwork/memory.cpp
-    src/clockwork/worker_dummy.cpp
-    src/clockwork/thread.cpp
-    src/clockwork/model/memfile.cpp
-    src/clockwork/model/model.cpp
-    src/clockwork/model/batched.cpp
-    src/clockwork/model/cuda.cpp
-    src/clockwork/model/so.cpp
-    src/clockwork/api/client_api.cpp
-    src/clockwork/api/worker_api.cpp
-    src/clockwork/network/network.cpp
-    src/clockwork/network/client_api.cpp
-    src/clockwork/network/worker.cpp
-    src/clockwork/network/controller.cpp
-    src/clockwork/controller/controller.cpp
-    src/clockwork/controller/closed_loop_controller.cpp
-    src/clockwork/controller/direct_controller.cpp
-    src/clockwork/controller/fifo_controller.cpp
-    src/clockwork/controller/cache_aware_fifo_controller.cpp
-    src/clockwork/controller/random_controller.cpp
-    src/clockwork/controller/scheduler.cpp
-    src/clockwork/controller/smart_scheduler.cpp
-    src/clockwork/controller/infer_only_scheduler.cpp
-    src/clockwork/controller/infer_only_scheduler_2.cpp
-    src/clockwork/controller/infer_and_load_scheduler.cpp
-    src/clockwork/controller/concurrent_infer_and_load_scheduler.cpp
-    src/clockwork/config.cpp
-    src/clockwork/network/client.cpp
-    src/clockwork/workload/workload.cpp
-    src/clockwork/telemetry/telemetry.cpp
 
-    $ENV{TVM_HOME}/src/runtime/meta_data.h
-
-### No point maintaining the below any more
-#   src/clockwork/alternatives/runtime_model.cpp
-#   src/clockwork/alternatives/model_manager.cpp
-#   src/clockwork/alternatives/threadpoolruntime.cpp
-#   src/clockwork/alternatives/greedyruntime.cpp
-#   src/clockwork/alternatives/worker.cpp
-)
 target_link_libraries( clockwork PUBLIC
 	clockwork_proto
 	cuda
@@ -160,19 +115,6 @@ target_link_libraries( clockwork PUBLIC
     ${Boost_FILESYSTEM_LIBRARY}
 )
 
-target_link_libraries( clockwork_dummy PUBLIC
-    clockwork_proto
-    cuda
-    cudart
-    tvm_runtime
-    tbb
-    nvidia-ml
-    config++
-    rt
-    stdc++fs
-    ${Boost_SYSTEM_LIBRARY}
-    ${Boost_FILESYSTEM_LIBRARY}
-)
 
 
 # Converts from TVM models to clockwork models
@@ -333,10 +275,10 @@ target_link_libraries(
     ${Boost_FILESYSTEM_LIBRARY}
 )
 
-add_executable (worker_dummy src/worker.cpp )
+add_executable (worker_dummy src/worker_dummy.cpp )
 target_link_libraries(
     worker_dummy
-    clockwork_dummy
+    clockwork
     clockwork_proto
     Threads::Threads
     dl
@@ -365,22 +307,6 @@ target_link_libraries(
     ${Boost_FILESYSTEM_LIBRARY}
 )
 
-add_executable (controller_dummy src/controller.cpp )
-target_link_libraries(
-    controller_dummy
-    clockwork_dummy
-    clockwork_proto
-    Threads::Threads
-    dl
-    cuda
-    cudart
-    tvm_runtime
-    stdc++fs
-    ${Boost_SYSTEM_LIBRARY}
-    ${Boost_FILESYSTEM_LIBRARY}
-)
-
-
 # Standalone clockwork workload generating client
 add_executable (client src/client.cpp )
 target_link_libraries(
@@ -396,22 +322,6 @@ target_link_libraries(
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
-
-add_executable (client_dummy src/client.cpp )
-target_link_libraries(
-    client_dummy
-    clockwork_dummy
-    clockwork_proto
-    Threads::Threads
-    dl
-    cuda
-    cudart
-    tvm_runtime
-    stdc++fs
-    ${Boost_SYSTEM_LIBRARY}
-    ${Boost_FILESYSTEM_LIBRARY}
-)
-
 
 # Spams the client API
 add_executable (netclient src/network/netclient.cpp )
