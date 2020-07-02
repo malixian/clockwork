@@ -17,7 +17,8 @@ void EngineDummy::run() {
             if(util::now() >= next.ready) next.callback();
             else{
                 //std::this_thread::sleep_until(next.ready); //wei TODOD
-                usleep(1000);
+                //nanosleep((const struct timespec[]){{0, next.ready - util::now()}}, NULL);
+                std::this_thread::sleep_for(std::chrono::nanoseconds(int(next.ready - util::now())));
                 next.callback();
             }
         }

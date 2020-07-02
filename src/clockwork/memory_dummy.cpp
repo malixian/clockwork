@@ -4,6 +4,8 @@
 #include <libconfig.h++>
 #include <algorithm>
 
+#include <iostream>
+
 
 namespace clockwork {
 
@@ -260,8 +262,8 @@ std::vector<ModelDataDummy> loadModelDataDummy(std::string base_filename) {
             model.weights_measurement = weights_measurement;
         }
     } catch (const libconfig::FileIOException& e) {
-
-        throw NoMeasureFile(actionErrorUnknownModel,"No measurements file");
+         std::cerr << "No measurements file for " + base_filename << std::endl;
+        throw NoMeasureFile(actionErrorUnknownModel,"No measurements file for " + base_filename);
     }
 
     return modeldata;
