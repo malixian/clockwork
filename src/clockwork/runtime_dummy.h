@@ -16,6 +16,7 @@
 #include "clockwork/priority_queue.h"
 #include "clockwork/common.h"
 #include "tbb/concurrent_queue.h"
+#include "tbb/concurrent_priority_queue.h"
 #include "clockwork/task.h"
 #include "clockwork/memory.h"
 #include "clockwork/config.h"
@@ -29,38 +30,58 @@ namespace clockwork {
 
 class ClockworkRuntimeDummy;
 
-class BaseExecutor_noTelemetry {
-public:
-	const TaskType type;
-	std::atomic_bool alive;
-	std::vector<std::thread> threads;
-	single_reader_priority_queue<Task> queue;
+class EngineDummy{
 
-	BaseExecutor_noTelemetry(TaskType type) : type(type), alive(true) {}
-
-	void enqueue(Task* task);
-	void shutdown();
-	void join();
-
-	virtual void executorMain(unsigned executor_id) = 0;
-};
-
-class CPUExecutor_noTelemetry : public BaseExecutor_noTelemetry {
-public:
-	CPUExecutor_noTelemetry(TaskType type);
-
-	void executorMain(unsigned executor_id);
-};
-
-class SingleThreadExecutor : public BaseExecutor_noTelemetry {
 private:
-	unsigned gpu_id;
-	tbb::concurrent_queue<AsyncTask*> runqueue;
+    struct element {
+        uint64_t ready;
+        std::function<void(void)> callback;
+
+        friend bool operator < (const element& lhs, const element &rhs) {
+            return lhs.ready < rhs.ready;
+        }
+        friend bool operator > (const element& lhs, const element &rhs) {
+            return lhs.ready > rhs.ready;
+        }
+    };
 
 public:
-	SingleThreadExecutor(TaskType type, unsigned gpu_id);
-	void enqueueRun(AsyncTask* task);
-	void executorMain(unsigned executor_id);
+    std::thread run_thread;
+    tbb::concurrent_priority_queue<element, std::greater<element>> pending_actions;
+    std::atomic_bool alive;
+    EngineDummy(): run_thread(&EngineDummy::run, this),alive(true){};
+    ~EngineDummy();
+    void enqueue(uint64_t end_at, std::function<void(void)> callback);
+    void run();    
+    void shutdown(bool await_completion){
+        alive = false;
+        if (await_completion) {
+            join();
+        }
+    }
+    void join(){run_thread.join();}
+
+};
+
+class ExecutorDummy{
+public:
+	uint64_t available_at;
+	EngineDummy* myEngine;
+	std::atomic_bool alive;
+    ClockworkRuntimeDummy* myRuntime;
+
+
+	ExecutorDummy(){}
+	ExecutorDummy(EngineDummy* engine, ClockworkRuntimeDummy* runtime) : available_at(util::now()),alive(true),myRuntime(runtime),myEngine(engine){};
+
+	void new_action(std::shared_ptr<workerapi::LoadModelFromDisk> action, uint64_t duration);
+	void new_action(std::shared_ptr<workerapi::LoadWeights> action, uint64_t duration);
+	void new_action(std::shared_ptr<workerapi::EvictWeights> action, uint64_t duration);
+	void new_action(std::shared_ptr<workerapi::Infer> action, uint64_t duration);
+	void new_action(std::shared_ptr<workerapi::ClearCache> action);
+	void new_action(std::shared_ptr<workerapi::GetWorkerState> action);
+
+	void shutdown(){alive = false;};
 };
 
 
@@ -70,14 +91,14 @@ public:
 	MemoryManager* manager;// TODO WEI
 	util::GPUClockState* gpu_clock;
 
-	std::vector<SingleThreadExecutor*> executors;	// Type 3
+	std::vector<EngineDummy*> engines;	// Type 3
+	EngineDummy* cpu_engine;	// Type 3
+	std::vector<ExecutorDummy*> gpu_executors;	// Type 3
 
-	CPUExecutor_noTelemetry* load_model_executor;	// Type 0
-
-	std::vector<CudaEventPool *> event_pools;// TODO WEI
-
-	//TaskTelemetryLogger* task_telemetry_logger; 
-	//ActionTelemetryLogger* action_telemetry_logger; 
+	ExecutorDummy* load_model_executor;	// Type 0
+	std::vector<ExecutorDummy*> weights_executors;	// Type 1
+	std::vector<ExecutorDummy*> inputs_executors;		// Type 2
+	std::vector<ExecutorDummy*> outputs_executors;	// Type 4
 
 	ClockworkRuntimeDummy() {
 		ClockworkWorkerConfig config;
@@ -91,12 +112,14 @@ public:
 	virtual ~ClockworkRuntimeDummy() {
 		delete manager;
 		delete load_model_executor;
-
-		//task_telemetry_logger->shutdown(true);
-		//action_telemetry_logger->shutdown(true);
+		delete cpu_engine;
 
 		for (unsigned gpu_id = 0; gpu_id < num_gpus; gpu_id++) {
-			delete executors[gpu_id];
+			delete gpu_executors[gpu_id];
+			delete weights_executors[gpu_id];
+			delete inputs_executors[gpu_id];
+			delete outputs_executors[gpu_id];
+			delete engines[gpu_id];
 
 		}
 	}
@@ -117,26 +140,21 @@ protected:
 		manager = new MemoryManager(config);// TODO WEI
 
 		for (unsigned gpu_id = 0; gpu_id < num_gpus; gpu_id++) {
-			event_pools.push_back(new CudaEventPool(gpu_id));
 			
-			executors.push_back(new SingleThreadExecutor(GPU, gpu_id)); // Type 3
+			EngineDummy* engine = new EngineDummy();
+			engines.push_back(engine);
+			gpu_executors.push_back(new ExecutorDummy(engine,this));
+			weights_executors.push_back(new ExecutorDummy(engine,this));
+			inputs_executors.push_back(new ExecutorDummy(engine,this));
+			outputs_executors.push_back(new ExecutorDummy(engine,this));
 
 		}
 
-		load_model_executor = new CPUExecutor_noTelemetry(CPU); // Type 0
+		cpu_engine = new EngineDummy();
+		load_model_executor = new ExecutorDummy(cpu_engine,this); 
 
 		std::string task_file_path = config.telemetry_log_dir + "/" + config.task_telemetry_log_file;
 		std::string action_file_path = config.telemetry_log_dir + "/" + config.action_telemetry_log_file;
-		/*
-		if (config.task_telemetry_logging_enabled)
-			task_telemetry_logger = new TaskTelemetryFileLogger(task_file_path);
-		else
-			task_telemetry_logger = new TaskTelemetryDummyLogger();
-
-		if (config.action_telemetry_logging_enabled)
-			action_telemetry_logger = new ActionTelemetryFileLogger(action_file_path);
-		else
-			action_telemetry_logger = new ActionTelemetryDummyLogger();*/
 
 	}
 };

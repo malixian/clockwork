@@ -5,112 +5,107 @@
 
 namespace clockwork {
 
-void BaseExecutor_noTelemetry::enqueue(Task* task) {
-	if (!queue.enqueue(task, task->eligible())) {
-		throw TaskError(actionErrorShuttingDown, "Cannot enqueue task to executor that is shutting down");
-	}
+
+void EngineDummy::enqueue(uint64_t end_at, std::function<void(void)> callback){
+	if (end_at - util::now() <= 0) callback();
+	else pending_actions.push(element{end_at, callback});
 }
 
-void BaseExecutor_noTelemetry::shutdown() {
-	queue.shutdown();
-	alive.store(false);
+void EngineDummy::run() {
+    while (alive.load()) {
+        element next;
+        while (pending_actions.try_pop(next)){
+        	if(util::now() > next.ready) next.callback();
+        	else{
+        		//std::this_thread::sleep_until(next.ready); //wei TODOD
+        		usleep(1000);
+        		next.callback();
+        	}
+        }
+    }
+    shutdown(true);
 }
 
-void BaseExecutor_noTelemetry::join() {
-	for (unsigned i = 0; i < threads.size(); i++) {
-		threads[i].join();
-	}
-}
-
-CPUExecutor_noTelemetry::CPUExecutor_noTelemetry(TaskType type) : BaseExecutor_noTelemetry(type) {
-	threads.push_back(std::thread(&CPUExecutor_noTelemetry::executorMain, this, 0));
-	for (auto &thread : threads) threading::initGPUThread(0, thread);
-}
-
-void CPUExecutor_noTelemetry::executorMain(unsigned executor_id) {
-	std::cout << TaskTypeName(type) << "-" << executor_id << " started" << std::endl;
-
-	while (alive.load()) {
-		// Currently, CPUExecutor is only used for LoadModelTask
-		LoadModelFromDiskTask* next = dynamic_cast<LoadModelFromDiskTask*>(queue.dequeue());
-		
-		if (next != nullptr) {
-			//auto telemetry = next->telemetry;
-			//telemetry->dequeued = util::hrt();
-			next->run();
-			//telemetry->exec_complete = util::hrt();
+void ExecutorDummy::new_action(std::shared_ptr<workerapi::LoadModelFromDisk> action, uint64_t duration){
+	if(alive){
+        LoadWeightsAction* loadweights = new LoadWeightsActionDummy(myRuntime,action);
+		uint64_t start_at = std::max(util::now(), available_at);
+    	uint64_t end_at = start_at + duration;
+		if(start_at > action->latest)
+			myEngine->enqueue(end_at, action.onError("couldn't execute in time"))
+		else if(start_at < action->earlist)
+            myEngine->enqueue(end_at, action.onError("ran before it was eligible"))
+        else{
+			available_at = end_at
+			myEngine->enqueue(end_at, action.onComplete)
 		}
 	}
+};
 
-	std::vector<Task*> tasks = queue.drain();
-	for (Task* task : tasks) {
-		task->cancel();
-	}
-}
+void ExecutorDummy::new_action(std::shared_ptr<workerapi::LoadWeights> action, uint64_t duration){
+    if(alive){
+        uint64_t start_at = std::max(util::now(), available_at);
+        uint64_t end_at = start_at + duration;
+        if(start_at > action->latest)
+            myEngine->enqueue(end_at, action.onError("couldn't execute in time"))
+        else{
+            available_at = end_at
+            myEngine->enqueue(end_at, action.onComplete)
+        }
+    }
+};
 
-SingleThreadExecutor::SingleThreadExecutor(TaskType type, unsigned gpu_id):
-	BaseExecutor_noTelemetry(type), gpu_id(gpu_id) {
-	threads.push_back(std::thread(&SingleThreadExecutor::executorMain, this, 0));
-	for (auto &thread : threads) threading::initGPUThread(gpu_id, thread);
-}
+void ExecutorDummy::new_action(std::shared_ptr<workerapi::EvictWeights> action, uint64_t duration){
+    if(alive){
+        uint64_t start_at = std::max(util::now(), available_at);
+        uint64_t end_at = start_at + duration;
+        if(start_at > action->latest)
+            myEngine->enqueue(end_at, action.onError("couldn't execute in time"))
+        else{
+            available_at = end_at
+            myEngine->enqueue(end_at, action.onComplete)
+        }
+    }
+};
 
-void SingleThreadExecutor::enqueueRun(AsyncTask* task) {
-	runqueue.push(task);
-}
+void ExecutorDummy::new_action(std::shared_ptr<workerapi::Infer> action, uint64_t duration){
+    if(alive){
+        uint64_t start_at = std::max(util::now(), available_at);
+        uint64_t end_at = start_at + duration;
+        if(start_at > action->latest)
+            myEngine->enqueue(end_at, action.onError("couldn't execute in time"))
+        else{
+            available_at = end_at
+            myEngine->enqueue(end_at, action.onComplete)
+        }
+    }
+};
 
-void SingleThreadExecutor::executorMain(unsigned executor_id) {
-	std::cout << "GPU" << gpu_id << "-" << TaskTypeName(type) << "-" << executor_id << " started" << std::endl;
+void ExecutorDummy::new_action(std::shared_ptr<workerapi::ClearCache> action){
+    if(alive){
+        uint64_t start_at = std::max(util::now(), available_at);
+        uint64_t end_at = start_at + duration;
+        if(start_at > action->latest)
+            myEngine->enqueue(end_at, action.onError("couldn't execute in time"))
+        else{
+            available_at = end_at
+            myEngine->enqueue(end_at, action.onComplete)
+        }
+    }
+};
 
-//TODO WEI 
-	int priority = 0;
-	if (type==TaskType::PCIe_H2D_Inputs || type==TaskType::PCIe_D2H_Output) {
-		priority = -1;
-	}
-	util::initializeCudaStream(gpu_id, priority);
-
-	cudaStream_t stream = util::Stream();
-//TODO WEI 
-
-	std::vector<AsyncTask*> pending_tasks;
-	while (alive.load() || pending_tasks.size() > 0) {
-
-	// Process all pending results
-		// Check completed tasks
-		std::vector<AsyncTask*> still_pending;
-		for (AsyncTask* task : pending_tasks) {
-			if (task->is_complete()) {
-				//auto telemetry = task->telemetry;
-				//telemetry->async_complete = util::hrt();
-				task->process_completion();
-			} else {
-				still_pending.push_back(task);
-			}
-		}
-		pending_tasks = still_pending;
-
-		// Drain any newly queued tasks
-		AsyncTask* nextRun;
-		while (runqueue.try_pop(nextRun)) {
-			pending_tasks.push_back(nextRun);
-		}
-
-	// Run one next request if available
-		Task* next = queue.dequeue();
-
-		if (next != nullptr) {
-			//auto telemetry = next->telemetry;
-
-			//telemetry->dequeued = util::hrt();
-			next->run(stream); //TODO WEI 
-			//telemetry->exec_complete = util::hrt();
-		}
-	}
-
-	std::vector<Task*> tasks = queue.drain();
-	for (Task* task : tasks) {
-		task->cancel();
-	}
-}
+void ExecutorDummy::new_action(std::shared_ptr<workerapi::GetWorkerState> action){
+    if(alive){
+        uint64_t start_at = std::max(util::now(), available_at);
+        uint64_t end_at = start_at + duration;
+        if(start_at > action->latest)
+            myEngine->enqueue(end_at, action.onError("couldn't execute in time"))
+        else{
+            available_at = end_at
+            myEngine->enqueue(end_at, action.onComplete)
+        }
+    }
+};
 
 void ClockworkRuntimeDummy::shutdown(bool await_completion) {
 	/* 
@@ -118,11 +113,15 @@ void ClockworkRuntimeDummy::shutdown(bool await_completion) {
 	new tasks, and cancel tasks that haven't been started yet
 	*/
 	load_model_executor->shutdown();
+	cpu_engine->shutdown(await_completion);
 	for (unsigned gpu_id = 0; gpu_id < num_gpus; gpu_id++) {
-		executors[gpu_id]->shutdown();
+		gpu_executors[gpu_id]->shutdown();
+		weights_executors[gpu_id]->shutdown();
+		inputs_executors[gpu_id]->shutdown();
+		outputs_executors[gpu_id]->shutdown();
+		engines[gpu_id]->shutdown(await_completion);
 	}
-
-	if (await_completion) {
+		if (await_completion) {
 		join();
 	}
 }
@@ -131,11 +130,11 @@ void ClockworkRuntimeDummy::join() {
 	/*
 	Wait for executors to be finished
 	*/
-	load_model_executor->join();
+	cpu_engine->join();
 	for (unsigned gpu_id = 0; gpu_id < num_gpus; gpu_id++) {
-		executors[gpu_id]->join();
+		engines[gpu_id]->join();
 	}
-
 }
+
 
 }

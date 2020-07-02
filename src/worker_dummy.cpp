@@ -1,6 +1,5 @@
 #include "clockwork/worker_dummy.h"
 #include "clockwork/network/worker_dummy.h"
-#include "clockwork/runtime_dummy.h"
 #include "clockwork/config.h"
 #include "clockwork/thread.h"
 
@@ -23,7 +22,9 @@ int main(int argc, char *argv[]) {
 	ClockworkWorkerConfig config(config_file_path);
 
 	clockwork::ClockworkDummyWorker* clockwork = new clockwork::ClockworkDummyWorker(config);
+	//clockwork::ClockworkDummyWorker* clockwork = new clockwork::ClockworkDummyWorker();
 	clockwork::network::worker::Server* server = new clockwork::network::worker::Server(clockwork);
+	clockwork->runtime->setController(server);
 	clockwork->controller = server;
 
 	threading::setDefaultPriority(); // Revert thread priority

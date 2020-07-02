@@ -14,12 +14,17 @@ bool verbose = false;
 
 class infer_action_rx_using_io_pool : public infer_action_rx {
 private:
-  clockwork::MemoryPool* host_io_pool;
+  //clockwork::MemoryPool* host_io_pool;
 
 
 public:
+	/*
   infer_action_rx_using_io_pool(clockwork::MemoryPool* host_io_pool):
     infer_action_rx(), host_io_pool(host_io_pool) {
+  }*/
+
+  infer_action_rx_using_io_pool():
+    infer_action_rx() {
   }
 
   virtual ~infer_action_rx_using_io_pool() {
@@ -30,19 +35,24 @@ public:
   	infer_action_rx::get(action);
 
   	// Copy the input body into a cached page
-    action.input = host_io_pool->alloc(body_len_);
-    CHECK(action.input != nullptr) << "Unable to alloc from host_io_pool for infer action input";
-    std::memcpy(action.input, body_, body_len_);
+    //action.input = host_io_pool->alloc(body_len_);
+    //CHECK(action.input != nullptr) << "Unable to alloc from host_io_pool for infer action input";
+    //std::memcpy(action.input, body_, body_len_);
   }
 };
 
 class infer_result_tx_using_io_pool : public infer_result_tx {
 private:
-  clockwork::MemoryPool* host_io_pool;
+  //clockwork::MemoryPool* host_io_pool;
 
 public:
+	/*
   infer_result_tx_using_io_pool(clockwork::MemoryPool* host_io_pool):
     infer_result_tx(), host_io_pool(host_io_pool) {
+  }*/
+
+  infer_result_tx_using_io_pool():
+    infer_result_tx() {
   }
 
   virtual ~infer_result_tx_using_io_pool() {
@@ -53,13 +63,14 @@ public:
   	// Memory allocated with cudaMallocHost doesn't play nicely with asio.
   	// Until we solve it, just do a memcpy here :(
   	infer_result_tx::set(result);
-    body_ = new uint8_t[result.output_size];
-    std::memcpy(body_, result.output, result.output_size);
-    host_io_pool->free(result.output);
+    //body_ = new uint8_t[result.output_size];
+    //std::memcpy(body_, result.output, result.output_size);
+    //host_io_pool->free(result.output);
   }
 
 };
 
+/*
 class InferUsingIOPool : public workerapi::Infer {
 public:
 	clockwork::MemoryPool* host_io_pool;
@@ -68,7 +79,7 @@ public:
 	~InferUsingIOPool() {
 		host_io_pool->free(input);
 	}
-};
+};*/
 
 Connection::Connection(asio::io_service &io_service, ClockworkDummyWorker* worker, std::function<void(void)> on_close) :
 		message_connection(io_service, *this),
@@ -141,7 +152,8 @@ message_rx* Connection::new_rx_message(message_connection *tcp_conn, uint64_t he
 		msg->set_msg_id(msg_id);
 		return msg;
 	} else if (msg_type == ACT_INFER) {
-		auto msg = new infer_action_rx_using_io_pool(worker->runtime->manager->host_io_pool);
+		//auto msg = new infer_action_rx_using_io_pool(worker->runtime->manager->host_io_pool);
+		auto msg = new infer_action_rx_using_io_pool();
 		msg->set_body_len(body_len);
 		msg->set_msg_id(msg_id);
 		return msg;
@@ -186,7 +198,8 @@ void Connection::completed_receive(message_connection *tcp_conn, message_rx *req
 
 		stats.load++;
 	} else if (auto infer = dynamic_cast<infer_action_rx_using_io_pool*>(req)) {
-		auto action = std::make_shared<InferUsingIOPool>(worker->runtime->manager->host_io_pool);
+		//auto action = std::make_shared<InferUsingIOPool>(worker->runtime->manager->host_io_pool);
+		auto action = std::make_shared<workerapi::Infer>();
 		infer->get(*action);
 		actions.push_back(action);
 
@@ -246,7 +259,8 @@ void Connection::sendResult(std::shared_ptr<workerapi::Result> result) {
 		msg_tx_.send_message(*tx);
 
 	} else if (auto infer = std::dynamic_pointer_cast<InferResult>(result)) {
-		auto tx = new infer_result_tx_using_io_pool(worker->runtime->manager->host_io_pool);
+		//auto tx = new infer_result_tx_using_io_pool(worker->runtime->manager->host_io_pool);
+		auto tx = new infer_result_tx_using_io_pool();
 		tx->set(*infer);
 		msg_tx_.send_message(*tx);
 
