@@ -21,7 +21,7 @@ void check_user_config() {
 
 	const libconfig::Setting& root = user_config.getRoot();
 
-	std::string settings [] = {"telemetry_settings", "memory_settings", "log_dir"};
+	std::string settings [] = {"telemetry_settings", "memory_settings", "log_dir", "allow_zero_size_inputs"};
 
 	std::string variables [] = {"enable_task_telemetry","enable_action_telemetry", "telemetry_log_dir",
 			"weights_cache_size", "weights_cache_page_size", "io_pool_size", "workspace_pool_size", "host_io_pool_size"};
