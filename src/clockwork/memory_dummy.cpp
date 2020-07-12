@@ -40,9 +40,7 @@ size_t RuntimeModelDummy::output_size(unsigned batch_size){
     return modelinfo->output_size*batch_size;
 }
 
-PageCacheDummy::PageCacheDummy(size_t total_size, size_t page_size):in_use(ATOMIC_FLAG_INIT), page_size(page_size),total_pages(total_size / page_size),size(page_size * total_pages){
-    n_free_pages = total_pages;
-}
+PageCacheDummy::PageCacheDummy(size_t total_size, size_t page_size):in_use(ATOMIC_FLAG_INIT), page_size(page_size),total_pages(total_size/page_size),n_free_pages(total_size/page_size),size(total_size){}
 
 bool PageCacheDummy::try_lock() {
     return !in_use.test_and_set();
@@ -100,7 +98,12 @@ ModelStoreDummy::~ModelStoreDummy() {
 RuntimeModelDummy* ModelStoreDummy::get(int model_id, unsigned gpu_id) {
     while (in_use.test_and_set());
 
-    RuntimeModelDummy* rm = models[std::make_pair(model_id, gpu_id)];
+    std::unordered_map<std::pair<int, unsigned>, RuntimeModelDummy*, util::hash_pair>::iterator got = models.find(std::make_pair(model_id, gpu_id));
+
+    if ( got == models.end() )
+        RuntimeModelDummy* rm = nullptr;
+    else
+        RuntimeModelDummy* rm = *got;
 
     in_use.clear();
 
@@ -110,11 +113,16 @@ RuntimeModelDummy* ModelStoreDummy::get(int model_id, unsigned gpu_id) {
 bool ModelStoreDummy::contains(int model_id, unsigned gpu_id) {
     while (in_use.test_and_set());
 
-    RuntimeModelDummy* rm = models[std::make_pair(model_id, gpu_id)];
+    bool did_contain = true;
+
+    std::unordered_map<std::pair<int, unsigned>, RuntimeModelDummy*, util::hash_pair>::iterator got = models.find(std::make_pair(model_id, gpu_id));
+
+    if ( got == models.end() )
+        did_contain = false;
 
     in_use.clear();
 
-    return rm != nullptr;
+    return did_contain;
 }
 
 void ModelStoreDummy::put(int model_id, unsigned gpu_id, RuntimeModelDummy* model) {
@@ -130,7 +138,9 @@ bool ModelStoreDummy::put_if_absent(int model_id, unsigned gpu_id, RuntimeModelD
 
     bool did_put = false;
     std::pair<int, unsigned> key = std::make_pair(model_id, gpu_id);
-    if (models[key] == nullptr) {
+    std::unordered_map<std::pair<int, unsigned>, RuntimeModelDummy*, util::hash_pair>::iterator got = models.find(key);
+
+    if ( got == models.end() ){
         models[key] = model;
         did_put = true;
     }
@@ -174,6 +184,11 @@ void ModelStoreDummy::get_model_info(workerapi::WorkerMemoryInfo &info) {
     in_use.clear();
 }
 
+void ModelStoreDummy::clearWeights(){
+    for (RuntimeModelDummy* rm : models){
+        rm->weights = false;
+    }
+}
 
 MemoryManagerDummy::MemoryManagerDummy(ClockworkWorkerConfig &config) :
             host_io_pool_size(config.host_io_pool_size),

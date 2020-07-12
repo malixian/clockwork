@@ -37,6 +37,7 @@ public:
     void put(int model_id, unsigned gpu_id, RuntimeModelDummy* model);
     bool put_if_absent(int model_id, unsigned gpu_id, RuntimeModelDummy* model);
     void get_model_info(clockwork::workerapi::WorkerMemoryInfo &worker_memory_info);
+    void clearWeights();
 
 };
 class PageCacheDummy{

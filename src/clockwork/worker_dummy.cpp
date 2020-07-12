@@ -3,17 +3,21 @@
 #include <algorithm>
 #include "clockwork/modeldef.h"
 
+#include <iostream>
+
 namespace clockwork {
 
 void EngineDummy::enqueue(uint64_t end_at, std::function<void(void)> callback){
-    if (end_at - util::now() <= 0) callback();
-    else pending_actions.push(element{end_at, callback});
+    if (end_at - util::now() <= 0){ std::cerr<< "callback now"<< std::endl; callback();}
+    else {std::cerr<< "callback later"<< std::endl; pending_actions.push(element{end_at, callback});}
 }
 
 void EngineDummy::run() {
     while (alive.load()) {
         element next;
+        std::cerr<< "alive"<< std::endl;
         while (pending_actions.try_pop(next)){
+            std::cerr<< "deque"<< std::endl;
             if(util::now() >= next.ready) next.callback();
             else{
                 //std::this_thread::sleep_until(next.ready); //wei TODOD
@@ -283,7 +287,7 @@ void ClockworkDummyWorker::loadModel(std::shared_ptr<workerapi::Action> action) 
         load_model->earliest = adjust_timestamp(load_model->earliest, load_model->clock_delta);
         load_model->latest = adjust_timestamp(load_model->latest, load_model->clock_delta);
 
-        runtime->load_model_executor->new_action(load_model,1000);
+        runtime->load_model_executor->new_action(load_model,1);
     } else {
         invalidAction(action);
     }
@@ -296,7 +300,7 @@ void ClockworkDummyWorker::loadWeights(std::shared_ptr<workerapi::Action> action
         load_weights->earliest = adjust_timestamp(load_weights->earliest, load_weights->clock_delta);
         load_weights->latest = adjust_timestamp(load_weights->latest, load_weights->clock_delta);
 
-        runtime->weights_executors[load_weights->gpu_id]->new_action(load_weights,1000);      
+        runtime->weights_executors[load_weights->gpu_id]->new_action(load_weights,load_weights->expected_duration);      
     } else {
         invalidAction(action);
     }
@@ -323,7 +327,7 @@ void ClockworkDummyWorker::infer(std::shared_ptr<workerapi::Action> action) {
         infer->earliest = adjust_timestamp(infer->earliest, infer->clock_delta);
         infer->latest = adjust_timestamp(infer->latest, infer->clock_delta);
 
-        runtime->gpu_executors[infer->gpu_id]->new_action(infer,1000);
+        runtime->gpu_executors[infer->gpu_id]->new_action(infer,infer->expected_duration);
     } else {
         invalidAction(action);
     }
