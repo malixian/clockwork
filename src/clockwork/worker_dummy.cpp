@@ -7,216 +7,95 @@
 
 namespace clockwork {
 
-void EngineDummy::enqueue(uint64_t end_at, std::function<void(void)> callback){
-    if (end_at - util::now() <= 0){ std::cerr<< "callback now"<< std::endl; callback();}
-    else {std::cerr<< "callback later"<< std::endl; pending_actions.push(element{end_at, callback});}
+EngineDummy::EngineDummy(unsigned num_gpus){
+    for (unsigned gpu_id = 0; gpu_id < num_gpus; gpu_id++){
+        infers_to_end.push_back(nullptr);
+        loads_to_end.push_back(nullptr);
+    }
+}
+
+void EngineDummy::addExecutor(ExecutorDummy* executor){executors.push_back(executor);}
+
+void EngineDummy::addToEnd(int type, unsigned gpu_id, element* action){
+    if(type == workerapi::loadWeightsAction)
+        loads_to_end[gpu_id] = action;
+    else if (type == workerapi::loadWeightsAction)
+        infers_to_end[gpu_id] = action;
+}
+
+void EngineDummy::startEngine(){
+    alive.store(true);
+    run_thread = std::thread(&EngineDummy::run, this);
 }
 
 void EngineDummy::run() {
-    while (alive.load()) {
+    while(alive.load()){
+        uint64_t timestamp = util::now();
         element next;
-        std::cerr<< "alive"<< std::endl;
-        while (pending_actions.try_pop(next)){
-            std::cerr<< "deque"<< std::endl;
-            if(util::now() >= next.ready) next.callback();
-            else{
-                //std::this_thread::sleep_until(next.ready); //wei TODOD
-                //nanosleep((const struct timespec[]){{0, next.ready - util::now()}}, NULL);
-                std::this_thread::sleep_for(std::chrono::nanoseconds(int(next.ready - util::now())));
+        for(ExecutorDummy* executor: executors){
+            if(executor->type == workerapi::loadWeightsAction){
+                if(loads_to_end[executor->gpu_id] != nullptr){
+                    if(loads_to_end[executor->gpu_id]->ready <= timestamp){
+                        loads_to_end[executor->gpu_id]->callback();
+                        loads_to_end[executor->gpu_id] = nullptr;
+                    }
+                }else{
+                    if(executor->actions_to_start.try_pop(next))
+                        next.callback();//loads_to_end[executor->gpu_id] = &element{end_at,loadweights_on_complete} if on_start succeed
+                }
+            }else if(executor->type == workerapi::inferAction){
+                if(infers_to_end[executor->gpu_id] != nullptr){
+                    if(infers_to_end[executor->gpu_id]->ready <= timestamp){
+                        infers_to_end[executor->gpu_id]->callback();
+                        infers_to_end[executor->gpu_id] = nullptr;
+                    }
+                }else{
+                    if(executor->actions_to_start.try_pop(next))
+                        next.callback();
+                }
+            }else if(executor->actions_to_start.try_pop(next)){
                 next.callback();
-            }
+            } 
         }
     }
     shutdown(true);
 }
 
-void ExecutorDummy::new_action(std::shared_ptr<workerapi::LoadModelFromDisk> action, uint64_t duration){
-    if(alive){
-
+void ExecutorDummy::new_action(std::shared_ptr<workerapi::LoadModelFromDisk> action){
+    if(alive.load()){
         LoadModelFromDiskDummy* loadmodel = new LoadModelFromDiskDummy(myManager,myEngine,action,myController);
-
-        std::stringstream err;
-
-        uint64_t start_at = std::max(util::now(), available_at);
-        uint64_t end_at = start_at + duration;
-        if(start_at < action->earliest){
-            err << "LoadModelFromDiskTask ran before it was eligible"
-            << " (now " << util::millis(start_at)
-            << ", earliest " << util::millis(action->earliest) << ")";
-            std::string message = err.str();
-            myEngine->enqueue(start_at, [loadmodel,message]() {
-            loadmodel->error(actionErrorRuntimeError,message);});
-        }
-        else if(start_at > action->latest){
-            err << "LoadModelFromDiskTask could not start in time"
-            << " (now " << util::millis(start_at)
-            << ", latest " << util::millis(action->latest) << ")";
-            std::string message = err.str();
-            myEngine->enqueue(start_at, [loadmodel,message]() {
-            loadmodel->error(actionErrorCouldNotStartInTime, message);});
-        }
-        else{
-            loadmodel->start = start_at;
-            loadmodel->end = end_at;
-            available_at = end_at;
-            myEngine->enqueue(end_at, [loadmodel]() { loadmodel->run();});
-        }
+        actions_to_start.push(element{loadmodel->loadmodel->earliest, [loadmodel]() {loadmodel->run();} });
     }
 };
 
-void ExecutorDummy::new_action(std::shared_ptr<workerapi::LoadWeights> action, uint64_t duration){
-    if(alive){
-
+void ExecutorDummy::new_action(std::shared_ptr<workerapi::LoadWeights> action){
+    if(alive.load()){
         LoadWeightsDummy* loadweights = new LoadWeightsDummy(myManager,myEngine,action, myController);
-
-        std::stringstream err;
-
-        uint64_t start_at = std::max(util::now(), available_at);
-        uint64_t end_at = start_at + duration;
-        if(start_at < action->earliest){
-            err << "LoadWeights ran before it was eligible"
-            << " (now " << util::millis(start_at)
-            << ", earliest " << util::millis(action->earliest) << ")";
-            std::string message = err.str();
-            myEngine->enqueue(start_at, [loadweights,message]() {
-            loadweights->error(actionErrorRuntimeError, message);});
-        }
-        else if(start_at > action->latest){
-            err << "LoadWeights could not start in time"
-            << " (now " << util::millis(start_at)
-            << ", latest " << util::millis(action->latest) << ")";
-            std::string message = err.str();
-            myEngine->enqueue(start_at, [loadweights,message]() {
-            loadweights->error(actionErrorCouldNotStartInTime, message);});
-        }
-        else{     
-            RuntimeModelDummy* rm = myManager->models->get(action->model_id, action->gpu_id);
-            if (rm == nullptr) {
-                std::string message = "LoadWeightsTask could not find model";
-                message += " with model ID " + std::to_string(action->model_id);
-                message += " and GPU ID " + std::to_string(action->gpu_id);
-                myEngine->enqueue(start_at, [loadweights,message]() {
-                loadweights->error(loadWeightsUnknownModel, message);});
-            }else{
-                loadweights->start = start_at;
-                loadweights->end = end_at;
-                available_at = end_at;
-                myEngine->enqueue(start_at, [loadweights]() { loadweights->run();});
-                myEngine->enqueue(end_at, [loadweights]() { loadweights->process_completion();});
-            }
-        }
+        actions_to_start.push(element{loadweights->loadweights->earliest,[loadweights]() {loadweights->run();} });
     }
 };
 
-void ExecutorDummy::new_action(std::shared_ptr<workerapi::EvictWeights> action, uint64_t duration){
-    if(alive){
-
+void ExecutorDummy::new_action(std::shared_ptr<workerapi::EvictWeights> action){
+    if(alive.load()){
         EvictWeightsDummy* evictweights = new EvictWeightsDummy(myManager,myEngine,action, myController);
-
-        std::stringstream err;
-
-        uint64_t start_at = std::max(util::now(), available_at);
-        uint64_t end_at = start_at + duration;
-        if(start_at < action->earliest){
-            err << "EvictWeights ran before it was eligible"
-            << " (now " << util::millis(start_at)
-            << ", earliest " << util::millis(action->earliest) << ")";
-            std::string message = err.str();
-            myEngine->enqueue(start_at, [evictweights,message]() {
-            evictweights->error(actionErrorRuntimeError, message);});
-        }
-        else if(start_at > action->latest){
-            err << "EvictWeights could not start in time"
-            << " (now " << util::millis(start_at)
-            << ", latest " << util::millis(action->latest) << ")";
-            std::string message = err.str();
-            myEngine->enqueue(start_at, [evictweights,message]() {
-            evictweights->error(actionErrorCouldNotStartInTime, message);});
-        }
-        else{
-            evictweights->start = start_at;
-            evictweights->end = end_at;
-            available_at = end_at;
-            myEngine->enqueue(end_at, [evictweights]() {
-            evictweights->run();});
-        }
+        actions_to_start.push(element{evictweights->evictweights->earliest, [evictweights]() {evictweights->run();} });
     }
 };
 
-void ExecutorDummy::new_action(std::shared_ptr<workerapi::Infer> action, uint64_t duration){
-    if(alive){
-
-        InferDummy* infer = new InferDummy(myManager,myEngine,action, myController, my_gpu_clock);
-
-        std::stringstream err;
-
-        uint64_t start_at = std::max(util::now(), available_at);
-        uint64_t end_at = start_at + duration;
-        if(start_at < action->earliest){
-            err << "Infer ran before it was eligible"
-            << " (now " << util::millis(start_at)
-            << ", earliest " << util::millis(action->earliest) << ")";
-            std::string message = err.str();
-            myEngine->enqueue(start_at, [infer,message]() {
-            infer->error(actionErrorRuntimeError, message);});
-        }
-        else if(start_at > action->latest){
-            err << "Infer could not start in time"
-            << " (now " << util::millis(start_at)
-            << ", latest " << util::millis(action->latest) << ")";
-            std::string message = err.str();
-            myEngine->enqueue(start_at, [infer,message]() {
-            infer->error(actionErrorCouldNotStartInTime, message);});
-        }
-        else{
-            RuntimeModelDummy* rm = myManager->models->get(action->model_id, action->gpu_id);
-            if (rm == nullptr) {
-                myEngine->enqueue(start_at, [infer]() {
-                infer->error(copyInputUnknownModel, "CopyInputTask could not find model with specified id");});
-                return;
-            }
-
-            if (!rm->is_valid_batch_size(action->batch_size)) {
-                std::stringstream err;
-                err << "CopyInputTask received unsupported batch size " << action->batch_size;
-                std::string message = err.str();
-                myEngine->enqueue(start_at, [infer,message]() {
-                infer->error(copyInputInvalidBatchSize, message);});
-                return;
-            }
-            if (action->input_size == 0 && myManager->allow_zero_size_inputs) {
-                // Used in testing; allow client to send zero-size inputs and generate worker-side
-            } else if (rm->input_size(action->batch_size) != action->input_size) {
-                // Normal behavior requires correctly sized inputs
-                std::stringstream err;
-                err << "CopyInputTask received incorrectly sized input"
-                    << " (expected " << rm->input_size(action->batch_size) 
-                    << ", got " << action->input_size
-                    << " (batch_size=" << action->batch_size << ")";
-                std::string message = err.str();
-                myEngine->enqueue(start_at, [infer,message]() {
-                infer->error(copyInputInvalidInput, message);});
-                return;  //TODO WEI
-            }
-            infer->start = start_at;
-            infer->end = end_at;
-            available_at = end_at;
-            myEngine->enqueue(start_at, [infer]() { infer->run();});
-            myEngine->enqueue(end_at, [infer]() { infer->process_completion();});
-        }
+void ExecutorDummy::new_action(std::shared_ptr<workerapi::Infer> action){
+    if(alive.load()){
+        InferDummy* infer = new InferDummy(myManager,myEngine,action, myController);
+        actions_to_start.push(element{infer->infer->earliest, [infer]() {infer->run();} });
     }
 };
 
 void ClockworkRuntimeDummy::setController(workerapi::Controller* Controller){
     for (unsigned gpu_id = 0; gpu_id < num_gpus; gpu_id++) {
-            
             gpu_executors[gpu_id]->setController(Controller);
             weights_executors[gpu_id]->setController(Controller);
-            inputs_executors[gpu_id]->setController(Controller);
             outputs_executors[gpu_id]->setController(Controller);
-
-        }
-        load_model_executor->setController(Controller);
+    }
+    load_model_executor->setController(Controller);
 }
 
 void ClockworkRuntimeDummy::shutdown(bool await_completion) {
@@ -224,16 +103,14 @@ void ClockworkRuntimeDummy::shutdown(bool await_completion) {
     Stop executors.  They'll finish current tasks, prevent enqueueing
     new tasks, and cancel tasks that haven't been started yet
     */
-    load_model_executor->shutdown();
-    cpu_engine->shutdown(await_completion);
+    engine->shutdown(await_completion);
+    load_model_executor->shutdown(); 
     for (unsigned gpu_id = 0; gpu_id < num_gpus; gpu_id++) {
         gpu_executors[gpu_id]->shutdown();
         weights_executors[gpu_id]->shutdown();
-        inputs_executors[gpu_id]->shutdown();
         outputs_executors[gpu_id]->shutdown();
-        engines[gpu_id]->shutdown(await_completion);
     }
-        if (await_completion) {
+    if (await_completion) {
         join();
     }
 }
@@ -242,10 +119,7 @@ void ClockworkRuntimeDummy::join() {
     /*
     Wait for executors to be finished
     */
-    cpu_engine->join();
-    for (unsigned gpu_id = 0; gpu_id < num_gpus; gpu_id++) {
-        engines[gpu_id]->join();
-    }
+    engine->join();
 }
 
 void ClockworkDummyWorker::sendActions(std::vector<std::shared_ptr<workerapi::Action>> &actions) {
@@ -287,7 +161,7 @@ void ClockworkDummyWorker::loadModel(std::shared_ptr<workerapi::Action> action) 
         load_model->earliest = adjust_timestamp(load_model->earliest, load_model->clock_delta);
         load_model->latest = adjust_timestamp(load_model->latest, load_model->clock_delta);
 
-        runtime->load_model_executor->new_action(load_model,1);
+        runtime->load_model_executor->new_action(load_model);
     } else {
         invalidAction(action);
     }
@@ -300,7 +174,7 @@ void ClockworkDummyWorker::loadWeights(std::shared_ptr<workerapi::Action> action
         load_weights->earliest = adjust_timestamp(load_weights->earliest, load_weights->clock_delta);
         load_weights->latest = adjust_timestamp(load_weights->latest, load_weights->clock_delta);
 
-        runtime->weights_executors[load_weights->gpu_id]->new_action(load_weights,load_weights->expected_duration);      
+        runtime->weights_executors[load_weights->gpu_id]->new_action(load_weights);      
     } else {
         invalidAction(action);
     }
@@ -313,7 +187,7 @@ void ClockworkDummyWorker::evictWeights(std::shared_ptr<workerapi::Action> actio
         evict_weights->earliest = adjust_timestamp(evict_weights->earliest, evict_weights->clock_delta);
         evict_weights->latest = adjust_timestamp(evict_weights->latest, evict_weights->clock_delta);
 
-        runtime->outputs_executors[evict_weights->gpu_id]->new_action(evict_weights,1000);
+        runtime->outputs_executors[evict_weights->gpu_id]->new_action(evict_weights);
         
     } else {
         invalidAction(action);
@@ -327,7 +201,7 @@ void ClockworkDummyWorker::infer(std::shared_ptr<workerapi::Action> action) {
         infer->earliest = adjust_timestamp(infer->earliest, infer->clock_delta);
         infer->latest = adjust_timestamp(infer->latest, infer->clock_delta);
 
-        runtime->gpu_executors[infer->gpu_id]->new_action(infer,infer->expected_duration);
+        runtime->gpu_executors[infer->gpu_id]->new_action(infer);
     } else {
         invalidAction(action);
     }
@@ -336,13 +210,14 @@ void ClockworkDummyWorker::infer(std::shared_ptr<workerapi::Action> action) {
 void ClockworkDummyWorker::clearCache(std::shared_ptr<workerapi::Action> action) {
     auto clear_cache = std::static_pointer_cast<workerapi::ClearCache>(action);
     if (clear_cache != nullptr) {
+        runtime->manager->models->clearWeights();
         for (unsigned i = 0; i < runtime->num_gpus; i++) {
             runtime->manager->weights_caches[i]->clear();
-        }// TODO WEI
+        }
         auto result = std::make_shared<workerapi::ClearCacheResult>();
         result->id = action->id;
         result->action_type = workerapi::clearCacheAction;
-        result->status = actionSuccess; // TODO What about error handling?
+        result->status = actionSuccess; 
         controller->sendResult(result);
     } else {
         invalidAction(action);
@@ -355,8 +230,8 @@ void ClockworkDummyWorker::getWorkerState(std::shared_ptr<workerapi::Action> act
         auto result = std::make_shared<workerapi::GetWorkerStateResult>();
         result->id = action->id;
         result->action_type = workerapi::getWorkerStateAction;
-        runtime->manager->get_worker_memory_info(result->worker);// TODO WEI
-        result->status = actionSuccess; // TODO What about error handling?
+        runtime->manager->get_worker_memory_info(result->worker);
+        result->status = actionSuccess; 
         controller->sendResult(result);
     } else {
         invalidAction(action);
@@ -392,8 +267,9 @@ void LoadModelFromDiskDummy::success(size_t inputs_size, size_t outputs_size,uns
     result->batch_size_exec_times_nanos = batch_size_exec_times_nanos;
 
     // TODO Verify: I assume that GPU-specific weights_caches have identical page_size
-    int page_size = myManager->weights_caches[0]->page_size;// TODO WEI
+    size_t page_size = myManager->weights_caches[0]->page_size;
     result->num_weights_pages = weights_pages_count;
+
     result->weights_size_in_cache = result->num_weights_pages * page_size;
 
     //Set timestamps in the result
@@ -410,6 +286,23 @@ void LoadModelFromDiskDummy::success(size_t inputs_size, size_t outputs_size,uns
 void LoadModelFromDiskDummy::run(){
 
     //Check if model is already loaded
+    start = util::now();
+    std::stringstream err;
+    if(start < loadmodel->earliest){
+        err << "LoadModelFromDiskTask ran before it was eligible"
+            << " (now " << util::millis(start)
+            << ", earliest " << util::millis(loadmodel->earliest) << ")";
+        error(actionErrorRuntimeError,err.str());
+        return;
+
+    }else if(start > loadmodel->latest){
+        err << "LoadModelFromDiskTask could not start in time"
+            << " (now " << util::millis(start)
+            << ", latest " << util::millis(loadmodel->latest) << ")";
+        error(actionErrorCouldNotStartInTime, err.str());
+        return;
+    }
+
     std::vector<unsigned> gpu_ids;
     for (unsigned gpu_id = 0; gpu_id < myManager->num_gpus; gpu_id++) {
         gpu_ids.push_back(gpu_id);
@@ -421,15 +314,14 @@ void LoadModelFromDiskDummy::run(){
         }
     }
 
-    size_t inputs_size = 0;
-    size_t outputs_size = 0;
-    unsigned weights_pages_count;
-    std::vector<unsigned> supported_batch_sizes;
-    std::vector<uint64_t> batch_size_exec_times_nanos;
-    uint64_t weights_load_time_nanos;
+    
     try{
         // Load data for batch sizes and extract performance profile
-        std::vector<ModelDataDummy> modeldata = loadModelDataDummy(loadmodel->model_path);//TODO WEI
+        std::vector<unsigned> supported_batch_sizes;
+        std::vector<uint64_t> batch_size_exec_times_nanos;
+        uint64_t weights_load_time_nanos;
+
+        std::vector<ModelDataDummy> modeldata = loadModelDataDummy(loadmodel->model_path);
         weights_load_time_nanos = modeldata[0].weights_measurement;
         for (ModelDataDummy &d : modeldata) {
                 if (d.batch_size <= loadmodel->max_batch_size && 
@@ -448,6 +340,8 @@ void LoadModelFromDiskDummy::run(){
         //Extract model metadata
         unsigned weights_pages_count = spec->weights_pages.size();
         uint64_t weights_size = weights_pages_count*spec->configured_weights_page_size;
+        size_t inputs_size = 0;
+        size_t outputs_size = 0;
     
         for (auto &input : spec->inputs) {
             inputs_size += input.size;
@@ -459,10 +353,8 @@ void LoadModelFromDiskDummy::run(){
 
         //Add model to modelstore
         for (auto &gpu_id : gpu_ids) {
-
             for (unsigned i = 0; i < loadmodel->no_of_copies; i++) {
-
-                workerapi::ModelInfo* modelInfo;
+                workerapi::ModelInfo* modelInfo = new workerapi::ModelInfo();
                 modelInfo->id = loadmodel->model_id + i;
                 modelInfo->source = loadmodel->model_path;
                 modelInfo->input_size = inputs_size;
@@ -472,7 +364,6 @@ void LoadModelFromDiskDummy::run(){
                 modelInfo->num_weights_pages = spec->configured_weights_page_size;
                 modelInfo->weights_load_time_nanos = weights_load_time_nanos;
                 modelInfo->batch_size_exec_times_nanos = batch_size_exec_times_nanos;
-
                 RuntimeModelDummy* rm = new RuntimeModelDummy(modelInfo,gpu_id,weights_pages_count);
 
                 bool success = myManager->models->put_if_absent(
@@ -484,49 +375,80 @@ void LoadModelFromDiskDummy::run(){
             }
         }
 
-    }catch (dmlc::Error &err) {
-        error(actionErrorInvalidModelID, err.what());
+        end = util::now();
+        success(inputs_size,outputs_size,weights_pages_count,weights_load_time_nanos,supported_batch_sizes,batch_size_exec_times_nanos);
+
+    }catch (dmlc::Error &errMessage) {
+        error(actionErrorInvalidModelID, errMessage.what());
         return;
-    }catch(NoMeasureFile &err){
-        error(err.status_code, err.message);
+    }catch(NoMeasureFile &errMessage){
+        error(errMessage.status_code, errMessage.message);
         return;
     }
-    success(inputs_size,outputs_size,weights_pages_count,weights_load_time_nanos,supported_batch_sizes,batch_size_exec_times_nanos);
+    
 
 }
 
 
 
 void LoadWeightsDummy::run(){
+    start = util::now();
+
+    std::stringstream err;
+    if(start < loadweights->earliest){
+        err << "LoadWeights ran before it was eligible"
+            << " (now " << util::millis(start)
+            << ", earliest " << util::millis(loadweights->earliest) << ")";
+        error(actionErrorRuntimeError, err.str());
+        return;
+
+    }else if(start > loadweights->latest){
+        err << "LoadWeights could not start in time"
+            << " (now " << util::millis(start)
+            << ", latest " << util::millis(loadweights->latest) << ")";
+        error(actionErrorCouldNotStartInTime, err.str());
+        return;
+    }
+
     RuntimeModelDummy* rm = myManager->models->get(loadweights->model_id, loadweights->gpu_id);
+    if (rm == nullptr) {
+        std::string message = "LoadWeightsTask could not find model";
+        message += " with model ID " + std::to_string(loadweights->model_id);
+        message += " and GPU ID " + std::to_string(loadweights->gpu_id);
+        error(loadWeightsUnknownModel, message);
+        return;
+    }
     rm->lock();
     if (!rm->weights) {
-        //TODO alloc weight;
         alloc_success = myManager->weights_caches[loadweights->gpu_id]->alloc(rm->weightspagescount);
     }
     version = ++rm->version;
-    rm->weights = true;
     rm->unlock();
+    end = start + rm->modelinfo->weights_load_time_nanos;
+    element* action = new element();
+    action->ready = end;
+    action->callback = [this]() {this->process_completion();};
+    myEngine->addToEnd(workerapi::loadWeightsAction, loadweights->gpu_id,action);
 }
 
 void LoadWeightsDummy::process_completion(){
     RuntimeModelDummy* rm = myManager->models->get(loadweights->model_id, loadweights->gpu_id);
     bool version_unchanged = false;
     rm->lock();
-    if (rm->version == version && rm->weights) {
+    if (rm->version == version) {
         version_unchanged = true;
     }
     rm->unlock();
     if (version_unchanged) {
         if(alloc_success){
+            rm->lock();
+            rm->weights = true;
+            rm->unlock();
             success();
         }else{
             error(loadWeightsInsufficientCache, "LoadWeightsTask failed to allocate pages from cache");
-            rm->lock();
-            rm->weights = false;
-            rm->unlock();
         }
-    } else {
+    }else {
         error(loadWeightsConcurrentModification, "Model weights were modified while being copied");
     }
 }
@@ -541,7 +463,7 @@ void LoadWeightsDummy::success(){
     //Set timestamps in the result
     result->begin = adjust_timestamp(start, -loadweights->clock_delta);
     result->end = adjust_timestamp(end, -loadweights->clock_delta);
-    result->duration = result->end - result->begin;//QUESTION (uint64_t) (telemetry->async_duration * 1000000.0)?
+    result->duration = result->end - result->begin;
     result->action_received = adjust_timestamp(loadweights->received, -loadweights->clock_delta);
     result->clock_delta = loadweights->clock_delta;
     
@@ -563,6 +485,24 @@ void LoadWeightsDummy::error(int status_code, std::string message){
 }
 
 void EvictWeightsDummy::run(){
+    start = util::now();
+
+    std::stringstream err;
+    if(start < evictweights->earliest){
+        err << "EvictWeights ran before it was eligible"
+            << " (now " << util::millis(start)
+            << ", earliest " << util::millis(evictweights->earliest) << ")";
+        error(actionErrorRuntimeError, err.str());
+        return;
+
+    }else if(start > evictweights->latest){
+        err << "EvictWeights could not start in time"
+            << " (now " << util::millis(start)
+            << ", latest " << util::millis(evictweights->latest) << ")";
+        error(actionErrorCouldNotStartInTime, err.str());
+        return;
+    }
+
     RuntimeModelDummy* rm = myManager->models->get(evictweights->model_id, evictweights->gpu_id);
     if (rm == nullptr) {
         error(evictWeightsUnknownModel, "EvictWeightsTask could not find model with specified id");
@@ -584,6 +524,7 @@ void EvictWeightsDummy::run(){
 
     myManager->weights_caches[evictweights->gpu_id]->free(rm->weightspagescount);
 
+    end = util::now();
     success();
 }
 
@@ -597,7 +538,7 @@ void EvictWeightsDummy::success(){
     //Set timestamps in the result
     result->begin = adjust_timestamp(start, -evictweights->clock_delta);
     result->end = adjust_timestamp(end, -evictweights->clock_delta);
-    result->duration = result->end - result->begin;//QUESTION (uint64_t) (telemetry->async_duration * 1000000.0)?
+    result->duration = result->end - result->begin;
     result->action_received = adjust_timestamp(evictweights->received, -evictweights->clock_delta);
     result->clock_delta = evictweights->clock_delta;
     
@@ -618,11 +559,58 @@ void EvictWeightsDummy::error(int status_code, std::string message){
 }
 
 void InferDummy::run(){
-    gpu_clock_before = gpu_clock->get(infer->gpu_id);
+    start = util::now();
+
+    std::stringstream err;
+    if(start < infer->earliest){
+        err << "Infer ran before it was eligible"
+            << " (now " << util::millis(start)
+            << ", earliest " << util::millis(infer->earliest) << ")";
+        error(actionErrorRuntimeError, err.str());
+        return;
+    }else if(start > infer->latest){
+        err << "Infer could not start in time"
+            << " (now " << util::millis(start)
+            << ", latest " << util::millis(infer->latest) << ")";
+        error(actionErrorCouldNotStartInTime, err.str());
+        return;
+    }
+
     RuntimeModelDummy* rm = myManager->models->get(infer->model_id, infer->gpu_id);
+    if (rm == nullptr) {
+        error(copyInputUnknownModel, "CopyInputTask could not find model with specified id");
+        return;
+    }
+    int padded_batch_size = rm->padded_batch_size(infer->batch_size);
+    if (padded_batch_size == -1) {
+        err << "CopyInputTask received unsupported batch size " << infer->batch_size;
+        error(copyInputInvalidBatchSize, err.str());
+        return;
+    }
+    if (infer->input_size == 0 && myManager->allow_zero_size_inputs) {
+        // Used in testing; allow client to send zero-size inputs and generate worker-side
+    }else if (rm->input_size(infer->batch_size) != infer->input_size) {
+        // Normal behavior requires correctly sized inputs
+        err << "CopyInputTask received incorrectly sized input"
+            << " (expected " << rm->input_size(infer->batch_size) 
+            << ", got " << infer->input_size
+            << " (batch_size=" << infer->batch_size << ")";
+        error(copyInputInvalidInput, err.str());
+        return;
+    }
+
+    if (rm->weights == false) {
+        error(execWeightsMissing, "ExecTask failed due to missing model weights");
+    }
+
     rm->lock();
     version = rm->version;
     rm->unlock();
+    end = start + rm->modelinfo->batch_size_exec_times_nanos[0]*padded_batch_size;
+    element* action = new element();
+    action->ready = end;
+    action->callback = [this]() {this->process_completion();};
+    myEngine->addToEnd(workerapi::inferAction,infer->gpu_id, action);
 }
 
 void InferDummy::process_completion(){
@@ -663,10 +651,10 @@ void InferDummy::success(){
     //Set timestamps in the result
     result->copy_input.begin = adjust_timestamp(start, -infer->clock_delta);
     result->exec.begin = adjust_timestamp(start, -infer->clock_delta);
-    result->copy_output.begin = adjust_timestamp(start, -infer->clock_delta);
+    result->copy_output.begin = adjust_timestamp(end, -infer->clock_delta);
     result->copy_input.end = adjust_timestamp(start, -infer->clock_delta);
     result->exec.end = adjust_timestamp(end, -infer->clock_delta);
-    result->copy_output.end = adjust_timestamp(start, -infer->clock_delta);
+    result->copy_output.end = adjust_timestamp(end, -infer->clock_delta);
     result->copy_input.duration = result->copy_input.end - result->copy_input.begin;
     result->exec.duration = result->exec.end - result->exec.begin;
     result->copy_output.duration = result->copy_output.end - result->copy_output.begin;
@@ -681,8 +669,8 @@ void InferDummy::success(){
     result->output = (char*)nullptr;
 
     result->gpu_id = infer->gpu_id;
-    result->gpu_clock_before = gpu_clock_before;
-    result->gpu_clock = gpu_clock->get(result->gpu_id);
+    result->gpu_clock_before = 1380;//Magic number for gpu_clock
+    result->gpu_clock = 1380;
     
     result->clock_delta = infer->clock_delta;
     

@@ -26,33 +26,38 @@ using a clockwork scheduling framework (defined in runtime.h).
 
 namespace clockwork {
 
-class ClockworkRuntimeDummy;
+class ExecutorDummy;
+
+struct element {
+    uint64_t ready;
+    std::function<void(void)> callback;
+
+    friend bool operator < (const element& lhs, const element &rhs) {
+        return lhs.ready < rhs.ready;
+    }
+    friend bool operator > (const element& lhs, const element &rhs) {
+        return lhs.ready > rhs.ready;
+    }
+};
 
 class EngineDummy{
 
-private:
-    struct element {
-        uint64_t ready;
-        std::function<void(void)> callback;
-
-        friend bool operator < (const element& lhs, const element &rhs) {
-            return lhs.ready < rhs.ready;
-        }
-        friend bool operator > (const element& lhs, const element &rhs) {
-            return lhs.ready > rhs.ready;
-        }
-    };
-
 public:
-    std::thread run_thread;
-    tbb::concurrent_priority_queue<element, std::greater<element>> pending_actions;
     std::atomic_bool alive;
-    EngineDummy(): run_thread(&EngineDummy::run, this),alive(true){};
+    std::thread run_thread;
+    std::vector<ExecutorDummy*> executors;
+    std::vector<element*> infers_to_end;// num_gpus
+    std::vector<element*> loads_to_end;// num_gpus
+
+
+    EngineDummy(unsigned num_gpus);
     virtual ~EngineDummy(){
         this->shutdown(false);
         delete &run_thread;
     };
-    void enqueue(uint64_t end_at, std::function<void(void)> callback);
+    void addExecutor(ExecutorDummy* executor);
+    void addToEnd(int type, unsigned gpu_id, element* action);
+    void startEngine();
     void run();    
     void shutdown(bool await_completion){
         alive.store(false);
@@ -66,44 +71,38 @@ public:
 
 class ExecutorDummy{
 public:
-    uint64_t available_at;
-    EngineDummy* myEngine;
+    int type;
+    unsigned gpu_id;
     std::atomic_bool alive;
+    tbb::concurrent_priority_queue<element, std::greater<element>> actions_to_start;//queue sorted by earlist
+
+    EngineDummy* myEngine;
     MemoryManagerDummy* myManager;
     workerapi::Controller*  myController;
 
-    util::GPUClockState* my_gpu_clock;//For infer's results
+    ExecutorDummy(int Type,unsigned gpuNumber, EngineDummy* engine,  MemoryManagerDummy* manager) : type(Type),gpu_id(gpuNumber),alive(true),myManager(manager),myEngine(engine){};
 
-    //TODO CANCELL?
-    ExecutorDummy(){};
-    ExecutorDummy(EngineDummy* engine,  MemoryManagerDummy* manager) : available_at(util::now()),alive(true),myManager(manager),myEngine(engine){};
-
-    void new_action(std::shared_ptr<workerapi::LoadModelFromDisk> action, uint64_t duration);
-    void new_action(std::shared_ptr<workerapi::LoadWeights> action, uint64_t duration);
-    void new_action(std::shared_ptr<workerapi::EvictWeights> action, uint64_t duration);
-    void new_action(std::shared_ptr<workerapi::Infer> action, uint64_t duration);
+    void new_action(std::shared_ptr<workerapi::LoadModelFromDisk> action);
+    void new_action(std::shared_ptr<workerapi::LoadWeights> action);
+    void new_action(std::shared_ptr<workerapi::EvictWeights> action);
+    void new_action(std::shared_ptr<workerapi::Infer> action);
 
     void setController(workerapi::Controller* Controller){ myController = Controller;};
 
     void shutdown(){alive.store(false);};
 
-    void setGPUClock(util::GPUClockState* gpu_clock){my_gpu_clock = gpu_clock;};
 };
 
 
 class ClockworkRuntimeDummy {
 public:
     unsigned num_gpus;
-    MemoryManagerDummy* manager;// TODO WEI
-    util::GPUClockState* gpu_clock;
-
-    std::vector<EngineDummy*> engines;  // Type 3
-    EngineDummy* cpu_engine;    // Type 3
-    std::vector<ExecutorDummy*> gpu_executors;  // Type 3
+    MemoryManagerDummy* manager;
+    EngineDummy* engine;    // Type 3
 
     ExecutorDummy* load_model_executor; // Type 0
+    std::vector<ExecutorDummy*> gpu_executors;  // Type 3
     std::vector<ExecutorDummy*> weights_executors;  // Type 1
-    std::vector<ExecutorDummy*> inputs_executors;       // Type 2
     std::vector<ExecutorDummy*> outputs_executors;  // Type 4
 
     ClockworkRuntimeDummy() {
@@ -118,15 +117,12 @@ public:
     virtual ~ClockworkRuntimeDummy() {
         delete manager;
         delete load_model_executor;
-        delete cpu_engine;
+        delete engine;
 
         for (unsigned gpu_id = 0; gpu_id < num_gpus; gpu_id++) {
             delete gpu_executors[gpu_id];
             delete weights_executors[gpu_id];
-            delete inputs_executors[gpu_id];
             delete outputs_executors[gpu_id];
-            delete engines[gpu_id];
-
         }
     }
 
@@ -143,25 +139,24 @@ protected:
 
         num_gpus = config.num_gpus;
 
-        gpu_clock = new util::GPUClockState(num_gpus);
+        manager = new MemoryManagerDummy(config);
 
-        manager = new MemoryManagerDummy(config);// TODO WEI
+        engine = new EngineDummy(num_gpus);
+
+        load_model_executor = new ExecutorDummy( workerapi::loadModelFromDiskAction, 0, engine, manager);
+        engine->addExecutor(load_model_executor);
 
         for (unsigned gpu_id = 0; gpu_id < num_gpus; gpu_id++) {
-            
-            EngineDummy* engine = new EngineDummy();
-            engines.push_back(engine);
-            gpu_executors.push_back(new ExecutorDummy(engine,manager));
-            gpu_executors[gpu_id]->setGPUClock(gpu_clock);
-            weights_executors.push_back(new ExecutorDummy(engine,manager));
-            inputs_executors.push_back(new ExecutorDummy(engine,manager));
-            outputs_executors.push_back(new ExecutorDummy(engine,manager));
-
+            gpu_executors.push_back(new ExecutorDummy( workerapi::inferAction, gpu_id, engine,manager));
+            weights_executors.push_back(new ExecutorDummy( workerapi::loadWeightsAction, gpu_id, engine,manager));
+            outputs_executors.push_back(new ExecutorDummy( workerapi::evictWeightsAction, gpu_id, engine,manager));
+            engine->addExecutor(gpu_executors[gpu_id]);
+            engine->addExecutor(weights_executors[gpu_id]);
+            engine->addExecutor(outputs_executors[gpu_id]);
         }
-        cpu_engine = new EngineDummy();
-        load_model_executor = new ExecutorDummy(cpu_engine,manager); 
-
+        engine->startEngine();
     }
+
 };
 
 class ClockworkDummyWorker : public workerapi::Worker {
@@ -254,14 +249,12 @@ public:
     std::shared_ptr<workerapi::Infer> infer;
     workerapi::Controller*  myController;
 
-    unsigned gpu_clock_before;
-    util::GPUClockState* gpu_clock;
     int version; 
     uint64_t start = 0;
     uint64_t end = 0;
 
     InferDummy();
-    InferDummy( MemoryManagerDummy* Manager,EngineDummy* Engine,std::shared_ptr<workerapi::Infer> Infer,workerapi::Controller* Controller, util::GPUClockState* gpu_clock):myManager(Manager),myEngine(Engine),infer(Infer), myController(Controller),gpu_clock(gpu_clock){version = 0;};
+    InferDummy( MemoryManagerDummy* Manager,EngineDummy* Engine,std::shared_ptr<workerapi::Infer> Infer,workerapi::Controller* Controller):myManager(Manager),myEngine(Engine),infer(Infer), myController(Controller){version = 0;};
     void run();
     void process_completion();
     void success();

@@ -5,7 +5,7 @@
 
 
 int main(int argc, char *argv[]) {
-	threading::initProcess();
+	//threading::initProcess();
 	util::setCudaFlags();
 	util::printCudaVersion();
 
@@ -23,11 +23,12 @@ int main(int argc, char *argv[]) {
 
 	clockwork::ClockworkDummyWorker* clockwork = new clockwork::ClockworkDummyWorker(config);
 	//clockwork::ClockworkDummyWorker* clockwork = new clockwork::ClockworkDummyWorker();
+	std::cerr<< "Server";
 	clockwork::network::worker::Server* server = new clockwork::network::worker::Server(clockwork);
 	clockwork->runtime->setController(server);
 	clockwork->controller = server;
 
-	threading::setDefaultPriority(); // Revert thread priority
+	//threading::setDefaultPriority(); // Revert thread priority
 	clockwork->join();
 
 	std::cout << "Clockwork Worker Exiting" << std::endl;

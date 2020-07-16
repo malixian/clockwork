@@ -16,7 +16,7 @@ public:
     bool try_lock();
     void lock();
     void unlock();
-    bool is_valid_batch_size(int batch_size); // Check if batch_size is valid, supporting padded batches
+    int padded_batch_size(int batch_size); // return padded batch size if batch_size is legal, return -1 otherwise
     size_t input_size(unsigned batch_size);
     size_t output_size(unsigned batch_size); 
 
@@ -71,13 +71,13 @@ public:
 
 
     // Device-side GPU-specific memory pools for inference inputs and outputs
-    const size_t io_pool_size;//TODO WEI 
+    const size_t io_pool_size;
 
     // Device-side GPU-specific memory pools for inference workspace
-    const size_t workspace_pool_size;//TODO WEI 
+    const size_t workspace_pool_size;
 
     // Host-side memory pool for inference inputs and outputs
-    const size_t host_io_pool_size;//TODO WEI 
+    const size_t host_io_pool_size;
     
 
     ModelStoreDummy* models; // Models

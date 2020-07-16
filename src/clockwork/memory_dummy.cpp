@@ -25,12 +25,16 @@ void RuntimeModelDummy::unlock() {
     in_use.clear();
 }
 
-bool RuntimeModelDummy::is_valid_batch_size(int batch_size){
-    if( modelinfo->supported_batch_sizes.size() == 0)
-        return false;
+int RuntimeModelDummy::padded_batch_size(int batch_size){
+    if( batch_size <= 0 || modelinfo->supported_batch_sizes.size() == 0)
+        return -1;
     if(batch_size > modelinfo->supported_batch_sizes[modelinfo->supported_batch_sizes.size()-1] ||batch_size < modelinfo->supported_batch_sizes[0])
-        return false;
-    return true;
+        return -1;
+    for(unsigned size: modelinfo->supported_batch_sizes){
+        if(batch_size <= int(size))
+            return batch_size;
+    }
+    return -1;
 }
 
 size_t RuntimeModelDummy::input_size(unsigned batch_size){
@@ -100,10 +104,10 @@ RuntimeModelDummy* ModelStoreDummy::get(int model_id, unsigned gpu_id) {
 
     std::unordered_map<std::pair<int, unsigned>, RuntimeModelDummy*, util::hash_pair>::iterator got = models.find(std::make_pair(model_id, gpu_id));
 
-    if ( got == models.end() )
-        RuntimeModelDummy* rm = nullptr;
-    else
-        RuntimeModelDummy* rm = *got;
+    RuntimeModelDummy* rm = nullptr;
+
+    if ( got != models.end() )
+        rm = got->second;
 
     in_use.clear();
 
@@ -185,8 +189,11 @@ void ModelStoreDummy::get_model_info(workerapi::WorkerMemoryInfo &info) {
 }
 
 void ModelStoreDummy::clearWeights(){
-    for (RuntimeModelDummy* rm : models){
+    for (std::unordered_map<std::pair<int, unsigned>, RuntimeModelDummy*, util::hash_pair>::iterator got = models.begin(); got != models.end(); ++got){
+        RuntimeModelDummy* rm = got->second;
+        rm->lock();
         rm->weights = false;
+        rm->unlock();
     }
 }
 
