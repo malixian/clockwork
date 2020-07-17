@@ -45,7 +45,12 @@ ModelStore::~ModelStore() {
 RuntimeModel* ModelStore::get(int model_id, unsigned gpu_id) {
 	while (in_use.test_and_set());
 
-	RuntimeModel* rm = models[std::make_pair(model_id, gpu_id)];
+	std::unordered_map<std::pair<int, unsigned>, RuntimeModel*, util::hash_pair>::iterator got = models.find(std::make_pair(model_id, gpu_id));
+
+	RuntimeModel* rm = nullptr;
+
+	if ( got != models.end() )
+		rm = got->second;
 
 	in_use.clear();
 
@@ -55,11 +60,16 @@ RuntimeModel* ModelStore::get(int model_id, unsigned gpu_id) {
 bool ModelStore::contains(int model_id, unsigned gpu_id) {
 	while (in_use.test_and_set());
 
-	RuntimeModel* rm = models[std::make_pair(model_id, gpu_id)];
+	bool did_contain = true;
+
+	std::unordered_map<std::pair<int, unsigned>, RuntimeModel*, util::hash_pair>::iterator got = models.find(std::make_pair(model_id, gpu_id));
+
+	if ( got == models.end() )
+		did_contain = false;
 
 	in_use.clear();
 
-	return rm != nullptr;
+	return did_contain;
 }
 
 void ModelStore::put(int model_id, unsigned gpu_id, RuntimeModel* model) {
@@ -75,7 +85,9 @@ bool ModelStore::put_if_absent(int model_id, unsigned gpu_id, RuntimeModel* mode
 
 	bool did_put = false;
 	std::pair<int, unsigned> key = std::make_pair(model_id, gpu_id);
-	if (models[key] == nullptr) {
+	std::unordered_map<std::pair<int, unsigned>, RuntimeModel*, util::hash_pair>::iterator got = models.find(key);
+
+	if ( got == models.end() ){
 		models[key] = model;
 		did_put = true;
 	}
