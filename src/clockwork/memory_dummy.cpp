@@ -193,6 +193,7 @@ void ModelStoreDummy::clearWeights(){
         RuntimeModelDummy* rm = got->second;
         rm->lock();
         rm->weights = false;
+        rm->version++;
         rm->unlock();
     }
 }

@@ -116,8 +116,8 @@ public:
 
     virtual ~ClockworkRuntimeDummy() {
         delete manager;
-        delete load_model_executor;
         delete engine;
+        delete load_model_executor;
 
         for (unsigned gpu_id = 0; gpu_id < num_gpus; gpu_id++) {
             delete gpu_executors[gpu_id];
@@ -257,7 +257,7 @@ public:
     InferDummy( MemoryManagerDummy* Manager,EngineDummy* Engine,std::shared_ptr<workerapi::Infer> Infer,workerapi::Controller* Controller):myManager(Manager),myEngine(Engine),infer(Infer), myController(Controller){version = 0;};
     void run();
     void process_completion();
-    void success();
+    void success(int output_size);
     void error(int status_code, std::string message);
 };
 
