@@ -6,8 +6,9 @@
 
 int main(int argc, char *argv[]) {
 	//threading::initProcess();
-	util::setCudaFlags();
-	util::printCudaVersion();
+	//util::setCudaFlags();
+	//util::printCudaVersion();
+	//Don't need CUDA
 
 	std::cout << "Starting Clockwork Worker" << std::endl;
 
