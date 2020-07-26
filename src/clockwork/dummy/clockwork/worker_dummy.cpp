@@ -1,4 +1,4 @@
-#include "clockwork/worker_dummy.h"
+#include "clockwork/dummy/clockwork/worker_dummy.h"
 #include <dmlc/logging.h>
 #include <algorithm>
 #include "clockwork/modeldef.h"
@@ -38,24 +38,33 @@ void EngineDummy::run() {
                 if(loads_to_end[executor->gpu_id] != nullptr){
                     if(loads_to_end[executor->gpu_id]->ready <= timestamp){
                         loads_to_end[executor->gpu_id]->callback();
+                        delete loads_to_end[executor->gpu_id];
                         loads_to_end[executor->gpu_id] = nullptr;
                     }
-                }else{
-                    if(executor->actions_to_start.try_pop(next))
+                }else if(executor->actions_to_start.try_pop(next)){
+                    if(next.ready <= timestamp)
                         next.callback();//loads_to_end[executor->gpu_id] = &element{end_at,loadweights_on_complete} if on_start succeed
+                    else
+                        executor->actions_to_start.push(next); 
                 }
             }else if(executor->type == workerapi::inferAction){
                 if(infers_to_end[executor->gpu_id] != nullptr){
                     if(infers_to_end[executor->gpu_id]->ready <= timestamp){
                         infers_to_end[executor->gpu_id]->callback();
+                        delete infers_to_end[executor->gpu_id];
                         infers_to_end[executor->gpu_id] = nullptr;
                     }
-                }else{
-                    if(executor->actions_to_start.try_pop(next))
+                }else if(executor->actions_to_start.try_pop(next)){
+                    if(next.ready <= timestamp)
                         next.callback();
+                    else
+                        executor->actions_to_start.push(next);
                 }
             }else if(executor->actions_to_start.try_pop(next)){
-                next.callback();
+                if(next.ready <= timestamp)
+                        next.callback();
+                else
+                    executor->actions_to_start.push(next);
             } 
         }
     }
@@ -63,31 +72,23 @@ void EngineDummy::run() {
 }
 
 void ExecutorDummy::new_action(std::shared_ptr<workerapi::LoadModelFromDisk> action){
-    if(alive.load()){
-        LoadModelFromDiskDummy* loadmodel = new LoadModelFromDiskDummy(myManager,myEngine,action,myController);
-        actions_to_start.push(element{loadmodel->loadmodel->earliest, [loadmodel]() {loadmodel->run();} });
-    }
+    LoadModelFromDiskDummy* loadmodel = new LoadModelFromDiskDummy(myManager,myEngine,action,myController);
+    actions_to_start.push(element{loadmodel->loadmodel->earliest, [loadmodel]() {loadmodel->run();} });
 };
 
 void ExecutorDummy::new_action(std::shared_ptr<workerapi::LoadWeights> action){
-    if(alive.load()){
-        LoadWeightsDummy* loadweights = new LoadWeightsDummy(myManager,myEngine,action, myController);
-        actions_to_start.push(element{loadweights->loadweights->earliest,[loadweights]() {loadweights->run();} });
-    }
+    LoadWeightsDummy* loadweights = new LoadWeightsDummy(myManager,myEngine,action, myController);
+    actions_to_start.push(element{loadweights->loadweights->earliest,[loadweights]() {loadweights->run();} });
 };
 
 void ExecutorDummy::new_action(std::shared_ptr<workerapi::EvictWeights> action){
-    if(alive.load()){
-        EvictWeightsDummy* evictweights = new EvictWeightsDummy(myManager,myEngine,action, myController);
-        actions_to_start.push(element{evictweights->evictweights->earliest, [evictweights]() {evictweights->run();} });
-    }
+    EvictWeightsDummy* evictweights = new EvictWeightsDummy(myManager,myEngine,action, myController);
+    actions_to_start.push(element{evictweights->evictweights->earliest, [evictweights]() {evictweights->run();} });
 };
 
 void ExecutorDummy::new_action(std::shared_ptr<workerapi::Infer> action){
-    if(alive.load()){
-        InferDummy* infer = new InferDummy(myManager,myEngine,action, myController);
-        actions_to_start.push(element{infer->infer->earliest, [infer]() {infer->run();} });
-    }
+    InferDummy* infer = new InferDummy(myManager,myEngine,action, myController);
+    actions_to_start.push(element{infer->infer->earliest, [infer]() {infer->run();} });
 };
 
 void ClockworkRuntimeDummy::setController(workerapi::Controller* Controller){
@@ -101,25 +102,17 @@ void ClockworkRuntimeDummy::setController(workerapi::Controller* Controller){
 
 void ClockworkRuntimeDummy::shutdown(bool await_completion) {
     /* 
-    Stop executors.  They'll finish current tasks, prevent enqueueing
+    Stop engine.  It'll finish current tasks, prevent enqueueing
     new tasks, and cancel tasks that haven't been started yet
     */
     engine->shutdown(false);
-    load_model_executor->shutdown(); 
-    for (unsigned gpu_id = 0; gpu_id < num_gpus; gpu_id++) {
-        gpu_executors[gpu_id]->shutdown();
-        weights_executors[gpu_id]->shutdown();
-        outputs_executors[gpu_id]->shutdown();
-    }
     if (await_completion) {
         join();
     }
 }
 
 void ClockworkRuntimeDummy::join() {
-    /*
-    Wait for executors to be finished
-    */
+    //Wait for engine to be finished
     engine->join();
 }
 
@@ -136,7 +129,10 @@ void ClockworkDummyWorker::sendActions(std::vector<std::shared_ptr<workerapi::Ac
         }
     }
 }
-
+void ClockworkDummyWorker::setController(workerapi::Controller* Controller){
+    runtime->setController(Controller);
+    controller = Controller;
+}
 void ClockworkDummyWorker::invalidAction(std::shared_ptr<workerapi::Action> action) {
     auto result = std::make_shared<workerapi::ErrorResult>();
 
@@ -396,6 +392,8 @@ void LoadWeightsDummy::run(){
     //Check timestamp for running task
     std::stringstream err;
     if(start < loadweights->earliest){
+        std::cerr<< "earliest: "<< loadweights->earliest << std::endl;
+        std::cerr<< "now: " << start << std::endl;
         err << "LoadWeights ran before it was eligible"
             << " (now " << util::millis(start)
             << ", earliest " << util::millis(loadweights->earliest) << ")";

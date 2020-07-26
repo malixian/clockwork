@@ -1,5 +1,4 @@
-#include "clockwork/memory_dummy.h"
-#include "clockwork/cuda_common.h"
+#include "clockwork/dummy/clockwork/memory_dummy.h"
 #include <exception>
 #include <libconfig.h++>
 #include <algorithm>

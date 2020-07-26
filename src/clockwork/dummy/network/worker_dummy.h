@@ -7,7 +7,7 @@
 #include <iostream>
 #include <boost/bind.hpp>
 #include <asio.hpp>
-#include "clockwork/worker_dummy.h"
+#include "clockwork/dummy/clockwork/worker_dummy.h"
 #include "clockwork/network/network.h"
 #include "clockwork/network/worker_api.h"
 

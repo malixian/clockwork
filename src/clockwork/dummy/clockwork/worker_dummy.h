@@ -1,23 +1,16 @@
 #ifndef _CLOCKWORK_WORKER_H_
 #define _CLOCKWORK_WORKER_H_
 
-//#include "clockwork/action_dummy.h"
-//#include "clockwork/runtime_dummy.h"
 #include <thread>
 #include <limits>
 #include <memory>
 #include <atomic>
-#include <cuda_runtime.h>
-#include "clockwork/cuda_common.h"
-#include "clockwork/telemetry.h"
-#include "clockwork/cache.h"
 #include "clockwork/model/model.h"
-#include "clockwork/priority_queue.h"
 #include "clockwork/common.h"
 #include "clockwork/task.h"
 #include "clockwork/api/worker_api.h"
 #include "tbb/concurrent_priority_queue.h"
-#include "clockwork/memory_dummy.h"
+#include "clockwork/dummy/clockwork/memory_dummy.h"
 
 /*
 This file ties together the worker API (defined in api/worker_api.h) with model actions (defined in action.h)
@@ -73,14 +66,13 @@ class ExecutorDummy{
 public:
     int type;
     unsigned gpu_id;
-    std::atomic_bool alive;
     tbb::concurrent_priority_queue<element, std::greater<element>> actions_to_start;//queue sorted by earlist
 
     EngineDummy* myEngine;
     MemoryManagerDummy* myManager;
     workerapi::Controller*  myController;
 
-    ExecutorDummy(int Type,unsigned gpuNumber, EngineDummy* engine,  MemoryManagerDummy* manager) : type(Type),gpu_id(gpuNumber),alive(true),myManager(manager),myEngine(engine){};
+    ExecutorDummy(int Type,unsigned gpuNumber, EngineDummy* engine,  MemoryManagerDummy* manager) : type(Type),gpu_id(gpuNumber),myManager(manager),myEngine(engine){};
 
     void new_action(std::shared_ptr<workerapi::LoadModelFromDisk> action);
     void new_action(std::shared_ptr<workerapi::LoadWeights> action);
@@ -88,8 +80,6 @@ public:
     void new_action(std::shared_ptr<workerapi::Infer> action);
 
     void setController(workerapi::Controller* Controller){ myController = Controller;};
-
-    void shutdown(){alive.store(false);};
 
 };
 
@@ -137,7 +127,8 @@ protected:
 
     void initialize(ClockworkWorkerConfig &config) {
 
-        num_gpus = config.num_gpus;
+        config.num_gpus = 2;// Use 2 for now TODO Wei
+        num_gpus = config.num_gpus; 
 
         manager = new MemoryManagerDummy(config);
 
@@ -179,6 +170,7 @@ public:
         }
     }
     void join(){runtime->join();}
+    void setController(workerapi::Controller* Controller);
 
 private:
     void invalidAction(std::shared_ptr<workerapi::Action> action);

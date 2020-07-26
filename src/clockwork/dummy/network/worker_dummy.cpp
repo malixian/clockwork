@@ -1,4 +1,4 @@
-#include "clockwork/network/worker_dummy.h"
+#include "clockwork/dummy/network/worker_dummy.h"
 #include "clockwork/util.h"
 #include <sstream>
 #include "clockwork/thread.h"
