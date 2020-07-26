@@ -57,9 +57,9 @@ add_library( clockwork
 	src/clockwork/action.cpp
 	src/clockwork/runtime.cpp
 	src/clockwork/memory.cpp
-    src/clockwork/memory_dummy.cpp
+    src/clockwork/dummy/clockwork/memory_dummy.cpp
 	src/clockwork/worker.cpp
-    src/clockwork/worker_dummy.cpp
+    src/clockwork/dummy/clockwork/worker_dummy.cpp
 	src/clockwork/thread.cpp
 	src/clockwork/model/memfile.cpp
 	src/clockwork/model/model.cpp
@@ -71,7 +71,7 @@ add_library( clockwork
 	src/clockwork/network/network.cpp
 	src/clockwork/network/client_api.cpp
 	src/clockwork/network/worker.cpp
-    src/clockwork/network/worker_dummy.cpp
+    src/clockwork/dummy/network/worker_dummy.cpp
 	src/clockwork/network/controller.cpp
 	src/clockwork/controller/controller.cpp
 	src/clockwork/controller/closed_loop_controller.cpp
@@ -275,7 +275,7 @@ target_link_libraries(
     ${Boost_FILESYSTEM_LIBRARY}
 )
 
-add_executable (worker_dummy src/worker_dummy.cpp )
+add_executable (worker_dummy src/clockwork/dummy/worker_dummy.cpp )
 target_link_libraries(
     worker_dummy
     clockwork
