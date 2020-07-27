@@ -1,16 +1,10 @@
 #ifndef _CLOCKWORK_WORKER_H_
 #define _CLOCKWORK_WORKER_H_
 
-#include <thread>
-#include <limits>
-#include <memory>
 #include <atomic>
-#include "clockwork/model/model.h"
-#include "clockwork/common.h"
-#include "clockwork/task.h"
 #include "clockwork/api/worker_api.h"
 #include "tbb/concurrent_priority_queue.h"
-#include "clockwork/dummy/clockwork/memory_dummy.h"
+#include "clockwork/dummy/clockwork/action_dummy.h"
 
 /*
 This file ties together the worker API (defined in api/worker_api.h) with model actions (defined in action.h)
@@ -182,74 +176,49 @@ private:
     void getWorkerState(std::shared_ptr<workerapi::Action> action);
 };
 
-class LoadModelFromDiskDummy{
+class LoadModelFromDiskDummy : public LoadModelFromDiskDummyAction{
 public:
-    MemoryManagerDummy* myManager;
     EngineDummy* myEngine;
-    std::shared_ptr<workerapi::LoadModelFromDisk> loadmodel;
     workerapi::Controller* myController;
-    uint64_t start = 0;
-    uint64_t end = 0;
 
-    LoadModelFromDiskDummy();
-    LoadModelFromDiskDummy( MemoryManagerDummy* Manager,EngineDummy* Engine,std::shared_ptr<workerapi::LoadModelFromDisk> LoadModel, workerapi::Controller* Controller):myManager(Manager),myEngine(Engine),loadmodel(LoadModel), myController(Controller){};
-    void run();
-    void success(size_t inputs_size, size_t outputs_size,unsigned weights_pages_count, uint64_t weights_load_time_nanos,std::vector<unsigned> supported_batch_sizes,
-        std::vector<uint64_t> batch_size_exec_times_nanos);
+    LoadModelFromDiskDummy( MemoryManagerDummy* Manager,EngineDummy* Engine,std::shared_ptr<workerapi::LoadModelFromDisk> LoadModel, workerapi::Controller* Controller);
+
+    void success(std::shared_ptr<workerapi::LoadModelFromDiskResult> result);
     void error(int status_code, std::string message);
 };
 
-class LoadWeightsDummy{
+class LoadWeightsDummy : public LoadWeightsDummyAction{
 public:
-    MemoryManagerDummy* myManager;
     EngineDummy* myEngine;
-    std::shared_ptr<workerapi::LoadWeights> loadweights;
-    workerapi::Controller*  myController; 
-    int version;
-    bool alloc_success;
-    uint64_t start = 0;
-    uint64_t end = 0;
-
-    LoadWeightsDummy();
-    LoadWeightsDummy( MemoryManagerDummy* Manager,EngineDummy* Engine,std::shared_ptr<workerapi::LoadWeights> LoadWeights,workerapi::Controller* Controller):myManager(Manager),myEngine(Engine),loadweights(LoadWeights), myController(Controller){version = 0; alloc_success = true;};
-    void run();
-    void process_completion();
-    void success();
-    void error(int status_code, std::string message);
-};
-
-class EvictWeightsDummy{
-public:
-    MemoryManagerDummy* myManager;
-    EngineDummy* myEngine;
-    std::shared_ptr<workerapi::EvictWeights> evictweights;
-    workerapi::Controller*  myController;
-    uint64_t start = 0;
-    uint64_t end = 0;
-
-    EvictWeightsDummy();
-    EvictWeightsDummy( MemoryManagerDummy* Manager,EngineDummy* Engine,std::shared_ptr<workerapi::EvictWeights> EvictWeights, workerapi::Controller* Controller):myManager(Manager),myEngine(Engine),evictweights(EvictWeights), myController(Controller){};
-    void run();
-    void success();
-    void error(int status_code, std::string message);
-};
-
-class InferDummy{
-public:
-    MemoryManagerDummy* myManager;
-    EngineDummy* myEngine;
-    std::shared_ptr<workerapi::Infer> infer;
     workerapi::Controller*  myController;
 
-    int version; 
-    uint64_t start = 0;
-    uint64_t end = 0;
+    LoadWeightsDummy(MemoryManagerDummy* Manager, EngineDummy* Engine,std::shared_ptr<workerapi::LoadWeights> LoadWeights, workerapi::Controller* Controller);
 
-    InferDummy();
-    InferDummy( MemoryManagerDummy* Manager,EngineDummy* Engine,std::shared_ptr<workerapi::Infer> Infer,workerapi::Controller* Controller):myManager(Manager),myEngine(Engine),infer(Infer), myController(Controller){version = 0;};
-    void run();
-    void process_completion();
-    void success(int output_size);
+    void toComplete();
+    void success(std::shared_ptr<workerapi::LoadWeightsResult> result);
+    void error(int status_code, std::string message);
+};
+
+class EvictWeightsDummy : public EvictWeightsDummyAction{
+public:
+    EngineDummy* myEngine;
+    workerapi::Controller*  myController;
+
+    EvictWeightsDummy(MemoryManagerDummy* Manager,EngineDummy* Engine,std::shared_ptr<workerapi::EvictWeights> EvictWeights, workerapi::Controller* Controller);
+
+    void success(std::shared_ptr<workerapi::EvictWeightsResult> result);
+    void error(int status_code, std::string message);
+};
+
+class InferDummy : public InferDummyAction{
+public:
+    EngineDummy* myEngine;
+    workerapi::Controller*  myController;
+
+    InferDummy( MemoryManagerDummy* Manager,EngineDummy* Engine,std::shared_ptr<workerapi::Infer> Infer,workerapi::Controller* Controller);
+
+    void toComplete();
+    void success(std::shared_ptr<workerapi::InferResult> result);
     void error(int status_code, std::string message);
 };
 

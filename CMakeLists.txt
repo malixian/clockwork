@@ -57,9 +57,7 @@ add_library( clockwork
 	src/clockwork/action.cpp
 	src/clockwork/runtime.cpp
 	src/clockwork/memory.cpp
-    src/clockwork/dummy/clockwork/memory_dummy.cpp
 	src/clockwork/worker.cpp
-    src/clockwork/dummy/clockwork/worker_dummy.cpp
 	src/clockwork/thread.cpp
 	src/clockwork/model/memfile.cpp
 	src/clockwork/model/model.cpp
@@ -71,7 +69,6 @@ add_library( clockwork
 	src/clockwork/network/network.cpp
 	src/clockwork/network/client_api.cpp
 	src/clockwork/network/worker.cpp
-    src/clockwork/dummy/network/worker_dummy.cpp
 	src/clockwork/network/controller.cpp
 	src/clockwork/controller/controller.cpp
 	src/clockwork/controller/closed_loop_controller.cpp
@@ -89,6 +86,10 @@ add_library( clockwork
 	src/clockwork/network/client.cpp
 	src/clockwork/workload/workload.cpp
 	src/clockwork/telemetry/telemetry.cpp
+    src/clockwork/dummy/clockwork/memory_dummy.cpp
+    src/clockwork/dummy/clockwork/action_dummy.cpp
+    src/clockwork/dummy/clockwork/worker_dummy.cpp
+    src/clockwork/dummy/network/worker_dummy.cpp
 
 	$ENV{TVM_HOME}/src/runtime/meta_data.h
 
