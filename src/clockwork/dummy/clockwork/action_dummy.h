@@ -1,3 +1,6 @@
+#ifndef _CLOCKWORK_ACTION_DUMMY_H_
+#define _CLOCKWORK_ACTION_DUMMY_H_
+
 #include <atomic>
 #include "clockwork/task.h"
 #include "clockwork/api/worker_api.h"
@@ -79,3 +82,5 @@ public:
 };
 
 }
+
+#endif

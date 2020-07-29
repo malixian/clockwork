@@ -1,5 +1,5 @@
-#ifndef _CLOCKWORK_WORKER_H_
-#define _CLOCKWORK_WORKER_H_
+#ifndef _CLOCKWORK_WORKER_DUMMY_H_
+#define _CLOCKWORK_WORKER_DUMMY_H_
 
 #include <atomic>
 #include "clockwork/api/worker_api.h"

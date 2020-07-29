@@ -231,6 +231,29 @@ target_link_libraries( tests
     ${Boost_FILESYSTEM_LIBRARY}
 )
 
+# tests for dummy_worker
+add_executable (tests_dummy
+    test/tests.cpp
+    test/clockwork/test/util.cpp
+    test/clockwork/test/actions.cpp
+    test/clockwork/test_dummy/actions.cpp
+    test/clockwork/test_dummy/testaction.cpp
+)
+target_link_libraries( tests_dummy
+    clockwork
+    clockwork_proto
+    Threads::Threads
+    dl
+    cuda
+    cudart
+    tvm_runtime
+    tbb
+    nvidia-ml
+    stdc++fs
+    ${Boost_SYSTEM_LIBRARY}
+    ${Boost_FILESYSTEM_LIBRARY}
+)
+
 
 # Like tests, but does profiling
 add_executable ( profile

@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <libgen.h>
 #include <fstream>
+#include <iostream>
 #include <algorithm>
 #include <cuda_runtime.h>
 #include "clockwork/task.h"
@@ -49,6 +50,8 @@ public:
             INFO(status_code << ": " << error_message);
             REQUIRE(!is_error);
             REQUIRE(is_success);
+            if(!is_error) std::cerr<< "pass 1" << std::endl;
+            if(is_success) std::cerr<< "pass 2" << std::endl;
         } else {
             REQUIRE(is_error);
             REQUIRE(!is_success);

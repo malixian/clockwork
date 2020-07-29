@@ -1,5 +1,5 @@
-#ifndef _CLOCKWORK_NETWORK_WORKER_H_
-#define _CLOCKWORK_NETWORK_WORKER_H_
+#ifndef _CLOCKWORK_NETWORK_WORKER_DUMMY_H_
+#define _CLOCKWORK_NETWORK_WORKER_DUMMY_H_
 
 #include <utility>
 #include <cstring>

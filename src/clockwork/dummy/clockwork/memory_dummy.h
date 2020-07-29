@@ -1,3 +1,6 @@
+#ifndef _CLOCKWORK_MEMORY_DUMMY_H_
+#define _CLOCKWORK_MEMORY_DUMMY_H_
+
 #include "clockwork/memory.h"
 
 namespace clockwork {
@@ -108,3 +111,4 @@ std::vector<ModelDataDummy> loadModelDataDummy(std::string base_filename);
 
 }
 
+#endif
