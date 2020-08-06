@@ -299,7 +299,7 @@ target_link_libraries(
     ${Boost_FILESYSTEM_LIBRARY}
 )
 
-add_executable (worker_dummy src/clockwork/dummy/worker_dummy.cpp )
+add_executable (worker_dummy src/worker_dummy.cpp )
 target_link_libraries(
     worker_dummy
     clockwork

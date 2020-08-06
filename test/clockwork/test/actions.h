@@ -50,8 +50,6 @@ public:
             INFO(status_code << ": " << error_message);
             REQUIRE(!is_error);
             REQUIRE(is_success);
-            if(!is_error) std::cerr<< "pass 1" << std::endl;
-            if(is_success) std::cerr<< "pass 2" << std::endl;
         } else {
             REQUIRE(is_error);
             REQUIRE(!is_success);

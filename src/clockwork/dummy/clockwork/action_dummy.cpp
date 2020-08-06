@@ -120,7 +120,7 @@ void LoadModelFromDiskDummyAction::run(){
         success(result);
 
     }catch (dmlc::Error &errMessage) {
-        error(actionErrorInvalidModelID, errMessage.what());
+        error(actionErrorInvalidModelPath, errMessage.what());
         return;
     }catch(NoMeasureFile &errMessage){
         error(errMessage.status_code, errMessage.message);
@@ -135,8 +135,6 @@ void LoadWeightsDummyAction::run(){
     //Check timestamp for running task
     std::stringstream err;
     if(start < loadweights->earliest){
-        std::cerr<< "earliest: "<< loadweights->earliest << std::endl;
-        std::cerr<< "now: " << start << std::endl;
         err << "LoadWeights ran before it was eligible"
             << " (now " << util::millis(start)
             << ", earliest " << util::millis(loadweights->earliest) << ")";
@@ -163,11 +161,18 @@ void LoadWeightsDummyAction::run(){
 
     //Alloc weights and update version, leave weights evicted mark unchanged for now
     rm->lock();
+    std::atomic_bool alloc_success = true;
     if (!rm->weights) {
         alloc_success = myManager->weights_caches[loadweights->gpu_id]->alloc(rm->weightspagescount);
     }
     version = ++rm->version;
     rm->unlock();
+
+    if(!alloc_success){
+        error(loadWeightsInsufficientCache, "LoadWeightsTask failed to allocate pages from cache");
+        return;
+    }
+
     end = start + rm->modelinfo->weights_load_time_nanos;
 
     toComplete();
@@ -183,16 +188,12 @@ void LoadWeightsDummyAction::process_completion(){
     }
     rm->unlock();
     if (version_unchanged) {
-        if(alloc_success){
-            rm->lock();
-            rm->weights = true;
-            rm->unlock();
+        rm->lock();
+        rm->weights = true;
+        rm->unlock();
 
-            auto result = std::make_shared<workerapi::LoadWeightsResult>();
-            success(result);
-        }else{
-            error(loadWeightsInsufficientCache, "LoadWeightsTask failed to allocate pages from cache");
-        }
+        auto result = std::make_shared<workerapi::LoadWeightsResult>();
+        success(result);
     }else {
         error(loadWeightsConcurrentModification, "Model weights were modified while being copied");
     }
@@ -290,6 +291,7 @@ void InferDummyAction::run(){
     //Check if target model's weight is present
     if (rm->weights == false) {
         error(execWeightsMissing, "ExecTask failed due to missing model weights");
+        return;
     }
 
     rm->lock();

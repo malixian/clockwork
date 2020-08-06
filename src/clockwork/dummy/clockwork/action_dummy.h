@@ -35,11 +35,10 @@ public:
     std::shared_ptr<workerapi::LoadWeights> loadweights;
 
     int version;
-    bool alloc_success;
     uint64_t start = 0;
     uint64_t end = 0;
 
-    LoadWeightsDummyAction( MemoryManagerDummy* Manager,std::shared_ptr<workerapi::LoadWeights> LoadWeights):myManager(Manager),loadweights(LoadWeights){version = 0; alloc_success = true;};
+    LoadWeightsDummyAction( MemoryManagerDummy* Manager,std::shared_ptr<workerapi::LoadWeights> LoadWeights):myManager(Manager),loadweights(LoadWeights){version = 0;};
     void run();
     void process_completion();
 

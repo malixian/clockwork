@@ -1,6 +1,8 @@
 #ifndef _CLOCKWORK_TEST_ACTIONS_DUMMY_H_
 #define _CLOCKWORK_TEST_ACTIONS_DUMMY_H_
 
+#include <chrono>
+#include <thread>
 #include "clockwork/api/worker_api.h"
 #include "clockwork/test/actions.h"
 #include "clockwork/dummy/clockwork/action_dummy.h"
@@ -11,75 +13,63 @@ namespace clockwork {
 
 class TestLoadModelFromDiskDummy : public LoadModelFromDiskDummyAction, public TestAction {
 public:
-    TestLoadModelFromDiskDummy(MemoryManagerDummy* Manager, std::shared_ptr<workerapi::LoadModelFromDisk> action) : 
-        LoadModelFromDiskDummyAction(Manager, action) {}
 
-    void success(std::shared_ptr<workerapi::LoadModelFromDiskResult> result) {
-        setsuccess();
-    }
+    ClockworkRuntimeDummy* myRuntime;
 
-    void error(int status_code, std::string message){
-        auto result = std::make_shared<workerapi::ErrorResult>();
-        result->action_type = workerapi::loadModelFromDiskAction;
-        result->status = status_code; 
-        seterror(result);
-    }
+    TestLoadModelFromDiskDummy(ClockworkRuntimeDummy* runtime, std::shared_ptr<workerapi::LoadModelFromDisk> action) : 
+        LoadModelFromDiskDummyAction(runtime->manager, action) {myRuntime = runtime;}
+
+    void submit();
+
+    void success(std::shared_ptr<workerapi::LoadModelFromDiskResult> result);
+    void error(int status_code, std::string message);
 
 };
 
 class TestLoadWeightsDummy : public LoadWeightsDummyAction, public TestAction {
 public:
-    TestLoadWeightsDummy(MemoryManagerDummy* Manager, std::shared_ptr<workerapi::LoadWeights> action) : 
-        LoadWeightsDummyAction(Manager, action) {}
 
-    void success(std::shared_ptr<workerapi::LoadWeightsResult> result) {
-        setsuccess();
-    }
+    ClockworkRuntimeDummy* myRuntime;
 
-    void error(int status_code, std::string message) {
-        auto result = std::make_shared<workerapi::ErrorResult>();
-        result->action_type = workerapi::loadWeightsAction;
-        result->status = status_code;
-        seterror(result);
-    }
+    TestLoadWeightsDummy(ClockworkRuntimeDummy* runtime, std::shared_ptr<workerapi::LoadWeights> action) : 
+        LoadWeightsDummyAction(runtime->manager, action) {myRuntime = runtime;}
 
+    void submit();
+    void toComplete();
+
+    void success(std::shared_ptr<workerapi::LoadWeightsResult> result);
+    void error(int status_code, std::string message);
 };
 
 
 class TestEvictWeightsDummy : public EvictWeightsDummyAction, public TestAction {
 public:
-    TestEvictWeightsDummy(MemoryManagerDummy* Manager, std::shared_ptr<workerapi::EvictWeights> action) : 
-        EvictWeightsDummyAction(Manager, action) {}
 
-    void success(std::shared_ptr<workerapi::EvictWeightsResult> result) {
-        setsuccess();
-    }
+    ClockworkRuntimeDummy* myRuntime;
 
-    void error(int status_code, std::string message) {
-        auto result = std::make_shared<workerapi::ErrorResult>();
-        result->action_type = workerapi::evictWeightsAction;
-        result->status = status_code;
-        seterror(result);
-    }
+    TestEvictWeightsDummy(ClockworkRuntimeDummy* runtime, std::shared_ptr<workerapi::EvictWeights> action) : 
+        EvictWeightsDummyAction(runtime->manager, action) {myRuntime = runtime;}
 
+    void submit();
+
+    void success(std::shared_ptr<workerapi::EvictWeightsResult> result);
+    void error(int status_code, std::string message);
 };
 
 
 class TestInferDummy : public InferDummyAction, public TestAction {
 public:
-	TestInferDummy(MemoryManagerDummy* Manager, std::shared_ptr<workerapi::Infer> action) : 
-		InferDummyAction(Manager, action) {}
 
-	void success(std::shared_ptr<workerapi::InferResult> result) {
-		setsuccess();
-	}
+    ClockworkRuntimeDummy* myRuntime;
 
-    void error(int status_code, std::string message) {
-        auto result = std::make_shared<workerapi::ErrorResult>();
-        result->action_type = workerapi::inferAction;
-        result->status = status_code;
-        seterror(result);
-    }
+	TestInferDummy(ClockworkRuntimeDummy* runtime, std::shared_ptr<workerapi::Infer> action) : 
+		InferDummyAction(runtime->manager, action) {myRuntime = runtime;}
+
+    void submit();
+    void toComplete();
+    
+	void success(std::shared_ptr<workerapi::InferResult> result);
+    void error(int status_code, std::string message);
 
 };
 
@@ -90,7 +80,7 @@ public:
     }
 };
 
-std::shared_ptr<workerapi::Infer> infer_action(int batch_size, BatchedModel* model);
+std::shared_ptr<workerapi::Infer> infer_action(int batch_size, RuntimeModelDummy* model);
 
 std::shared_ptr<workerapi::Infer> infer_action2(ClockworkRuntimeDummy* worker);
 

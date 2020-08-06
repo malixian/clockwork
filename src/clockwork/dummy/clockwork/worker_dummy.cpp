@@ -63,27 +63,54 @@ void EngineDummy::run() {
             } 
         }
     }
-    shutdown(true);
+
+    element next;
+    for(ExecutorDummy* executor: executors){
+        if(executor->type == workerapi::loadWeightsAction){
+            if(loads_to_end[executor->gpu_id] != nullptr){
+
+                loads_to_end[executor->gpu_id]->defaultfunc();
+                delete loads_to_end[executor->gpu_id];
+                loads_to_end[executor->gpu_id] = nullptr;
+
+            }else if(executor->actions_to_start.try_pop(next)){
+                next.defaultfunc();
+            }
+        }else if(executor->type == workerapi::inferAction){
+            if(infers_to_end[executor->gpu_id] != nullptr){
+
+                infers_to_end[executor->gpu_id]->defaultfunc();
+                delete infers_to_end[executor->gpu_id];
+                infers_to_end[executor->gpu_id] = nullptr;
+
+            }else if(executor->actions_to_start.try_pop(next)){
+                next.defaultfunc();
+            }
+        }else if(executor->actions_to_start.try_pop(next)){
+            next.defaultfunc();
+        } 
+    }
+
 }
 
 void ExecutorDummy::new_action(std::shared_ptr<workerapi::LoadModelFromDisk> action){
     LoadModelFromDiskDummy* loadmodel = new LoadModelFromDiskDummy(myManager,myEngine,action,myController);
-    actions_to_start.push(element{loadmodel->loadmodel->earliest, [loadmodel]() {loadmodel->run();} });
+    actions_to_start.push(element{loadmodel->loadmodel->earliest, [loadmodel]() {loadmodel->run();} ,[loadmodel]() {loadmodel->error(actionCancelled, "Action cancelled");} });
 };
 
 void ExecutorDummy::new_action(std::shared_ptr<workerapi::LoadWeights> action){
     LoadWeightsDummy* loadweights = new LoadWeightsDummy(myManager,myEngine,action, myController);
-    actions_to_start.push(element{loadweights->loadweights->earliest,[loadweights]() {loadweights->run();} });
+    actions_to_start.push(element{loadweights->loadweights->earliest,[loadweights]() {loadweights->run();}, [loadweights]() {loadweights->error(actionCancelled, "Action cancelled");} });
 };
 
 void ExecutorDummy::new_action(std::shared_ptr<workerapi::EvictWeights> action){
     EvictWeightsDummy* evictweights = new EvictWeightsDummy(myManager,myEngine,action, myController);
-    actions_to_start.push(element{evictweights->evictweights->earliest, [evictweights]() {evictweights->run();} });
+    actions_to_start.push(element{evictweights->evictweights->earliest, [evictweights]() {evictweights->run();}, [evictweights]() {evictweights->error(actionCancelled, "Action cancelled");} });
 };
 
 void ExecutorDummy::new_action(std::shared_ptr<workerapi::Infer> action){
     InferDummy* infer = new InferDummy(myManager,myEngine,action, myController);
-    actions_to_start.push(element{infer->infer->earliest, [infer]() {infer->run();} });
+    actions_to_start.push(element{infer->infer->earliest, [infer]() {infer->run();}, [infer]() {infer->error(actionCancelled, "Action cancelled");} });
 };
 
 void ClockworkRuntimeDummy::setController(workerapi::Controller* Controller){
@@ -100,7 +127,7 @@ void ClockworkRuntimeDummy::shutdown(bool await_completion) {
     Stop engine.  It'll finish current tasks, prevent enqueueing
     new tasks, and cancel tasks that haven't been started yet
     */
-    engine->shutdown(false);
+    engine->shutdown();
     if (await_completion) {
         join();
     }
@@ -266,6 +293,7 @@ void LoadWeightsDummy::toComplete(){
     element* action = new element();
     action->ready = end;
     action->callback = [this]() {this->process_completion();};
+    action->defaultfunc = [this]() {this->error(actionCancelled, "Action cancelled");};
     myEngine->addToEnd(workerapi::loadWeightsAction, loadweights->gpu_id,action);
 }
 
@@ -315,6 +343,7 @@ void EvictWeightsDummy::success(std::shared_ptr<workerapi::EvictWeightsResult> r
     result->clock_delta = evictweights->clock_delta;
     
     myController->sendResult(result);
+    delete this;
 }
 
 void EvictWeightsDummy::error(int status_code, std::string message){
@@ -339,6 +368,7 @@ void InferDummy::toComplete(){
     element* action = new element();
     action->ready = end;
     action->callback = [this]() {this->process_completion();};
+    action->defaultfunc = [this]() {this->error(actionCancelled, "Action cancelled");};
     myEngine->addToEnd(workerapi::inferAction,infer->gpu_id, action);
 }
 

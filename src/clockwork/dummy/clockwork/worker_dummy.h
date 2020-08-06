@@ -18,6 +18,7 @@ class ExecutorDummy;
 struct element {
     uint64_t ready;
     std::function<void(void)> callback;
+    std::function<void(void)> defaultfunc;
 
     friend bool operator < (const element& lhs, const element &rhs) {
         return lhs.ready < rhs.ready;
@@ -38,20 +39,11 @@ public:
 
 
     EngineDummy(unsigned num_gpus);
-    virtual ~EngineDummy(){
-        this->shutdown(false);
-        delete &run_thread;
-    };
     void addExecutor(ExecutorDummy* executor);
     void addToEnd(int type, unsigned gpu_id, element* action);
     void startEngine();
     void run();    
-    void shutdown(bool await_completion){
-        alive.store(false);
-        if (await_completion) {
-            join();
-        }
-    }
+    void shutdown(){alive.store(false);}
     void join(){run_thread.join();}
 
 };
@@ -121,7 +113,7 @@ protected:
 
     void initialize(ClockworkWorkerConfig &config) {
 
-        config.num_gpus = 2;// Use 2 for now TODO Wei
+        config.num_gpus = 20;// Use 2 for now TODO Wei
         num_gpus = config.num_gpus; 
 
         manager = new MemoryManagerDummy(config);
