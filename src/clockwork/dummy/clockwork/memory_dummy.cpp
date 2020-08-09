@@ -268,9 +268,9 @@ std::vector<ModelDataDummy> loadModelDataDummy(std::string base_filename) {
             0
         });
     }
-
+    
     CHECK(modeldata.size() != 0) << "No valid batch sizes found for " << base_filename;
-
+    
     // Load measurements if they exist
     try {
         std::string measurements_file = base_filename + ".measurements";
@@ -286,6 +286,7 @@ std::vector<ModelDataDummy> loadModelDataDummy(std::string base_filename) {
             model.weights_measurement = weights_measurement;
         }
     } catch (const libconfig::FileIOException& e) {
+        std::cerr<< "here2";
         throw NoMeasureFile(actionErrorUnknownModel,"No measurements file for " + base_filename);
     }
 

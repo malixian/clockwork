@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <queue>
 #include "clockwork/dummy/clockwork/memory_dummy.h"
-#include "clockwork/test/util.h"
 
 TEST_CASE("Simple Page alloc and free", "[cache]") {
 
