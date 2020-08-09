@@ -1,7 +1,10 @@
 #ifndef _CLOCKWORK_MEMORY_DUMMY_H_
 #define _CLOCKWORK_MEMORY_DUMMY_H_
 
-#include "clockwork/memory.h"
+#include <atomic>
+#include <unordered_map>
+#include "clockwork/api/worker_api.h"
+#include "clockwork/config.h"
 
 namespace clockwork {
 

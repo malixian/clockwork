@@ -238,6 +238,8 @@ add_executable (tests_dummy
     test/clockwork/test/actions.cpp
     test/clockwork/test_dummy/actions.cpp
     test/clockwork/test_dummy/testaction.cpp
+    test/clockwork/test_dummy/testworker.cpp
+    test/clockwork/test_dummy/testmemory.cpp
 )
 target_link_libraries( tests_dummy
     clockwork

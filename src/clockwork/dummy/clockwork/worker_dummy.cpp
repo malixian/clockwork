@@ -279,7 +279,6 @@ void LoadModelFromDiskDummy::success(std::shared_ptr<workerapi::LoadModelFromDis
     result->duration = result->end - result->begin;
     result->action_received = adjust_timestamp(loadmodel->received, -loadmodel->clock_delta);
     result->clock_delta = loadmodel->clock_delta;
-
     myController->sendResult(result);
     delete this;
 }

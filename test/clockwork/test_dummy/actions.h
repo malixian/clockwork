@@ -82,7 +82,7 @@ public:
 
 std::shared_ptr<workerapi::Infer> infer_action(int batch_size, RuntimeModelDummy* model);
 
-std::shared_ptr<workerapi::Infer> infer_action2(ClockworkRuntimeDummy* worker);
+std::shared_ptr<workerapi::Infer> infer_action2(ClockworkDummyWorker* worker);
 
 }
 

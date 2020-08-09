@@ -5,6 +5,7 @@
 #include "clockwork/api/worker_api.h"
 #include "tbb/concurrent_priority_queue.h"
 #include "clockwork/dummy/clockwork/action_dummy.h"
+#include "clockwork/config.h"
 
 /*
 This file ties together the worker API (defined in api/worker_api.h) with model actions (defined in action.h)

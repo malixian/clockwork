@@ -70,7 +70,9 @@ bool PageCacheDummy::alloc(unsigned n_pages) {
 
 void PageCacheDummy::free(unsigned n_pages) {
     this->lock();
-    n_free_pages += n_pages;
+    if(n_free_pages + n_pages <= total_pages){
+        n_free_pages += n_pages;
+    }
     this->unlock();
 }
 
@@ -284,7 +286,6 @@ std::vector<ModelDataDummy> loadModelDataDummy(std::string base_filename) {
             model.weights_measurement = weights_measurement;
         }
     } catch (const libconfig::FileIOException& e) {
-         std::cerr << "No measurements file for " + base_filename << std::endl;
         throw NoMeasureFile(actionErrorUnknownModel,"No measurements file for " + base_filename);
     }
 
