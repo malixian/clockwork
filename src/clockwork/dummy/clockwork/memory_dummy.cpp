@@ -24,14 +24,17 @@ void RuntimeModelDummy::unlock() {
     in_use.clear();
 }
 
-int RuntimeModelDummy::padded_batch_size(int batch_size){
+int RuntimeModelDummy::padded_batch_size_index(int batch_size){
     if( batch_size <= 0 || modelinfo->supported_batch_sizes.size() == 0)
         return -1;
     if(batch_size > modelinfo->supported_batch_sizes[modelinfo->supported_batch_sizes.size()-1] ||batch_size < modelinfo->supported_batch_sizes[0])
         return -1;
+    int index = 0;
     for(unsigned size: modelinfo->supported_batch_sizes){
-        if(batch_size <= int(size))
-            return batch_size;
+        if(batch_size <= int(size)){
+            return index;
+        }
+        index++;
     }
     return -1;
 }

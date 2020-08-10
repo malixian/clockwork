@@ -22,7 +22,7 @@ public:
     bool try_lock();
     void lock();
     void unlock();
-    int padded_batch_size(int batch_size); // return padded batch size if batch_size is legal, return -1 otherwise
+    int padded_batch_size_index(int batch_size); // return the index for padded batch size if batch_size is legal, return -1 otherwise, This index is the same as the index for batch_size_exec_times_nanos
     size_t input_size(unsigned batch_size);
     size_t output_size(unsigned batch_size); 
 

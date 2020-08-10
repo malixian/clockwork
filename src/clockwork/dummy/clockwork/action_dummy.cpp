@@ -269,9 +269,9 @@ void InferDummyAction::run(){
         error(copyInputUnknownModel, "CopyInputTask could not find model with specified id");
         return;
     }
-    //Cauculate padded_batch_size. padded_batch_size = -1 if given batch_size is not supported at all
-    int padded_batch_size = rm->padded_batch_size(infer->batch_size);
-    if (padded_batch_size == -1) {
+    //Cauculate legal padded_batch_size. return padded_batch_size_index = -1 if given batch_size is not supported at all. This index is the same as the index for batch_size_exec_times_nanos.
+    int padded_batch_size_index = rm->padded_batch_size_index(infer->batch_size);
+    if (padded_batch_size_index == -1) {
         err << "CopyInputTask received unsupported batch size " << infer->batch_size;
         error(copyInputInvalidBatchSize, err.str());
         return;
@@ -297,7 +297,7 @@ void InferDummyAction::run(){
     rm->lock();
     version = rm->version;
     rm->unlock();
-    end = start + rm->modelinfo->batch_size_exec_times_nanos[0]*padded_batch_size;
+    end = start + rm->modelinfo->batch_size_exec_times_nanos[padded_batch_size_index];
 
     toComplete();
 }
