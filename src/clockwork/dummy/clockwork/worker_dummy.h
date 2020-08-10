@@ -114,7 +114,7 @@ protected:
 
     void initialize(ClockworkWorkerConfig &config) {
 
-        config.num_gpus = 20;// Use 2 for now TODO Wei
+        config.num_gpus = 2;// Use 2 for now TODO Wei
         num_gpus = config.num_gpus; 
 
         manager = new MemoryManagerDummy(config);

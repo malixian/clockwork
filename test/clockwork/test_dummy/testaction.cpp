@@ -596,10 +596,6 @@ TEST_CASE("Infer Multiple GPUs", "[action] [infer_action] [infer_mul_gpus]") {
         loadweights.push_back(std::make_shared<TestLoadWeightsDummy>(clockwork.get(),action));
     }
 
-    for(unsigned i = 0; i < num_gpus; i++){
-        auto rm = clockwork->manager->models->get(0, i);
-    }
-
     for(auto loadweight : loadweights){
         loadweight->submit();
     }
