@@ -1,4 +1,4 @@
-#include "clockwork/dummy/clockwork/memory_dummy.h"
+#include "clockwork/dummy/memory_dummy.h"
 #include <exception>
 #include <libconfig.h++>
 #include <algorithm>

@@ -5,8 +5,8 @@
 #include <thread>
 #include "clockwork/api/worker_api.h"
 #include "clockwork/test/actions.h"
-#include "clockwork/dummy/clockwork/action_dummy.h"
-#include "clockwork/dummy/clockwork/worker_dummy.h"
+#include "clockwork/dummy/action_dummy.h"
+#include "clockwork/dummy/worker_dummy.h"
 
 
 namespace clockwork {
@@ -80,9 +80,7 @@ public:
     }
 };
 
-std::shared_ptr<workerapi::Infer> infer_action(int batch_size, RuntimeModelDummy* model);
-
-std::shared_ptr<workerapi::Infer> infer_action2(ClockworkDummyWorker* worker);
+std::shared_ptr<workerapi::Infer> infer_action_dummy(int batch_size, RuntimeModelDummy* model);
 
 }
 

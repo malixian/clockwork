@@ -8,12 +8,12 @@
 #include "clockwork/test/util.h"
 #include "clockwork/modeldef.h"
 #include "clockwork/test_dummy/actions.h"
-#include "clockwork/dummy/clockwork/worker_dummy.h"
+#include "clockwork/dummy/worker_dummy.h"
 #include "tbb/concurrent_queue.h"
 
 using namespace clockwork;
 
-std::shared_ptr<ClockworkRuntimeDummy> make_runtime() {
+std::shared_ptr<ClockworkRuntimeDummy> make_runtime_dummy() {
     return std::make_shared<ClockworkRuntimeWrapperDummy>();
 }
 
@@ -95,8 +95,8 @@ RuntimeModelDummy* make_model_for_action(bool batched){
 }
 
 // Load Model 
-TEST_CASE("Load Model From Disk Action", "[action] [loadmodel_action] [loadmodel_single]") {
-    auto clockwork = make_runtime();
+TEST_CASE("Load Model From Disk Action Dummy", "[action] [loadmodel_action] [loadmodel_single] [dummy]") {
+    auto clockwork = make_runtime_dummy();
 
     TestLoadModelFromDiskDummy load_model(clockwork.get(), load_model_from_disk_action());
 
@@ -105,8 +105,8 @@ TEST_CASE("Load Model From Disk Action", "[action] [loadmodel_action] [loadmodel
     load_model.check_success(true);
 }
 
-TEST_CASE("Load Model From Disk Action Multiple", "[action] [loadmodel_action] [loadmodel_mul]") {
-    auto clockwork = make_runtime();
+TEST_CASE("Load Model From Disk Action Multiple Dummy", "[action] [loadmodel_action] [loadmodel_mul] [dummy]") {
+    auto clockwork = make_runtime_dummy();
 
     for (unsigned i = 0; i < 5; i++) {
         auto action = load_model_from_disk_action();
@@ -120,8 +120,8 @@ TEST_CASE("Load Model From Disk Action Multiple", "[action] [loadmodel_action] [
     }
 }
 
-TEST_CASE("Load Model From Disk Action Multiple Concurrent", "[action] [loadmodel_action] [loadmodel_concurrent]") {
-    auto clockwork = make_runtime();
+TEST_CASE("Load Model From Disk Action Multiple Concurrent Dummy", "[action] [loadmodel_action] [loadmodel_concurrent] [dummy]") {
+    auto clockwork = make_runtime_dummy();
 
     std::vector<std::shared_ptr<TestLoadModelFromDiskDummy>> loadmodels;
 
@@ -142,8 +142,8 @@ TEST_CASE("Load Model From Disk Action Multiple Concurrent", "[action] [loadmode
     }
 }
 
-TEST_CASE("Load Model Earliest", "[action] [loadmodel_action] [loadmodel_earliest] ") {
-    auto clockwork = make_runtime();
+TEST_CASE("Load Model Earliest Dummy", "[action] [loadmodel_action] [loadmodel_earliest] [dummy]") {
+    auto clockwork = make_runtime_dummy();
     auto action = load_model_from_disk_action();
     uint64_t now = util::now();
     action->earliest = now+1000000000;
@@ -155,8 +155,8 @@ TEST_CASE("Load Model Earliest", "[action] [loadmodel_action] [loadmodel_earlies
     load_model.check_success(false, actionErrorRuntimeError);
 }
 
-TEST_CASE("Load Model Latest", "[action] [loadmodel_action] [loadmodel_latest]") {
-    auto clockwork = make_runtime();
+TEST_CASE("Load Model Latest Dummy", "[action] [loadmodel_action] [loadmodel_latest] [dummy]") {
+    auto clockwork = make_runtime_dummy();
     auto action = load_model_from_disk_action();
     uint64_t now = util::now();
     action->earliest = 0;
@@ -168,8 +168,8 @@ TEST_CASE("Load Model Latest", "[action] [loadmodel_action] [loadmodel_latest]")
     load_model.check_success(false, actionErrorCouldNotStartInTime);
 }
 
-TEST_CASE("Load Model Already existed", "[action] [loadmodel_action] [loadmodel_existed]") {
-    auto clockwork = make_runtime();
+TEST_CASE("Load Model Already existed Dummy", "[action] [loadmodel_action] [loadmodel_existed] [dummy]") {
+    auto clockwork = make_runtime_dummy();
 
     TestLoadModelFromDiskDummy load_model(clockwork.get(), load_model_from_disk_action());
 
@@ -184,8 +184,8 @@ TEST_CASE("Load Model Already existed", "[action] [loadmodel_action] [loadmodel_
     load_model2.check_success(false, actionErrorInvalidModelID);
 }
 
-TEST_CASE("Load Non-Existent Model From Disk", "[action] [loadmodel_action] [loadmodel_nomodel]") {
-    auto clockwork = make_runtime();
+TEST_CASE("Load Non-Existent Model From Disk Dummy", "[action] [loadmodel_action] [loadmodel_nomodel] [dummy]") {
+    auto clockwork = make_runtime_dummy();
     auto action = load_model_from_disk_action();
     action->model_path = "";
     TestLoadModelFromDiskDummy load_model(clockwork.get(),action);
@@ -196,9 +196,9 @@ TEST_CASE("Load Non-Existent Model From Disk", "[action] [loadmodel_action] [loa
 }
 
 // Load Weights 
-TEST_CASE("Load Weights Action", "[action] [loadweights_action] [loadweights_single]") {
+TEST_CASE("Load Weights Action Dummy", "[action] [loadweights_action] [loadweights_single] [dummy]") {
     RuntimeModelDummy* model = make_model_for_action(false);
-    auto clockwork = make_runtime();
+    auto clockwork = make_runtime_dummy();
     clockwork->manager->models->put(0, GPU_ID_0, model);
 
     TestLoadWeightsDummy load_weights(clockwork.get(), load_weights_action());
@@ -208,9 +208,9 @@ TEST_CASE("Load Weights Action", "[action] [loadweights_action] [loadweights_sin
     load_weights.check_success(true);    
 }
 
-TEST_CASE("Load Weights Action Multiple", "[action] [loadweights_action] [loadweights_mul]") {
+TEST_CASE("Load Weights Action Multiple Dummy", "[action] [loadweights_action] [loadweights_mul] [dummy]") {
     RuntimeModelDummy* model = make_model_for_action(false);
-    auto clockwork = make_runtime();
+    auto clockwork = make_runtime_dummy();
     clockwork->manager->models->put(0, GPU_ID_0, model);
 
     for (unsigned i = 0; i < 5; i++) {
@@ -223,8 +223,8 @@ TEST_CASE("Load Weights Action Multiple", "[action] [loadweights_action] [loadwe
 }
 
 
-TEST_CASE("Load Weights Action Multiple Concurrent", "[action] [loadweights_action] [loadweights_concurrent]") {
-    auto clockwork = make_runtime();
+TEST_CASE("Load Weights Action Multiple Concurrent Dummy", "[action] [loadweights_action] [loadweights_concurrent] [dummy]") {
+    auto clockwork = make_runtime_dummy();
     std::vector<std::shared_ptr<TestLoadModelFromDiskDummy>> loadmodels;
 
     for (unsigned i = 0; i < 5; i++) {
@@ -260,9 +260,9 @@ TEST_CASE("Load Weights Action Multiple Concurrent", "[action] [loadweights_acti
     }
 }
 
-TEST_CASE("Load Weights Earliest", "[action] [loadweights_action] [loadweights_earliest] ") {
+TEST_CASE("Load Weights Earliest Dummy", "[action] [loadweights_action] [loadweights_earliest] [dummy]") {
     RuntimeModelDummy* model = make_model_for_action(false);
-    auto clockwork = make_runtime();
+    auto clockwork = make_runtime_dummy();
 
     auto action = load_weights_action();
     uint64_t now = util::now();
@@ -275,9 +275,9 @@ TEST_CASE("Load Weights Earliest", "[action] [loadweights_action] [loadweights_e
     load_weights.check_success(false, actionErrorRuntimeError);
 }
 
-TEST_CASE("Load Weights Latest", "[action] [loadweights_action] [loadweights_latest]") {
+TEST_CASE("Load Weights Latest Dummy", "[action] [loadweights_action] [loadweights_latest] [dummy]") {
     RuntimeModelDummy* model = make_model_for_action(false);
-    auto clockwork = make_runtime();
+    auto clockwork = make_runtime_dummy();
 
     auto action = load_weights_action();
     uint64_t now = util::now();
@@ -290,9 +290,9 @@ TEST_CASE("Load Weights Latest", "[action] [loadweights_action] [loadweights_lat
     load_weights.check_success(false, actionErrorCouldNotStartInTime);
 }
 
-TEST_CASE("Load Weights Action Invalid Model", "[action] [loadweights_action]  [loadweights_nomodel]") {
+TEST_CASE("Load Weights Action Invalid Model Dummy", "[action] [loadweights_action]  [loadweights_nomodel] [dummy]") {
     RuntimeModelDummy* model = make_model_for_action(false);
-    auto clockwork = make_runtime();
+    auto clockwork = make_runtime_dummy();
 
     TestLoadWeightsDummy load_weights(clockwork.get(), load_weights_action());
 
@@ -301,9 +301,9 @@ TEST_CASE("Load Weights Action Invalid Model", "[action] [loadweights_action]  [
     load_weights.check_success(false, loadWeightsUnknownModel);
 }
 
-TEST_CASE("Load Weights Insufficient Cache", "[action] [loadweights_action] [loadweights_cache]") {
+TEST_CASE("Load Weights Insufficient Cache Dummy", "[action] [loadweights_action] [loadweights_cache] [dummy]") {
     RuntimeModelDummy* model = make_model_for_action(false);
-    auto clockwork = make_runtime();
+    auto clockwork = make_runtime_dummy();
     clockwork->manager->models->put(0, GPU_ID_0, model);
     clockwork->manager->weights_caches[GPU_ID_0]->n_free_pages = 0;
 
@@ -314,10 +314,10 @@ TEST_CASE("Load Weights Insufficient Cache", "[action] [loadweights_action] [loa
     load_weights.check_success(false, loadWeightsInsufficientCache);
 }
 
-TEST_CASE("Load Weights Version Update", "[action] [loadweights_action] [loadweights_weight_version]") {
+TEST_CASE("Load Weights Version Update Dummy", "[action] [loadweights_action] [loadweights_weight_version] [dummy]") {
     RuntimeModelDummy* rm = make_model_for_action(false);
     rm->modelinfo->weights_load_time_nanos = 100000;//Hard code let process_completion() finish later
-    auto clockwork = make_runtime();
+    auto clockwork = make_runtime_dummy();
     clockwork->manager->models->put(0, GPU_ID_0, rm);
 
     auto action = load_weights_action();
@@ -334,13 +334,13 @@ TEST_CASE("Load Weights Version Update", "[action] [loadweights_action] [loadwei
     load_weights.check_success(false, loadWeightsConcurrentModification);
 }
 
-//TEST_CASE("Double Load Weights", "[task]")  this can't happen ( and be tested or deadlock will happen) since the engine will always try to finish an unfinished action first in the dummy worker
+//TEST_CASE("Double Load Weights Dummy", "[task] [dummy]")  this can't happen ( and be tested or deadlock will happen) since the engine will always try to finish an unfinished action first in the dummy worker
 
 
 //Evict Weights
-TEST_CASE("Load Evict Weights Action", "[action] [evict_action] [evict_single]") {
+TEST_CASE("Load Evict Weights Action Dummy", "[action] [evict_action] [evict_single] [dummy]") {
     RuntimeModelDummy* model = make_model_for_action(false);
-    auto clockwork = make_runtime();
+    auto clockwork = make_runtime_dummy();
     clockwork->manager->models->put(0, GPU_ID_0, model);
 
     TestLoadWeightsDummy load_weights(clockwork.get(), load_weights_action());
@@ -356,9 +356,9 @@ TEST_CASE("Load Evict Weights Action", "[action] [evict_action] [evict_single]")
     evict_weights.check_success(true);
 }
 
-TEST_CASE("Load Evict Weights Action Multiple", "[action] [evict_action] [evict_mul]") {
+TEST_CASE("Load Evict Weights Action Multiple Dummy", "[action] [evict_action] [evict_mul] [dummy]") {
     RuntimeModelDummy* model = make_model_for_action(false);
-    auto clockwork = make_runtime();
+    auto clockwork = make_runtime_dummy();
     clockwork->manager->models->put(0, GPU_ID_0, model);
 
     for (unsigned i = 0; i < 5; i++) {
@@ -377,8 +377,8 @@ TEST_CASE("Load Evict Weights Action Multiple", "[action] [evict_action] [evict_
 }
 
 
-TEST_CASE("Load Evict Weights Action Multiple Concurrent", "[action] [evict_action] [evict_concurrent]") {
-    auto clockwork = make_runtime();
+TEST_CASE("Load Evict Weights Action Multiple Concurrent Dummy", "[action] [evict_action] [evict_concurrent] [dummy]") {
+    auto clockwork = make_runtime_dummy();
     std::vector<std::shared_ptr<TestLoadModelFromDiskDummy>> loadmodels;
 
     for (unsigned i = 0; i < 5; i++) {
@@ -428,11 +428,11 @@ TEST_CASE("Load Evict Weights Action Multiple Concurrent", "[action] [evict_acti
     }
 }
 
-//TEST_CASE("Double Evict", "[task]") this can't happen (and be tested or deadlock will happen) since the engine will always try to finish a unfinished action first in the dummy worker
+//TEST_CASE("Double Evict Dummy", "[task] [dummy]") this can't happen (and be tested or deadlock will happen) since the engine will always try to finish a unfinished action first in the dummy worker
 
-TEST_CASE("Evict Weights Earliest", "[action] [evict_action] [evict_earliest] ") {
+TEST_CASE("Evict Weights Earliest Dummy", "[action] [evict_action] [evict_earliest] [dummy]") {
     RuntimeModelDummy* model = make_model_for_action(false);
-    auto clockwork = make_runtime();
+    auto clockwork = make_runtime_dummy();
 
     auto action = evict_weights_action();
     uint64_t now = util::now();
@@ -445,9 +445,9 @@ TEST_CASE("Evict Weights Earliest", "[action] [evict_action] [evict_earliest] ")
     evict_weights.check_success(false, actionErrorRuntimeError);
 }
 
-TEST_CASE("Evict Weights Latest", "[action] [evict_action] [evict_latest]") {
+TEST_CASE("Evict Weights Latest Dummy", "[action] [evict_action] [evict_latest] [dummy]") {
     RuntimeModelDummy* model = make_model_for_action(false);
-    auto clockwork = make_runtime();
+    auto clockwork = make_runtime_dummy();
 
     auto action = evict_weights_action();
     uint64_t now = util::now();
@@ -460,9 +460,9 @@ TEST_CASE("Evict Weights Latest", "[action] [evict_action] [evict_latest]") {
     evict_weights.check_success(false, actionErrorCouldNotStartInTime);
 }
 
-TEST_CASE("Evict Weights Nonexistent Model", "[action] [evict_action] [evict_nomodel]") {
+TEST_CASE("Evict Weights Nonexistent Model Dummy", "[action] [evict_action] [evict_nomodel] [dummy]") {
     RuntimeModelDummy* model = make_model_for_action(false);
-    auto clockwork = make_runtime();
+    auto clockwork = make_runtime_dummy();
 
     TestEvictWeightsDummy evict_weights(clockwork.get(), evict_weights_action());
 
@@ -471,9 +471,9 @@ TEST_CASE("Evict Weights Nonexistent Model", "[action] [evict_action] [evict_nom
     evict_weights.check_success(false, evictWeightsUnknownModel);
 }
 
-TEST_CASE("Evict without Weights Action", "[action] [evict_action] [evict_noweights]") {
+TEST_CASE("Evict without Weights Action Dummy", "[action] [evict_action] [evict_noweights] [dummy]") {
     RuntimeModelDummy* model = make_model_for_action(false);
-    auto clockwork = make_runtime();
+    auto clockwork = make_runtime_dummy();
     clockwork->manager->models->put(0, GPU_ID_0, model);
 
     TestEvictWeightsDummy evict_weights(clockwork.get(), evict_weights_action());
@@ -484,9 +484,9 @@ TEST_CASE("Evict without Weights Action", "[action] [evict_action] [evict_noweig
 }
 
 //Infer Action
-TEST_CASE("Infer Action", "[action] [infer_action] [infer_single]") {
+TEST_CASE("Infer Action Dummy", "[action] [infer_action] [infer_single] [dummy]") {
     RuntimeModelDummy* model = make_model_for_action(false);
-    auto clockwork = make_runtime();
+    auto clockwork = make_runtime_dummy();
     clockwork->manager->models->put(0, GPU_ID_0, model);
 
     TestLoadWeightsDummy load_weights(clockwork.get(), load_weights_action());
@@ -502,9 +502,9 @@ TEST_CASE("Infer Action", "[action] [infer_action] [infer_single]") {
     infer.check_success(true);
 }
 
-TEST_CASE("Infer Action Batched", "[action] [infer_action] [infer_batched]") {
+TEST_CASE("Infer Action Batched Dummy", "[action] [infer_action] [infer_batched] [dummy]") {
     RuntimeModelDummy* model = make_model_for_action(true);
-    auto clockwork = make_runtime();
+    auto clockwork = make_runtime_dummy();
     clockwork->manager->models->put(0, GPU_ID_0, model);
 
     TestLoadWeightsDummy load_weights(clockwork.get(), load_weights_action());
@@ -514,7 +514,7 @@ TEST_CASE("Infer Action Batched", "[action] [infer_action] [infer_batched]") {
     load_weights.check_success(true);
 
     for (unsigned batch_size = 1; batch_size <= 16; batch_size*=2){
-        TestInferDummy infer(clockwork.get(), infer_action(batch_size, model));
+        TestInferDummy infer(clockwork.get(), infer_action_dummy(batch_size, model));
 
         infer.submit();
         infer.await();
@@ -522,9 +522,9 @@ TEST_CASE("Infer Action Batched", "[action] [infer_action] [infer_batched]") {
     }
 }
 
-TEST_CASE("Infer Action Multiple", "[action] [infer_action] [infer_action_mul]") {
+TEST_CASE("Infer Action Multiple Dummy", "[action] [infer_action] [infer_action_mul] [dummy]") {
     RuntimeModelDummy* model = make_model_for_action(false);
-    auto clockwork = make_runtime();
+    auto clockwork = make_runtime_dummy();
     clockwork->manager->models->put(0, GPU_ID_0, model);
 
     TestLoadWeightsDummy load_weights(clockwork.get(), load_weights_action());
@@ -542,7 +542,7 @@ TEST_CASE("Infer Action Multiple", "[action] [infer_action] [infer_action_mul]")
     }
 }
 
-TEST_CASE("Make Many Models", "[action] [models]") {
+TEST_CASE("Make Many Models Dummy", "[action] [models] [dummy]") {
     std::vector<RuntimeModelDummy*> models;
     for (unsigned i = 0; i < 30; i++) {
         models.push_back(make_model_for_action(false));
@@ -552,9 +552,9 @@ TEST_CASE("Make Many Models", "[action] [models]") {
     }
 }//Q what is it?
 
-TEST_CASE("Infer Action Multiple Concurrent", "[action] [infer_action] [infer_concurrent]") {
+TEST_CASE("Infer Action Multiple Concurrent Dummy", "[action] [infer_action] [infer_concurrent] [dummy]") {
     RuntimeModelDummy* model = make_model_for_action(false);
-    auto clockwork = make_runtime();
+    auto clockwork = make_runtime_dummy();
     clockwork->manager->models->put(0, GPU_ID_0, model);
 
     TestLoadWeightsDummy load_weights(clockwork.get(), load_weights_action());
@@ -579,8 +579,8 @@ TEST_CASE("Infer Action Multiple Concurrent", "[action] [infer_action] [infer_co
     }    
 }
 
-TEST_CASE("Infer Multiple GPUs", "[action] [infer_action] [infer_mul_gpus]") {    
-    auto clockwork = make_runtime();
+TEST_CASE("Infer Multiple GPUs Dummy", "[action] [infer_action] [infer_mul_gpus] [dummy]") {    
+    auto clockwork = make_runtime_dummy();
     unsigned num_gpus = clockwork->num_gpus;
 
     TestLoadModelFromDiskDummy load_model(clockwork.get(), load_model_from_disk_action());
@@ -623,9 +623,9 @@ TEST_CASE("Infer Multiple GPUs", "[action] [infer_action] [infer_mul_gpus]") {
     }  
 }
 
-TEST_CASE("Infer Earliest", "[action] [infer_action] [infer_earliest] ") {
+TEST_CASE("Infer Earliest Dummy", "[action] [infer_action] [infer_earliest] [dummy]") {
     RuntimeModelDummy* model = make_model_for_action(false);
-    auto clockwork = make_runtime();
+    auto clockwork = make_runtime_dummy();
 
     auto action = infer_action();
     uint64_t now = util::now();
@@ -638,9 +638,9 @@ TEST_CASE("Infer Earliest", "[action] [infer_action] [infer_earliest] ") {
     infer.check_success(false, actionErrorRuntimeError);
 }
 
-TEST_CASE("Infer Latest", "[action] [infer_action] [infer_latest]") {
+TEST_CASE("Infer Latest Dummy", "[action] [infer_action] [infer_latest] [dummy]") {
     RuntimeModelDummy* model = make_model_for_action(false);
-    auto clockwork = make_runtime();
+    auto clockwork = make_runtime_dummy();
 
     auto action = infer_action();
     uint64_t now = util::now();
@@ -653,9 +653,9 @@ TEST_CASE("Infer Latest", "[action] [infer_action] [infer_latest]") {
     infer.check_success(false, actionErrorCouldNotStartInTime);
 }
 
-TEST_CASE("Infer Action Wrong Input Size", "[action] [infer_action] [infer_wrong_iosize]") {
+TEST_CASE("Infer Action Wrong Input Size Dummy", "[action] [infer_action] [infer_wrong_iosize] [dummy]") {
     RuntimeModelDummy* model = make_model_for_action(false);
-    auto clockwork = make_runtime();
+    auto clockwork = make_runtime_dummy();
     clockwork->manager->models->put(0, GPU_ID_0, model);
 
     TestLoadWeightsDummy load_weights(clockwork.get(), load_weights_action());
@@ -672,8 +672,8 @@ TEST_CASE("Infer Action Wrong Input Size", "[action] [infer_action] [infer_wrong
     infer.check_success(false, copyInputInvalidInput);
 }
 
-TEST_CASE("Infer Action Nonexistent Model", "[action] [infer_action] [infer_nomodel]") {
-    auto clockwork = make_runtime();
+TEST_CASE("Infer Action Nonexistent Model Dummy", "[action] [infer_action] [infer_nomodel] [dummy]") {
+    auto clockwork = make_runtime_dummy();
 
     TestInferDummy infer(clockwork.get(), infer_action());
 
@@ -682,9 +682,9 @@ TEST_CASE("Infer Action Nonexistent Model", "[action] [infer_action] [infer_nomo
     infer.check_success(false, copyInputUnknownModel);
 }
 
-TEST_CASE("Infer Action Nonexistent Weights", "[action] [infer_action] [infer_noweights]") {
+TEST_CASE("Infer Action Nonexistent Weights Dummy", "[action] [infer_action] [infer_noweights] [dummy]") {
     RuntimeModelDummy* model = make_model_for_action(false);
-    auto clockwork = make_runtime();
+    auto clockwork = make_runtime_dummy();
     clockwork->manager->models->put(0, GPU_ID_0, model);
 
     TestInferDummy infer(clockwork.get(), infer_action());
@@ -694,9 +694,9 @@ TEST_CASE("Infer Action Nonexistent Weights", "[action] [infer_action] [infer_no
     infer.check_success(false, execWeightsMissing);
 }
 
-TEST_CASE("Infer after Evict Action", "[action] [infer_action] [infer_after_evict]") {
+TEST_CASE("Infer after Evict Action Dummy", "[action] [infer_action] [infer_after_evict] [dummy]") {
     RuntimeModelDummy* model = make_model_for_action(false);
-    auto clockwork = make_runtime();
+    auto clockwork = make_runtime_dummy();
     clockwork->manager->models->put(0, GPU_ID_0, model);
 
     TestLoadWeightsDummy load_weights(clockwork.get(), load_weights_action());
@@ -724,8 +724,8 @@ TEST_CASE("Infer after Evict Action", "[action] [infer_action] [infer_after_evic
     infer2.check_success(false, execWeightsMissing);   
 }
 
-TEST_CASE("Actions E2E", "[action] [e2e]") {
-    auto clockwork = make_runtime();
+TEST_CASE("Actions E2E Dummy", "[action] [e2e] [dummy]") {
+    auto clockwork = make_runtime_dummy();
 
     auto load_model = new TestLoadModelFromDiskDummy(clockwork.get(), load_model_from_disk_action());
 
@@ -769,9 +769,9 @@ TEST_CASE("Actions E2E", "[action] [e2e]") {
     delete infer2;  
 }
 
-TEST_CASE("Task Cancelled After Shutdown", "[action] [shutdown]") {
+TEST_CASE("Task Cancelled After Shutdown Dummy", "[action] [shutdown] [dummy]") {
     RuntimeModelDummy* model = make_model_for_action(false);
-    auto clockwork = make_runtime();
+    auto clockwork = make_runtime_dummy();
     clockwork->manager->models->put(0, GPU_ID_0, model);
 
     auto action = load_weights_action();
@@ -787,13 +787,13 @@ TEST_CASE("Task Cancelled After Shutdown", "[action] [shutdown]") {
     delete load_weights;
 }
 
-class TestLoadModelFromDiskActionThatDeletesItself : public LoadModelFromDiskDummyAction {
+class TestLoadModelFromDiskActionThatDeletesItselfDummy : public LoadModelFromDiskDummyAction {
 public:
     TestAction &action_status;
 
     ClockworkRuntimeDummy* myRuntime;
 
-    TestLoadModelFromDiskActionThatDeletesItself(ClockworkRuntimeDummy* runtime, std::shared_ptr<workerapi::LoadModelFromDisk> action, 
+    TestLoadModelFromDiskActionThatDeletesItselfDummy(ClockworkRuntimeDummy* runtime, std::shared_ptr<workerapi::LoadModelFromDisk> action, 
             TestAction &action_status) : 
         LoadModelFromDiskDummyAction(runtime->manager, action), action_status(action_status) {myRuntime = runtime;}
 
@@ -816,14 +816,14 @@ public:
 
 };
 
-TEST_CASE("Task Action That Deletes Itself in Callback", "[action] [shutdown]") {
-    auto clockwork = make_runtime();
+TEST_CASE("Task Action That Deletes Itself in Callback Dummy", "[action] [shutdown] [dummy]") {
+    auto clockwork = make_runtime_dummy();
 
     TestAction action_status;
 
     auto action = load_model_from_disk_action();
     action->model_path = "";
-    auto load_model = new TestLoadModelFromDiskActionThatDeletesItself(
+    auto load_model = new TestLoadModelFromDiskActionThatDeletesItselfDummy(
             clockwork.get(), action, action_status);
 
     load_model->submit();

@@ -86,9 +86,9 @@ add_library( clockwork
 	src/clockwork/network/client.cpp
 	src/clockwork/workload/workload.cpp
 	src/clockwork/telemetry/telemetry.cpp
-    src/clockwork/dummy/clockwork/memory_dummy.cpp
-    src/clockwork/dummy/clockwork/action_dummy.cpp
-    src/clockwork/dummy/clockwork/worker_dummy.cpp
+    src/clockwork/dummy/memory_dummy.cpp
+    src/clockwork/dummy/action_dummy.cpp
+    src/clockwork/dummy/worker_dummy.cpp
     src/clockwork/dummy/network/worker_dummy.cpp
 
 	$ENV{TVM_HOME}/src/runtime/meta_data.h
@@ -215,6 +215,10 @@ add_executable (tests
 	test/clockwork/test/testutil.cpp
 	test/clockwork/test/model/testmodel.cpp
 	test/clockwork/test/model/testbatched.cpp
+    test/clockwork/test_dummy/actions.cpp
+    test/clockwork/test_dummy/testaction.cpp
+    test/clockwork/test_dummy/testworker.cpp
+    test/clockwork/test_dummy/testmemory.cpp
 )
 target_link_libraries( tests
 	clockwork
@@ -230,32 +234,6 @@ target_link_libraries( tests
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
-
-# tests for dummy_worker
-add_executable (tests_dummy
-    test/tests.cpp
-    test/clockwork/test/util.cpp
-    test/clockwork/test/actions.cpp
-    test/clockwork/test_dummy/actions.cpp
-    test/clockwork/test_dummy/testaction.cpp
-    test/clockwork/test_dummy/testworker.cpp
-    test/clockwork/test_dummy/testmemory.cpp
-)
-target_link_libraries( tests_dummy
-    clockwork
-    clockwork_proto
-    Threads::Threads
-    dl
-    cuda
-    cudart
-    tvm_runtime
-    tbb
-    nvidia-ml
-    stdc++fs
-    ${Boost_SYSTEM_LIBRARY}
-    ${Boost_FILESYSTEM_LIBRARY}
-)
-
 
 # Like tests, but does profiling
 add_executable ( profile

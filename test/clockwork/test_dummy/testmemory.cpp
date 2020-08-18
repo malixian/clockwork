@@ -3,9 +3,9 @@
 #include <iostream>
 #include <algorithm>
 #include <queue>
-#include "clockwork/dummy/clockwork/memory_dummy.h"
+#include "clockwork/dummy/memory_dummy.h"
 
-TEST_CASE("Simple Page alloc and free", "[cache]") {
+TEST_CASE("Simple Page alloc and free Dummy", "[cache] [dummy]") {
 
     using namespace clockwork;
     
@@ -57,7 +57,7 @@ TEST_CASE("Simple Page alloc and free", "[cache]") {
     REQUIRE( cache->n_free_pages == n_free_pages);
 }
 
-TEST_CASE("Simple Page clear", "[cache]") {
+TEST_CASE("Simple Page clear Dummy", "[cache] [dummy]") {
 
     using namespace clockwork;
     

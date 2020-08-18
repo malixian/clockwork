@@ -4,7 +4,7 @@
 #include <atomic>
 #include "clockwork/api/worker_api.h"
 #include "tbb/concurrent_priority_queue.h"
-#include "clockwork/dummy/clockwork/action_dummy.h"
+#include "clockwork/dummy/action_dummy.h"
 #include "clockwork/config.h"
 
 /*
@@ -215,7 +215,7 @@ public:
 };
 
 
-uint64_t adjust_timestamp(uint64_t timestamp, int64_t clock_delta);
+uint64_t adjust_timestamp_dummy(uint64_t timestamp, int64_t clock_delta);
 }
 
 #endif

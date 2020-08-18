@@ -1,6 +1,6 @@
 #include <dmlc/logging.h>
 #include "clockwork/modeldef.h"
-#include "clockwork/dummy/clockwork/action_dummy.h"
+#include "clockwork/dummy/action_dummy.h"
 
 #include <iostream>
 

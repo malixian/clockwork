@@ -1,4 +1,4 @@
-#include "clockwork/dummy/clockwork/worker_dummy.h"
+#include "clockwork/dummy/worker_dummy.h"
 
 namespace clockwork {
 
@@ -168,7 +168,7 @@ void ClockworkDummyWorker::invalidAction(std::shared_ptr<workerapi::Action> acti
 
 // Need to be careful of timestamp = 0 and timestamp = UINT64_MAX which occur often
 // and clock_delta can be positive or negative
-uint64_t adjust_timestamp(uint64_t timestamp, int64_t clock_delta) {
+uint64_t adjust_timestamp_dummy(uint64_t timestamp, int64_t clock_delta) {
     if (clock_delta >= 0) return std::max(timestamp, timestamp + clock_delta);
     else return std::min(timestamp, timestamp + clock_delta);
 }
@@ -177,8 +177,8 @@ void ClockworkDummyWorker::loadModel(std::shared_ptr<workerapi::Action> action) 
     auto load_model = std::static_pointer_cast<workerapi::LoadModelFromDisk>(action);
     if (load_model != nullptr) {
         // It is a hack to do this here, but easiest / safest place to do it for now
-        load_model->earliest = adjust_timestamp(load_model->earliest, load_model->clock_delta);
-        load_model->latest = adjust_timestamp(load_model->latest, load_model->clock_delta);
+        load_model->earliest = adjust_timestamp_dummy(load_model->earliest, load_model->clock_delta);
+        load_model->latest = adjust_timestamp_dummy(load_model->latest, load_model->clock_delta);
 
         runtime->load_model_executor->new_action(load_model);
     } else {
@@ -190,8 +190,8 @@ void ClockworkDummyWorker::loadWeights(std::shared_ptr<workerapi::Action> action
     auto load_weights = std::static_pointer_cast<workerapi::LoadWeights>(action);
     if (load_weights != nullptr) {
         // It is a hack to do this here, but easiest / safest place to do it for now
-        load_weights->earliest = adjust_timestamp(load_weights->earliest, load_weights->clock_delta);
-        load_weights->latest = adjust_timestamp(load_weights->latest, load_weights->clock_delta);
+        load_weights->earliest = adjust_timestamp_dummy(load_weights->earliest, load_weights->clock_delta);
+        load_weights->latest = adjust_timestamp_dummy(load_weights->latest, load_weights->clock_delta);
 
         runtime->weights_executors[load_weights->gpu_id]->new_action(load_weights);      
     } else {
@@ -203,8 +203,8 @@ void ClockworkDummyWorker::evictWeights(std::shared_ptr<workerapi::Action> actio
     auto evict_weights = std::static_pointer_cast<workerapi::EvictWeights>(action);
     if (evict_weights != nullptr) {
         // It is a hack to do this here, but easiest / safest place to do it for now
-        evict_weights->earliest = adjust_timestamp(evict_weights->earliest, evict_weights->clock_delta);
-        evict_weights->latest = adjust_timestamp(evict_weights->latest, evict_weights->clock_delta);
+        evict_weights->earliest = adjust_timestamp_dummy(evict_weights->earliest, evict_weights->clock_delta);
+        evict_weights->latest = adjust_timestamp_dummy(evict_weights->latest, evict_weights->clock_delta);
 
         runtime->outputs_executors[evict_weights->gpu_id]->new_action(evict_weights);
         
@@ -217,8 +217,8 @@ void ClockworkDummyWorker::infer(std::shared_ptr<workerapi::Action> action) {
     auto infer = std::static_pointer_cast<workerapi::Infer>(action);
     if (infer != nullptr) {
         // It is a hack to do this here, but easiest / safest place to do it for now
-        infer->earliest = adjust_timestamp(infer->earliest, infer->clock_delta);
-        infer->latest = adjust_timestamp(infer->latest, infer->clock_delta);
+        infer->earliest = adjust_timestamp_dummy(infer->earliest, infer->clock_delta);
+        infer->latest = adjust_timestamp_dummy(infer->latest, infer->clock_delta);
 
         runtime->gpu_executors[infer->gpu_id]->new_action(infer);
     } else {
@@ -266,7 +266,7 @@ void LoadModelFromDiskDummy::error(int status_code, std::string message){
     result->action_type = workerapi::loadModelFromDiskAction;
     result->status = status_code;
     result->message = message;
-    result->action_received = adjust_timestamp(loadmodel->received, -loadmodel->clock_delta);
+    result->action_received = adjust_timestamp_dummy(loadmodel->received, -loadmodel->clock_delta);
     result->clock_delta = loadmodel->clock_delta;
     myController->sendResult(result);
     delete this;
@@ -274,10 +274,10 @@ void LoadModelFromDiskDummy::error(int status_code, std::string message){
 
 void LoadModelFromDiskDummy::success(std::shared_ptr<workerapi::LoadModelFromDiskResult> result) {
     //Set timestamps in the result
-    result->begin = adjust_timestamp(start, -loadmodel->clock_delta);
-    result->end = adjust_timestamp(end, -loadmodel->clock_delta);
+    result->begin = adjust_timestamp_dummy(start, -loadmodel->clock_delta);
+    result->end = adjust_timestamp_dummy(end, -loadmodel->clock_delta);
     result->duration = result->end - result->begin;
-    result->action_received = adjust_timestamp(loadmodel->received, -loadmodel->clock_delta);
+    result->action_received = adjust_timestamp_dummy(loadmodel->received, -loadmodel->clock_delta);
     result->clock_delta = loadmodel->clock_delta;
     myController->sendResult(result);
     delete this;
@@ -302,10 +302,10 @@ void LoadWeightsDummy::success(std::shared_ptr<workerapi::LoadWeightsResult> res
     result->status = actionSuccess;
 
     //Set timestamps in the result
-    result->begin = adjust_timestamp(start, -loadweights->clock_delta);
-    result->end = adjust_timestamp(end, -loadweights->clock_delta);
+    result->begin = adjust_timestamp_dummy(start, -loadweights->clock_delta);
+    result->end = adjust_timestamp_dummy(end, -loadweights->clock_delta);
     result->duration = result->end - result->begin;
-    result->action_received = adjust_timestamp(loadweights->received, -loadweights->clock_delta);
+    result->action_received = adjust_timestamp_dummy(loadweights->received, -loadweights->clock_delta);
     result->clock_delta = loadweights->clock_delta;
     
     myController->sendResult(result);
@@ -319,7 +319,7 @@ void LoadWeightsDummy::error(int status_code, std::string message){
     result->action_type = workerapi::loadWeightsAction;
     result->status = error->status_code;
     result->message = error->message;
-    result->action_received = adjust_timestamp(loadweights->received, -loadweights->clock_delta);
+    result->action_received = adjust_timestamp_dummy(loadweights->received, -loadweights->clock_delta);
     result->clock_delta = loadweights->clock_delta;
     myController->sendResult(result);
     delete this;
@@ -335,10 +335,10 @@ void EvictWeightsDummy::success(std::shared_ptr<workerapi::EvictWeightsResult> r
     result->status = actionSuccess;
 
     //Set timestamps in the result
-    result->begin = adjust_timestamp(start, -evictweights->clock_delta);
-    result->end = adjust_timestamp(end, -evictweights->clock_delta);
+    result->begin = adjust_timestamp_dummy(start, -evictweights->clock_delta);
+    result->end = adjust_timestamp_dummy(end, -evictweights->clock_delta);
     result->duration = result->end - result->begin;
-    result->action_received = adjust_timestamp(evictweights->received, -evictweights->clock_delta);
+    result->action_received = adjust_timestamp_dummy(evictweights->received, -evictweights->clock_delta);
     result->clock_delta = evictweights->clock_delta;
     
     myController->sendResult(result);
@@ -352,7 +352,7 @@ void EvictWeightsDummy::error(int status_code, std::string message){
     result->action_type = workerapi::evictWeightsAction;
     result->status = error->status_code;
     result->message = error->message;
-    result->action_received = adjust_timestamp(evictweights->received, -evictweights->clock_delta);
+    result->action_received = adjust_timestamp_dummy(evictweights->received, -evictweights->clock_delta);
     result->clock_delta = evictweights->clock_delta;
     myController->sendResult(result);
     delete this;
@@ -378,7 +378,7 @@ void InferDummy::error(int status_code, std::string message){
     result->action_type = workerapi::inferAction;
     result->status = error->status_code;
     result->message = error->message;
-    result->action_received = adjust_timestamp(infer->received, -infer->clock_delta);
+    result->action_received = adjust_timestamp_dummy(infer->received, -infer->clock_delta);
     result->clock_delta = infer->clock_delta;
     myController->sendResult(result);
     delete this;
@@ -390,12 +390,12 @@ void InferDummy::success(std::shared_ptr<workerapi::InferResult> result){
     result->status = actionSuccess;
 
     //Set timestamps in the result
-    result->copy_input.begin = adjust_timestamp(start, -infer->clock_delta);
-    result->exec.begin = adjust_timestamp(start, -infer->clock_delta);
-    result->copy_output.begin = adjust_timestamp(end, -infer->clock_delta);
-    result->copy_input.end = adjust_timestamp(start, -infer->clock_delta);
-    result->exec.end = adjust_timestamp(end, -infer->clock_delta);
-    result->copy_output.end = adjust_timestamp(end, -infer->clock_delta);
+    result->copy_input.begin = adjust_timestamp_dummy(start, -infer->clock_delta);
+    result->exec.begin = adjust_timestamp_dummy(start, -infer->clock_delta);
+    result->copy_output.begin = adjust_timestamp_dummy(end, -infer->clock_delta);
+    result->copy_input.end = adjust_timestamp_dummy(start, -infer->clock_delta);
+    result->exec.end = adjust_timestamp_dummy(end, -infer->clock_delta);
+    result->copy_output.end = adjust_timestamp_dummy(end, -infer->clock_delta);
     result->copy_input.duration = result->copy_input.end - result->copy_input.begin;
     result->exec.duration = result->exec.end - result->exec.begin;
     result->copy_output.duration = result->copy_output.end - result->copy_output.begin;

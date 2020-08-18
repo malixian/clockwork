@@ -8,11 +8,11 @@
 #include "clockwork/test/util.h"
 #include "clockwork/modeldef.h"
 #include "clockwork/test_dummy/actions.h"
-#include "clockwork/dummy/clockwork/worker_dummy.h"
+#include "clockwork/dummy/worker_dummy.h"
 #include "clockwork/test/controller.h"
 #include "tbb/concurrent_queue.h"
 
-TEST_CASE("Test Worker", "[worker]") {
+TEST_CASE("Test Worker Dummy", "[worker] [dummy]") {
     ClockworkWorkerConfig config("");
     ClockworkDummyWorker worker(config);
     TestController controller;
@@ -28,7 +28,7 @@ TEST_CASE("Test Worker", "[worker]") {
     worker.shutdown(true);
 }
 
-TEST_CASE("Test Infer No Weights", "[worker] [noweights]") {
+TEST_CASE("Test Infer No Weights Dummy", "[worker] [noweights] [dummy]") {
     ClockworkWorkerConfig config("");
     ClockworkDummyWorker worker(config);
     TestController controller;
@@ -48,7 +48,7 @@ TEST_CASE("Test Infer No Weights", "[worker] [noweights]") {
     
 }
 
-TEST_CASE("Test Infer Invalid Input Size", "[worker] [invalid]") {
+TEST_CASE("Test Infer Invalid Input Size Dummy", "[worker] [invalid] [dummy]") {
     ClockworkWorkerConfig config("");
     ClockworkDummyWorker worker(config);
     TestController controller;
@@ -71,7 +71,7 @@ TEST_CASE("Test Infer Invalid Input Size", "[worker] [invalid]") {
 }
 
 
-TEST_CASE("Test Worker E2E Simple", "[worker] [e2esimple]") {
+TEST_CASE("Test Worker E2E Simple Dummy", "[worker] [e2esimple] [dummy]") {
     ClockworkWorkerConfig config("");
     ClockworkDummyWorker worker(config);
     TestController controller;
@@ -103,7 +103,7 @@ TEST_CASE("Test Worker E2E Simple", "[worker] [e2esimple]") {
     
 }
 
-TEST_CASE("Test Worker E2E Timed Success", "[worker]") {
+TEST_CASE("Test Worker E2E Timed Success Dummy", "[worker] [dummy]") {
     ClockworkWorkerConfig config("");
     ClockworkDummyWorker worker(config);
     TestController controller;
@@ -134,7 +134,7 @@ TEST_CASE("Test Worker E2E Timed Success", "[worker]") {
     
 }
 
-TEST_CASE("Test GetWorkerState", "[worker] [e2esimple]") {
+TEST_CASE("Test GetWorkerState Dummy", "[worker] [e2esimple] [dummy]") {
     ClockworkWorkerConfig config("");
     ClockworkDummyWorker worker(config);
     TestController controller;

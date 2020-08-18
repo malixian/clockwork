@@ -4,7 +4,7 @@
 #include <atomic>
 #include "clockwork/task.h"
 #include "clockwork/api/worker_api.h"
-#include "clockwork/dummy/clockwork/memory_dummy.h"
+#include "clockwork/dummy/memory_dummy.h"
 
 /*
 This file ties together the worker API (defined in api/worker_api.h) with model actions (defined in action.h)
