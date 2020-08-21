@@ -86,6 +86,10 @@ add_library( clockwork
 	src/clockwork/network/client.cpp
 	src/clockwork/workload/workload.cpp
 	src/clockwork/telemetry/telemetry.cpp
+    src/clockwork/dummy/memory_dummy.cpp
+    src/clockwork/dummy/action_dummy.cpp
+    src/clockwork/dummy/worker_dummy.cpp
+    src/clockwork/dummy/network/worker_dummy.cpp
 
 	$ENV{TVM_HOME}/src/runtime/meta_data.h
 
@@ -96,6 +100,7 @@ add_library( clockwork
 #	src/clockwork/alternatives/greedyruntime.cpp
 #	src/clockwork/alternatives/worker.cpp
 )
+
 
 target_link_libraries( clockwork PUBLIC
 	clockwork_proto
@@ -110,6 +115,7 @@ target_link_libraries( clockwork PUBLIC
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
+
 
 
 # Converts from TVM models to clockwork models
@@ -209,6 +215,10 @@ add_executable (tests
 	test/clockwork/test/testutil.cpp
 	test/clockwork/test/model/testmodel.cpp
 	test/clockwork/test/model/testbatched.cpp
+    test/clockwork/test_dummy/actions.cpp
+    test/clockwork/test_dummy/testaction.cpp
+    test/clockwork/test_dummy/testworker.cpp
+    test/clockwork/test_dummy/testmemory.cpp
 )
 target_link_libraries( tests
 	clockwork
@@ -224,7 +234,6 @@ target_link_libraries( tests
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
-
 
 # Like tests, but does profiling
 add_executable ( profile
@@ -270,6 +279,21 @@ target_link_libraries(
     ${Boost_FILESYSTEM_LIBRARY}
 )
 
+add_executable (worker_dummy src/worker_dummy.cpp )
+target_link_libraries(
+    worker_dummy
+    clockwork
+    clockwork_proto
+    Threads::Threads
+    dl
+    cuda
+    cudart
+    tvm_runtime
+    stdc++fs
+    ${Boost_SYSTEM_LIBRARY}
+    ${Boost_FILESYSTEM_LIBRARY}
+)
+
 
 # Standalone clockwork controller 
 add_executable (controller src/controller.cpp )
@@ -287,7 +311,6 @@ target_link_libraries(
     ${Boost_FILESYSTEM_LIBRARY}
 )
 
-
 # Standalone clockwork workload generating client
 add_executable (client src/client.cpp )
 target_link_libraries(
@@ -303,7 +326,6 @@ target_link_libraries(
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
-
 
 # Spams the client API
 add_executable (netclient src/network/netclient.cpp )

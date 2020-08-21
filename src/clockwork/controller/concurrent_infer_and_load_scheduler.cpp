@@ -1410,7 +1410,7 @@ void Scheduler::start(std::vector<network::controller::WorkerConnection*> worker
     for (unsigned i = 0; i < gpus.size(); i++) {
         std::vector<GPU*> gpus_for_thread = {gpus[i]};
         gpu_threads.push_back(std::thread(&Scheduler::run_gpu_thread, this, gpus_for_thread));
-        threading::initHighPriorityThread(gpu_threads[i]);
+        threading::initLowPriorityThread(gpu_threads[i]);
     }
 }
 

@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <libgen.h>
 #include <fstream>
+#include <iostream>
 #include <algorithm>
 #include <cuda_runtime.h>
 #include "clockwork/task.h"
