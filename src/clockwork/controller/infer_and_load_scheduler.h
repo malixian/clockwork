@@ -8,9 +8,11 @@
 #include <string>
 #include <sstream>
 #include "clockwork/controller/scheduler.h"
+#include "clockwork/controller/worker_tracker.h"
 #include "clockwork/telemetry/controller_action_logger.h"
 #include "clockwork/thread.h"
 #include "clockwork/api/worker_api.h"
+#include "clockwork/sliding_window.h"
 
 namespace clockwork {
 namespace scheduler {
@@ -237,8 +239,8 @@ class Scheduler : public clockwork::Scheduler {
         unsigned max_batch_size;
 
         std::map<unsigned, uint64_t> estimates;
-        std::map<unsigned, util::SlidingWindow*> estimators;
-        util::SlidingWindow* weights_estimator;
+        std::map<unsigned, SlidingWindow*> estimators;
+        SlidingWindow* weights_estimator;
         uint64_t weights_estimate;
         uint64_t request_id_seed = 0;
 
@@ -303,8 +305,8 @@ class Scheduler : public clockwork::Scheduler {
      public:
         network::controller::WorkerConnection* worker;
         Scheduler* scheduler;
-        util::WorkerTracker exec;
-        util::WorkerTracker loadweights;
+        WorkerTracker exec;
+        WorkerTracker loadweights;
 
         unsigned free_pages;
         bool eviction_required = false;

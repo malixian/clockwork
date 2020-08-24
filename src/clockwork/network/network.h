@@ -9,6 +9,7 @@
 #include "clockwork/network/message.h"
 #include "tbb/concurrent_queue.h"
 #include "clockwork/util.h"
+#include "clockwork/sliding_window.h"
 
 namespace clockwork {
 namespace network {
@@ -52,8 +53,8 @@ public:
 
   int64_t local_delta_ = INT64_MAX;
   int64_t remote_delta_ = INT64_MAX;
-  util::SlidingWindowT<int64_t> local_delta_tracker = util::SlidingWindowT<int64_t>(1024);
-  util::SlidingWindowT<int64_t> remote_delta_tracker = util::SlidingWindowT<int64_t>(1024);
+  SlidingWindowT<int64_t> local_delta_tracker = SlidingWindowT<int64_t>(1024);
+  SlidingWindowT<int64_t> remote_delta_tracker = SlidingWindowT<int64_t>(1024);
 
 };
 

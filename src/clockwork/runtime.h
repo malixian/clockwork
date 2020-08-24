@@ -145,7 +145,9 @@ protected:
 
 		num_gpus = config.num_gpus;
 
+		// A background thread that queries the current GPU clock periodically
 		gpu_clock = new util::GPUClockState(num_gpus);
+  		threading::initLowPriorityThread(gpu_clock->thread);
 
 		manager = new MemoryManager(config);
 

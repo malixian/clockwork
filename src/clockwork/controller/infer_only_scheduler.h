@@ -6,8 +6,10 @@
 #include <atomic>
 #include <algorithm>
 #include "clockwork/controller/scheduler.h"
+#include "clockwork/controller/worker_tracker.h"
 #include "clockwork/telemetry/controller_action_logger.h"
 #include "clockwork/thread.h"
+#include "clockwork/sliding_window.h"
 
 
 namespace clockwork {
@@ -76,7 +78,7 @@ class InferOnlyScheduler : public Scheduler {
     class Model {
      public:
         std::map<unsigned, uint64_t> estimates;
-        std::map<unsigned, util::SlidingWindow*> estimators;
+        std::map<unsigned, SlidingWindow*> estimators;
 
         uint64_t request_id_seed = 0;
         unsigned id;
@@ -96,7 +98,7 @@ class InferOnlyScheduler : public Scheduler {
      public:
         InferOnlyScheduler* scheduler;
         network::controller::WorkerConnection* worker;
-        util::WorkerTracker tracker;
+        WorkerTracker tracker;
 
         unsigned gpu_id;
         unsigned worker_id;

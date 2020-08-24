@@ -84,7 +84,7 @@ InferOnlyScheduler::Model::Model(BatchedModelState &state)
         if (batch_size == 1 || 
             (estimate > 0 && estimate < InferOnlyScheduler::max_allowable_exec_time)) {
             estimates[batch_size] = estimate * InferOnlyScheduler::default_clock;
-            estimators[batch_size] = new util::SlidingWindow(InferOnlyScheduler::estimate_window_size);
+            estimators[batch_size] = new SlidingWindow(InferOnlyScheduler::estimate_window_size);
             supported_batch_sizes.push_back(batch_size);
         } else {
             std::cout << "Excluding b" << batch_size << " with estimate " << estimate << "model=" << state.model_path << std::endl;

@@ -4,6 +4,7 @@
 #include <string>
 #include "clockwork/controller/scheduler.h"
 #include "clockwork/telemetry/controller_action_logger.h"
+#include "clockwork/sliding_window.h"
 
 namespace clockwork {
 
@@ -39,7 +40,7 @@ class SmartScheduler : public Scheduler {
 
     std::vector<unsigned> batch_sizes;
     std::map<unsigned, uint64_t> estimates;  // store latency * freq
-    std::map<unsigned, util::SlidingWindow>
+    std::map<unsigned, SlidingWindow>
         sliding_windows;  // track latency * freq
 
     void set_batch_sizes(std::vector<unsigned> &sizes);

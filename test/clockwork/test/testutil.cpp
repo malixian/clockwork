@@ -12,6 +12,7 @@
 #include "clockwork/memory.h"
 #include "clockwork/config.h"
 #include "clockwork/controller/infer_and_load_scheduler.h"
+#include "clockwork/sliding_window.h"
 #include <catch2/catch.hpp>
 #include <stdio.h>
 
@@ -19,7 +20,7 @@ using namespace clockwork;
 using namespace clockwork::model;
 
 TEST_CASE("Test estimator", "[estimator] [util]") {
-    util::SlidingWindow window(3);
+    SlidingWindow window(3);
 
     window.insert(70);
     REQUIRE(window.get_value(0) == 70);

@@ -19,7 +19,7 @@ void SmartScheduler::ExecutionProfiler::set_estimates(
 void SmartScheduler::ExecutionProfiler::set_window_size(unsigned size) {
   this->window_size = size;
   for (auto const &s : batch_sizes) {
-    sliding_windows[s] = util::SlidingWindow(size);
+    sliding_windows[s] = SlidingWindow(size);
   }
 }
 
@@ -52,7 +52,7 @@ void SmartScheduler::ExecutionProfiler::insert(unsigned batch, uint64_t latency,
 }
 
 void SmartScheduler::ExecutionProfiler::update_estimate(unsigned batch) {
-  util::SlidingWindow &sliding_window = sliding_windows[batch];
+  SlidingWindow &sliding_window = sliding_windows[batch];
   if (sliding_window.get_size() == 0) {
     return;
   }

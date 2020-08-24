@@ -9,9 +9,11 @@
 #include <sstream>
 #include <set>
 #include "clockwork/controller/scheduler.h"
+#include "clockwork/controller/worker_tracker.h"
 #include "clockwork/telemetry/controller_action_logger.h"
 #include "clockwork/thread.h"
 #include "clockwork/api/worker_api.h"
+#include "clockwork/sliding_window.h"
 #include "tbb/mutex.h"
 #include "tbb/queuing_mutex.h"
 
@@ -301,10 +303,10 @@ class Scheduler : public clockwork::Scheduler {
 
         std::atomic_flag estimates_in_use;
         std::vector<uint64_t> estimates;
-        std::map<unsigned, util::SlidingWindow*> estimators;
+        std::map<unsigned, SlidingWindow*> estimators;
 
         std::atomic_flag weights_in_use;
-        util::SlidingWindow* weights_estimator;
+        SlidingWindow* weights_estimator;
         uint64_t weights_estimate;
 
         std::atomic_uint64_t request_id_seed_ = 0;
@@ -380,8 +382,8 @@ class Scheduler : public clockwork::Scheduler {
      private:
         network::controller::WorkerConnection* worker;
         Scheduler* scheduler;
-        util::WorkerTracker exec;
-        util::WorkerTracker loadweights;
+        WorkerTracker exec;
+        WorkerTracker loadweights;
 
         unsigned free_pages;
         bool eviction_required = false;

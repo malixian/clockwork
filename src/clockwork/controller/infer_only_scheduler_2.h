@@ -10,6 +10,8 @@
 #include "clockwork/controller/scheduler.h"
 #include "clockwork/telemetry/controller_action_logger.h"
 #include "clockwork/thread.h"
+#include "clockwork/sliding_window.h"
+#include "clockwork/controller/worker_tracker.h"
 
 namespace clockwork {
 namespace scheduler {
@@ -87,7 +89,7 @@ class InferOnlyScheduler : public Scheduler {
         unsigned max_batch_size;
 
         std::map<unsigned, uint64_t> estimates;
-        std::map<unsigned, util::SlidingWindow*> estimators;
+        std::map<unsigned, SlidingWindow*> estimators;
         uint64_t request_id_seed = 0;
 
         std::queue<Request*> queue;
@@ -114,7 +116,7 @@ class InferOnlyScheduler : public Scheduler {
      public:
         InferOnlyScheduler* scheduler;
         network::controller::WorkerConnection* worker;
-        util::WorkerTracker tracker;
+        WorkerTracker tracker;
 
         unsigned gpu_id;
         unsigned worker_id;

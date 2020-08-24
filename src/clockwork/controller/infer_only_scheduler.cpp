@@ -72,7 +72,7 @@ InferOnlyScheduler::Model::Model(BatchedModelState &state) : id(state.id) {
         } else {
             estimates[batch_size] = it->second * InferOnlyScheduler::default_clock;
         }
-        estimators[batch_size] = new util::SlidingWindow(InferOnlyScheduler::estimate_window_size);
+        estimators[batch_size] = new SlidingWindow(InferOnlyScheduler::estimate_window_size);
     }
 }
 

@@ -472,14 +472,14 @@ Scheduler::Model::Model(Scheduler* scheduler, BatchedModelState &state)
                 estimates.resize(batch_size+1, 100000UL * Scheduler::default_clock);
             }
             estimates[batch_size] = estimate * Scheduler::default_clock;
-            estimators[batch_size] = new util::SlidingWindow(Scheduler::estimate_window_size);
+            estimators[batch_size] = new SlidingWindow(Scheduler::estimate_window_size);
             supported_batch_sizes.push_back(batch_size);
         } else {
             std::cout << "Excluding b" << batch_size << " with estimate " << estimate << "model=" << state.model_path << std::endl;
         }
     }
 
-    weights_estimator = new util::SlidingWindow(Scheduler::estimate_window_size);
+    weights_estimator = new SlidingWindow(Scheduler::estimate_window_size);
     weights_estimate = state.weights_transfer_duration;
 
     batch_lookup_ = util::make_batch_lookup(supported_batch_sizes);

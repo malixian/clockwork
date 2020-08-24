@@ -256,9 +256,7 @@ void printCudaVersion() {
   std::cout << "Using CUDA Driver " << driverVersion << " Runtime " << runtimeVersion << std::endl;
 }
 
-GPUClockState::GPUClockState(unsigned num_gpus) : clock(num_gpus), checker(&GPUClockState::run, this) {
-  threading::initLowPriorityThread(checker);
-}
+GPUClockState::GPUClockState(unsigned num_gpus) : clock(num_gpus), thread(&GPUClockState::run, this) {}
 
 void GPUClockState::run() {
   nvmlReturn_t status;
@@ -306,7 +304,7 @@ void GPUClockState::shutdown() {
   alive = false;
 }
 void GPUClockState::join() {
-  checker.join();
+  thread.join();
 }
 
 unsigned GPUClockState::get(unsigned gpu_id) {
