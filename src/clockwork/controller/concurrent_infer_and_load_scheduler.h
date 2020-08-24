@@ -10,6 +10,7 @@
 #include <set>
 #include "clockwork/controller/scheduler.h"
 #include "clockwork/controller/worker_tracker.h"
+#include "clockwork/controller/load_tracker.h"
 #include "clockwork/telemetry/controller_action_logger.h"
 #include "clockwork/thread.h"
 #include "clockwork/api/worker_api.h"
@@ -59,117 +60,6 @@ class Scheduler : public clockwork::Scheduler {
         std::string actions_filename = "/local/clockwork_action_log.tsv");
 
 
-    class WorkTracker2 {
-     public:
-
-        uint64_t last_print;
-        uint64_t print_every = 1000000000UL;
-        struct Demand {
-            int model_id;
-            int64_t exec_size;
-            int64_t loadweights_size;
-        };
-
-     private:
-        const int64_t capacity; // For now just use the slo
-        struct ModelPriority;
-        struct Model {
-            int id;
-            int gpu_count = 0;
-            std::vector<bool> gpus;
-            std::vector<bool> loading;
-
-            int64_t outstanding_exec = 0;
-            int64_t outstanding_loadweights = 0;
-
-            int64_t completed_exec = 0;
-            int64_t completed_loadweights = 0;
-            int64_t timedout_loadweights = 0;
-
-            std::vector<uint64_t> allocations;
-            std::vector<ModelPriority*> priorities;
-            std::vector<uint64_t> last_used;
-        };
-
-        struct ModelPriority {
-            int64_t priority = 0;
-            int preference = 0;
-            bool is_empty = true;
-            uint64_t last_used = 0;
-            Model* model;
-            ModelPriority(Model* model) : model(model) {}
-        };
-
-        struct CompareModelPriority {
-            bool operator() (const ModelPriority* a, const ModelPriority* b) const {
-                if (a->is_empty && b->is_empty) {
-                    return a->last_used > b->last_used;
-                } else if (!a->is_empty && !b->is_empty) {
-                    if (a->priority == b->priority) {
-                        return a->last_used > b->last_used;
-                    } else {
-                        return a->priority > b->priority;
-                    }
-                } else {
-                    return b->is_empty;
-                }
-            }
-        } sort_by_priority;
-
-        struct GPU {
-            int id;
-            int64_t outstanding = 1000000UL; // always assume 1ms outstanding work
-            double weight = 0.01;
-            std::vector<bool> models;
-            std::set<ModelPriority*, CompareModelPriority> cached;
-            std::set<ModelPriority*, CompareModelPriority> not_cached;
-        };
-
-        struct Request {
-            int model_id;
-            int64_t loadweights_size;
-            uint64_t time;
-
-            friend bool operator < (const Request& lhs, const Request &rhs) {
-                return lhs.time < rhs.time;
-            }
-            friend bool operator > (const Request& lhs, const Request &rhs) {
-                return lhs.time > rhs.time;
-            }
-        };
-
-        uint64_t seqno_seed = 0;
-        std::vector<Model> models;
-        std::vector<GPU> gpus;
-        const unsigned n_models;
-        const unsigned n_gpus;
-
-        std::priority_queue<Request, std::vector<Request>, std::greater<Request>> requests;
-
-        void attach(Model &model);
-        void detach(Model &model);
-        void updatePriority(Model &model);
-        void clearWork(Model &model);
-        void distributeWork(Model &model);
-        void addGPU(Model &model, GPU &gpu);
-        void addGPUcomplete(Model &model, GPU &gpu);
-        void removeGPU(Model &model, GPU &gpu);
-        void checkRequests();
-
-     public:
-        tbb::queuing_mutex mutex;
-
-        WorkTracker2(int num_gpus, int num_models, uint64_t capacity);
-        Demand addRequest(int model_id, int64_t size, uint64_t start_exec_by, uint64_t start_loadweights_by);
-        void requestExecuting(Demand &demand, int gpu_id);
-        void requestCompleted(Demand &demand, int gpu_id);
-        void requestCancelled(Demand &demand, int gpu_id);
-        int loadModel(int gpu_id, bool requires_eviction = false);
-        void loadModelComplete(int gpu_id, int model_id, bool success);
-        int evictModel(int gpu_id);
-    };
-
-
     class Model;
     class RequestImpl {
      public:
@@ -183,7 +73,7 @@ class Scheduler : public clockwork::Scheduler {
         clientapi::InferenceRequest request;
         clientapi::InferenceResponse response;
 
-        WorkTracker2::Demand demand;
+        LoadTracker::Demand demand;
 
      private:
         std::atomic_bool locked;
@@ -446,7 +336,7 @@ class Scheduler : public clockwork::Scheduler {
  public:
 
     // Thread-safe clockwork state
-    WorkTracker2* tracker;
+    LoadTracker* tracker;
 
     // Non-mutable so thread-safe
     std::vector<GPU*> gpus;

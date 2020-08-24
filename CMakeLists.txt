@@ -71,6 +71,7 @@ add_library( clockwork
 	src/clockwork/network/worker.cpp
 	src/clockwork/network/controller.cpp
 	src/clockwork/controller/controller.cpp
+	src/clockwork/controller/load_tracker.cpp
 	src/clockwork/controller/closed_loop_controller.cpp
 	src/clockwork/controller/direct_controller.cpp
 	src/clockwork/controller/fifo_controller.cpp
