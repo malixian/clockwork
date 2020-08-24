@@ -327,6 +327,22 @@ target_link_libraries(
     ${Boost_FILESYSTEM_LIBRARY}
 )
 
+# Simple Clockwork client demonstrating usage
+add_executable (simpleclient src/simpleclient.cpp )
+target_link_libraries(
+    simpleclient
+	clockwork
+	clockwork_proto
+    Threads::Threads
+    dl
+    cuda
+    cudart
+    tvm_runtime
+    stdc++fs
+    ${Boost_SYSTEM_LIBRARY}
+    ${Boost_FILESYSTEM_LIBRARY}
+)
+
 # Spams the client API
 add_executable (netclient src/network/netclient.cpp )
 target_link_libraries(
