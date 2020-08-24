@@ -283,7 +283,8 @@ void ModelImpl::infer(std::vector<uint8_t> &input, std::function<void(std::vecto
 	uint64_t t_send = util::now();
 	client->connection->infer(request, [this, input_data, t_send, onSuccess, onError](clientapi::InferenceResponse &response) {
 		uint64_t t_receive = util::now();
-		if (print) std::cout << " --> " << response.str() << std::endl;
+		float duration_ms = (t_receive - t_send) / 1000000.0;
+		if (print) std::cout << " --> " << response.str() << " (" << duration_ms << " ms)" << std::endl;
 		if (response.header.status == clockworkSuccess)
 		{
 			uint8_t *output = static_cast<uint8_t *>(response.output);

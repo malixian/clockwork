@@ -80,6 +80,25 @@ int main(int argc, char *argv[])
     while (true) {
 	    try {
 	    	std::vector<uint8_t> output = model->infer(input);
+
+	    	// Just for fun, print top-5 from output; this kinda assumes image classification
+	    	if (output.size() < 20) break;
+
+	    	// Convert to floats
+            float* outputf = static_cast<float*>(static_cast<void*>(output.data()));
+            unsigned output_size = model->output_size()/4;
+ 
+            // Order
+            std::priority_queue<std::pair<float, unsigned>> q;
+            for (unsigned i = 0; i < output_size; i++) {
+                q.push(std::pair<float, unsigned>(outputf[i], i));
+            }
+            int topn = 5;
+            for (unsigned i = 0; i < topn; i++) {
+                std::cout << "output[" << q.top().second << "] = " << q.top().first << std::endl;
+                q.pop();
+            }
+
 	    	break;
 	    } catch (const clockwork_initializing& e) {
 	    	// Wait for controller to finish initializing then retry
