@@ -228,6 +228,12 @@ std::map<std::string, std::string> get_clockwork_modelzoo() {
   return result;
 }
 
+bool client_inputs_disabled() {
+  auto disable_inputs = std::getenv("CLOCKWORK_DISABLE_INPUTS");
+  if (disable_inputs == nullptr) { return false; }
+  return std::string(disable_inputs) == "1";
+}
+
 std::string get_clockwork_model(std::string shortname) {
   auto modelzoo = get_clockwork_modelzoo();
   auto it = modelzoo.find(shortname);

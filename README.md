@@ -151,6 +151,16 @@ Some of these values can be checked by running the Clockwork profiler with:
 
 IMPORTANT: when you restart your machine, you will need to set persistence mode again.  Run the checker frequently!
 
+# Environment Variables
+
+You may need to set the below environment variables depending on what you are running
+
+Set `CLOCKWORK_DISABLE_INPUTS=1` to disable client-side sending of inputs.  This is useful for experimentation.  This value can be overridden with the `disable_inputs()` method call on the `Client` class.  The controller also has command-line options for disabling inputs (clients will send inputs, but the controller will not forward them to workers).
+
+Set `CLOCKWORK_MODEL_DIR` to the location of your modelzoo checkout (e.g. `clockwork-modelzoo-volta`).
+
+Set `AZURE_TRACE_DIR` to the location of your `azure-functions` trace checkout.
+
 # Troubleshooting
 
 Currently, the CMakeLists assumes CUDA lives in either `/usr/local/cuda/lib64` (the default location in Ubuntu 14.x) or `/usr/lib/x86_64-linux-gnu/nvidia/current` (the default location for MPI cluster machines).  If you get build errors saying cannot find CUDA or cannot find nvidia-ml, then you'll need to update the `include_directories` and `link_directories` directives in the CMakeLists.txt with the CUDA location on your machine.

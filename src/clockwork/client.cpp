@@ -42,7 +42,7 @@ public:
 	bool print;
 	NetworkClient *client;
 
-	bool inputs_enabled_ = false;
+	bool inputs_enabled_;
 	int user_id_;
 	const int model_id_;
 	const std::string source_;
@@ -215,7 +215,8 @@ std::future<ModelSet> NetworkClient::ls_async()
 }
 
 ModelImpl::ModelImpl(NetworkClient *client, int model_id, std::string source, size_t input_size, size_t output_size, bool print) : 
-	client(client), user_id_(client->user_id), model_id_(model_id), source_(source), input_size_(input_size), output_size_(output_size), print(print)
+	client(client), user_id_(client->user_id), model_id_(model_id), source_(source), input_size_(input_size), output_size_(output_size), print(print),
+	inputs_enabled_(!util::client_inputs_disabled())
 {
 }
 

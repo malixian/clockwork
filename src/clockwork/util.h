@@ -87,6 +87,7 @@ std::string get_modelzoo_dir();
 std::string get_clockwork_model(std::string shortname);
 
 std::map<std::string, std::string> get_clockwork_modelzoo();
+bool client_inputs_disabled();
 
 class GPUClockState {
  private:
