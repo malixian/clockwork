@@ -38,7 +38,8 @@ Scheduler::RequestImpl::RequestImpl(
         scheduler(scheduler),
         request(request), 
         callback(callback),
-        locked(false) {
+        locked(false),
+        response_sent(ATOMIC_FLAG_INIT) {
     // Set the response header fields now
     response.header.user_request_id = request.header.user_request_id;
     response.header.message = "";
@@ -92,6 +93,9 @@ void Scheduler::RequestImpl::set_error(int status, std::string message) {
 bool Scheduler::RequestImpl::complete(uint64_t now, int gpu_id) {
     if (print_debug) std::cout << ("Client <--  " + response.str() + "\n");
 
+    // Here to ensure only one response is sent
+    if (response_sent.test_and_set()) return false;
+
     // Set the departure time (controller.cpp can also do this, 
     // but we want to report departure time back to the action to determine goodput)
     response.departure = now;
@@ -111,6 +115,9 @@ void Scheduler::RequestImpl::timeout() {
 
     if (print_debug) std::cout << ("Client <--  " + response.str() + "\n");
 
+    // Here to ensure only one response is sent
+    if (response_sent.test_and_set()) return;
+
     if (response.header.status == 0)
         response.header.status = clockworkTimeout;
     response.departure = util::now();
@@ -120,7 +127,7 @@ void Scheduler::RequestImpl::timeout() {
 
     {
         tbb::queuing_mutex::scoped_lock lock(model->scheduler->tracker->mutex);
-        model->scheduler->tracker->requestCancelled(demand, -1);
+        model->scheduler->tracker->requestCancelled(demand);
     }
 }
 
@@ -182,33 +189,26 @@ void Scheduler::Model::enqueue(Request request) {
         batch_size_estimates[i] = estimate(supported_batch_sizes[i]);
     }
 
-    {
-        tbb::queuing_mutex::scoped_lock lock(scheduler->tracker->mutex);
-
-        request->demand = scheduler->tracker->addRequest(
-            id, batch_size_estimates[1], request->exec_slo, request->weights_slo);
+    // Create the request's strategies
+    request->id = request_id_seed_++;
+    request->strategies.reserve(batch_size_estimates.size());
+    for (int i = batch_size_estimates.size()-1; i >= 0; i--) {
+        Strategy strategy = std::make_shared<StrategyImpl>();
+        strategy->priority = request->deadline - batch_size_estimates[i];
+        strategy->deadline = request->deadline;
+        strategy->batch_size = supported_batch_sizes[i];
+        strategy->request_id = request->id;
+        strategy->model = this;
+        request->strategies.push_back(strategy);
     }
 
     // Enqueue the request
-    request->id = request_id_seed_++;
     requests_queued++;
     incoming.push(request);
 
     // Enqueue strategies to all loaded models
     for (auto &instance : instances) {
-        if (instance->loaded) {
-            for (unsigned i = 0; i < batch_size_estimates.size(); i++) {
-                auto strategy = new Scheduler::InferStrategy();
-                strategy->priority = request->deadline - batch_size_estimates[i];
-                strategy->deadline = request->deadline;
-                strategy->request_id = request->id;
-                strategy->batch_size = supported_batch_sizes[i];
-                strategy->instance = instance;
-                strategy->version = instance->version;
-
-                instance->gpu->add_strategy(strategy);
-            }
-        }
+        instance->gpu->add_strategies(request);
     }
 }
 
@@ -224,17 +224,7 @@ void Scheduler::Model::enqueue(ModelInstance* instance) {
     while (incoming.try_pop(newrequest)) queue.push_back(newrequest);
     
     for (auto &request : queue) {
-        for (unsigned i = 0; i < batch_size_estimates.size(); i++) {
-            auto strategy = new Scheduler::InferStrategy();
-            strategy->priority = request->deadline - batch_size_estimates[i];
-            strategy->deadline = request->deadline;
-            strategy->request_id = request->id;
-            strategy->batch_size = supported_batch_sizes[i];
-            strategy->instance = instance;
-            strategy->version = instance->version;
-
-            instance->gpu->add_strategy(strategy);
-        }
+        instance->gpu->add_strategies(request);
     }
 }
 
@@ -244,27 +234,28 @@ void Scheduler::Model::check_timeouts(uint64_t free_at) {
         if (request->deadline >= free_at) break;
 
         request->set_error(clockworkControllerCouldNotStartInTime, "");
-        queue.pop_front();
+        request->invalidate_strategies();
         requests_queued--;
-        // Don't time it out here -- let the checker thread do that
+
+        queue.pop_front();
     }
 }
 
 Scheduler::InferAction* Scheduler::Model::try_dequeue(
         uint64_t free_at,
         unsigned gpu_clock,
-        Scheduler::InferStrategy* strategy,
+        Strategy &strategy,
         bool &retry)
 {   
-    // Strategy already past its deadline
-    if (strategy->deadline < util::now()) {
+    uint64_t exec_time = estimate(strategy->batch_size, gpu_clock);
+    uint64_t completion_time = free_at + exec_time;
+
+    if (!strategy->valid || strategy->deadline < completion_time) {
         retry = false;
         return nullptr;
     }
 
-    InferAction* action;
-    uint64_t exec_time;
-    uint64_t completion_time;
+    InferAction* action;    
     {
         tbb::queuing_mutex::scoped_lock lock;
 
@@ -275,6 +266,11 @@ Scheduler::InferAction* Scheduler::Model::try_dequeue(
         }
         retry = false;
 
+        // Strategy or request may have been invalidated while we were waiting
+        if (!strategy->valid || strategy->deadline <= completion_time) {
+            return nullptr;
+        }
+
         // Pull any new requests
         Request newrequest;
         while (incoming.try_pop(newrequest)) queue.push_back(newrequest);
@@ -282,22 +278,18 @@ Scheduler::InferAction* Scheduler::Model::try_dequeue(
         // Drop any timed out requests
         check_timeouts(free_at);
 
-        // The model instance was updated since this strategy was created
-        if (strategy->instance->version != strategy->version) return nullptr;
-
-        // Pull any new requests
-        while (incoming.try_pop(newrequest)) queue.push_back(newrequest);
-
         // Insufficient requests queued
         if (queue.size() < strategy->batch_size) return nullptr;
 
         // The request that generated this strategy has already completed (e.g. as part of a previous batch)
-        if (queue.front()->id > strategy->request_id) return nullptr;
+        // (Now that strategies are explicitly invalidated, this check should be unnecessary)
+        // if (queue.front()->id > strategy->request_id) return nullptr;
 
         // See if the strategy can actually execute given the current GPU clock
-        exec_time = estimate(strategy->batch_size, gpu_clock);
-        completion_time = free_at + exec_time;
-        if (completion_time > strategy->deadline) return nullptr;
+        // (This check is done before acquiring the lock)
+        // exec_time = estimate(strategy->batch_size, gpu_clock);
+        // completion_time = free_at + exec_time;
+        // if (completion_time > strategy->deadline) return nullptr;
 
         // See if this strategy has enough requests to fill its batch
         //   ie. that (batch_size-1) new requests arrived after this request arrived
@@ -313,6 +305,7 @@ Scheduler::InferAction* Scheduler::Model::try_dequeue(
                 if (available_requests == strategy->batch_size) {
                     // Have to inherit new deadline
                     strategy->deadline = (*it)->deadline;
+                    strategy->request_id = (*it)->id;
                     break;
                 }
             }
@@ -341,11 +334,11 @@ Scheduler::InferAction* Scheduler::Model::try_dequeue(
         while (queue.size() > 0 
                 && queue.front()->id != strategy->request_id
                 && queue.front()->deadline < completion_time) {
-            auto &request = queue.front();
+            Request request = queue.front();
             request->set_error(clockworkControllerSkipped, "");
-            queue.pop_front();
             requests_queued--;
-            // Don't time it out here - let the queue checker do that
+            request->invalidate_strategies();
+            queue.pop_front();
         }
 
         // This shouldn't happen
@@ -356,8 +349,9 @@ Scheduler::InferAction* Scheduler::Model::try_dequeue(
             auto &request = queue.front();
             request->lock();
             action->requests.push_back(request);
-            queue.pop_front();
+            request->invalidate_strategies();
             requests_queued--;
+            queue.pop_front();
         }
     }
     action->set_expectations(free_at, exec_time, gpu_clock);
@@ -476,14 +470,15 @@ float Scheduler::InferAction::complete(uint64_t now, int gpu_id) {
 }
 
 void Scheduler::InferAction::set_expectations(uint64_t exec_start, uint64_t duration, int clock) {
+    uint64_t now = util::now();
     action->expected_duration = duration;
     action->expected_exec_complete = exec_start + duration;
     action->expected_gpu_clock = clock;
     // action->earliest = exec_start;
     // action->latest = action->earliest + Scheduler::latest_delta;
     // action->earliest = std::max(util::now() + future, exec_start - Scheduler::latest_delta);
-    action->earliest = util::now();
-    action->latest = std::max(util::now() + future + scheduler->latest_delta, exec_start + scheduler->latest_delta);
+    action->earliest = now;
+    action->latest = std::max(now + future + scheduler->latest_delta, exec_start + scheduler->latest_delta);
     // action->earliest = util::now() - Scheduler::schedule_ahead;
     // action->latest = action->expected_exec_complete + Scheduler::latest_delta;
 }
@@ -503,10 +498,11 @@ Scheduler::LoadWeightsAction::LoadWeightsAction(
 }
 
 void Scheduler::LoadWeightsAction::set_expectations(uint64_t exec_start, uint64_t duration) {
+    uint64_t now = util::now();
     action->expected_duration = duration;
     action->expected_exec_complete = exec_start + duration;
-    action->earliest = std::max(util::now() + future, exec_start - scheduler->latest_delta);
-    action->latest = std::max(util::now() + future + scheduler->latest_delta, exec_start + scheduler->latest_delta);
+    action->earliest = std::max(now + future, exec_start - scheduler->latest_delta);
+    action->latest = std::max(now + future + scheduler->latest_delta, exec_start + scheduler->latest_delta);
 }
 
 void Scheduler::LoadWeightsAction::set_error(std::shared_ptr<workerapi::ErrorResult> &error) {
@@ -587,10 +583,14 @@ void Scheduler::GPU::send_action(InferAction* action) {
 
     // Immediately mark the requests as executing for load balancer
     {
-        tbb::queuing_mutex::scoped_lock lock(scheduler->tracker->mutex);
+        std::vector<LoadTracker::Demand*> demands;
+        demands.reserve(action->requests.size());
         for (auto &request : action->requests) {
-            scheduler->tracker->requestExecuting(request->demand, id);
+            demands.push_back(&(request->demand));
         }
+
+        tbb::queuing_mutex::scoped_lock lock(scheduler->tracker->mutex);
+        scheduler->tracker->requestsExecuting(demands, id);
     }
 
     if (print_debug) std::cout << ("Worker <--  " + infer->str() + "\n");
@@ -667,20 +667,20 @@ std::vector<Scheduler::EvictWeightsAction*> Scheduler::GPU::evict_pages(unsigned
 }
 
 bool Scheduler::GPU::try_load(uint64_t available) {
-    uint64_t now = util::now();
-    if (last_load + 100000UL > now) return false;
+    if (last_load + 100000UL > util::now()) return false;
 
     ModelInstance* instance;
     unsigned size;
     std::vector<EvictWeightsAction*> evict_actions;
     {
+        tbb::queuing_mutex::scoped_lock load_lock;
         tbb::queuing_mutex::scoped_lock lock;
 
         // if (!lock.try_acquire(scheduler->tracker->mutex)) return false;
+        load_lock.acquire(scheduler->tracker->load_mutex);
         lock.acquire(scheduler->tracker->mutex);
 
-        last_load = now;
-
+        last_load = util::now();
 
         int model_id = scheduler->tracker->loadModel(id, eviction_required);
         if (model_id == -1) {
@@ -731,63 +731,61 @@ void Scheduler::GPU::check_pending() {
 
     // Handle all incoming results
     std::shared_ptr<workerapi::Result> result;
-    while (results.try_pop(result)) {
+    while (incoming_results.try_pop(result)) {
         handle_result(result);
         active = true;
     }
 
-    uint64_t exec_at = exec.available();
-
-    // // See if any model instances are at the point where their actions can be scheduled
-    // while (loading.size() > 0) {
-    //     auto &load = loading.front();
-
-    //     if (load.version == load.instance->version && (load.instance->loading || load.instance->loaded)) {
-    //         if (load.available_at > exec_at) break;
-
-    //         // Ready to enqueue infer strategies for this model
-    //         load.instance->model->enqueue(load.instance);
-    //         active = true;
-    //     }
-    //     loading.pop();
-    // }
-
-    // Drain all incoming strategies, add to priority queue
-    InferStrategy* strategy;
-    while (strategies.try_pop(strategy)) {
-        queue.push(strategy);
+    // Drain all incoming strategies, add to strategy_queue
+    Request request;
+    while (incoming_strategies.try_pop(request)) {
+        for (auto &strategy : request->strategies) {
+            if (strategy->valid) {
+                strategy_queue.push(strategy);
+            }
+        }
         active = true;
     }
 
-    // Drop all strategies that have passed
+    // Drop any strategies already processed or with missed deadlines
     uint64_t now = util::now();
-    while (queue.size() > 0) {
-        auto strategy = queue.top();
-        if (strategy->deadline > now) break;
-        queue.pop();
-        delete strategy;
+    while (strategy_queue.size() > 0) {
+        auto &strategy = strategy_queue.top();
+
+        if (strategy->valid && strategy->deadline > now) {
+            break;
+        }
+
+        strategy_queue.pop();
     }
 
+    // if (last_print + 1000000000UL < now) {
+    //     last_print = now;
+    //     std::stringstream s;
+    //     s << "GPU " << id << " strategy queue " << strategy_queue.size() << std::endl;
+    //     std::cout << s.str();
+    // }
+
     // Schedule infer actions
+    uint64_t exec_at;
     uint64_t schedule_until = now + scheduler->schedule_ahead;
-    while ((exec_at = exec.available()) < schedule_until && queue.size() > 0) {
-        InferStrategy* strategy = queue.top();
+    while ((exec_at = exec.available()) < schedule_until && strategy_queue.size() > 0) {
+        Strategy strategy = strategy_queue.top();
 
-        // bool retry = last_exec + 200000UL > util::now();
-        bool retry = false;
-        InferAction* action = strategy->instance->model->try_dequeue(exec_at, exec.clock(), strategy, retry);
+        // Only valid strategies, for which this GPU has the model loaded
+        if (strategy->valid && instances[strategy->model->id]->loaded) {
+            bool retry = false;
+            InferAction* action = strategy->model->try_dequeue(exec_at, exec.clock(), strategy, retry);
 
-        if (retry) break;
+            if (retry) break;
 
-        queue.pop();
-
-        delete strategy;
-
-        if (action != nullptr) {
-            send_action(action);
-            last_exec = util::now();
-            active = true;
+            if (action != nullptr) {
+                send_action(action);
+                active = true;
+            }
         }
+
+        strategy_queue.pop();
     }
 
     // Schedule one load action
@@ -799,11 +797,11 @@ void Scheduler::GPU::check_pending() {
     }
 
     if (!active) {
-        usleep(50);
+        usleep(100);
     }
 }
 
-void Scheduler::GPU::handle_result(std::shared_ptr<workerapi::Result> result) {
+void Scheduler::GPU::handle_result(std::shared_ptr<workerapi::Result> &result) {
     auto it = callbacks.find(result->id);
     CHECK(it != callbacks.end()) 
         << "Received result for non-existent action " << result->str();
@@ -1087,34 +1085,72 @@ void Scheduler::start(std::vector<network::controller::WorkerConnection*> worker
     initialize_model_instances();
     print_status();
 
-    this->thread = std::thread(&Scheduler::run, this);
-    threading::initHighPriorityThread(this->thread);
+    uint64_t num_admission_threads = 2;
+    for (int i = 0; i < num_admission_threads; i++) {
+        admission_threads.push_back(std::thread(&Scheduler::run_admission_thread, this));
+        threading::initHighPriorityThread(admission_threads[i]);
+    }
 
     // Create and start the printer thread
     this->printer = ControllerActionTelemetry::log_and_summarize(actions_filename, print_interval);
 
-    // Create and start the GPU threads
-    for (unsigned i = 0; i < gpus.size(); i++) {
-        std::vector<GPU*> gpus_for_thread = {gpus[i]};
-        gpu_threads.push_back(std::thread(&Scheduler::run_gpu_thread, this, gpus_for_thread));
-        threading::initLowPriorityThread(gpu_threads[i]);
+    // Allocate GPUs to threads
+    uint64_t max_gpu_threads = 10;
+    if (gpus.size() <= max_gpu_threads) {
+        // Create and start the GPU threads
+        for (unsigned i = 0; i < gpus.size(); i++) {
+            std::vector<GPU*> gpus_for_thread = {gpus[i]};
+            gpu_threads.push_back(std::thread(&Scheduler::run_gpu_thread, this, gpus_for_thread));
+            threading::initHighPriorityThread(gpu_threads[i]);
+        }
+    } else {
+        std::vector<std::vector<GPU*>> gpu_thread_allocations(max_gpu_threads);
+        for (unsigned i = 0; i < gpus.size(); i++) {
+            gpu_thread_allocations[i % max_gpu_threads].push_back(gpus[i]);
+        }
+
+        for (unsigned i = 0; i < gpu_thread_allocations.size(); i++) {
+            gpu_threads.push_back(std::thread(&Scheduler::run_gpu_thread, this, gpu_thread_allocations[i]));
+            threading::initHighPriorityThread(gpu_threads[i]);
+        }
     }
 }
 
-void Scheduler::handle_request(Request request) {
-    // Enqueue the request to the model
-    unsigned model_id = request->request.model_id;
-    if (model_id > models.size() || models[model_id] == nullptr) {
-        request->set_error(clockworkError, "Invalid model ID");
-        CHECK(!request->complete(util::now(), -1)) << "Erroneous request should not be successful";
-        return;
+struct tracker_request {
+    int model_id;
+    uint64_t size;
+    uint64_t start_exec_by;
+    uint64_t start_loadweights_by;
+};
+
+void Scheduler::handle_requests(std::vector<Request> &requests) {
+    std::vector<tracker_request> tracker_requests;
+    tracker_requests.reserve(requests.size());
+
+    for (auto &request : requests) {
+        int model_id = request->request.model_id;
+        Model* model = models[model_id];
+
+        request->set_model(model);
+        request->set_slo(default_slo);
+
+        tracker_requests.push_back({
+            model_id, model->estimate(1), request->exec_slo, request->weights_slo
+        });
     }
 
-    Model* model = models[model_id];
-    request->set_model(model);
-    request->set_slo(default_slo);
-    model->enqueue(request);
-    requests.push(request);
+    {
+        tbb::queuing_mutex::scoped_lock lock(tracker->mutex);
+
+        for (int i = 0; i < requests.size(); i++) {
+            auto &t = tracker_requests[i];
+            requests[i]->demand = tracker->addRequest(t.model_id, t.size, t.start_exec_by, t.start_loadweights_by);
+        }
+    }
+
+    for (auto &request : requests) {
+        request->model->enqueue(request);
+    }
 }
 
 void Scheduler::add_action(uint64_t action_id, GPU* gpu) {
@@ -1125,7 +1161,7 @@ void Scheduler::add_action(uint64_t action_id, GPU* gpu) {
     actions_in_use.clear();
 }
 
-void Scheduler::handle_result(std::shared_ptr<workerapi::Result> result) {
+void Scheduler::handle_result(std::shared_ptr<workerapi::Result> &result) {
     while (actions_in_use.test_and_set());
 
     auto it = outstanding_actions.find(result->id);
@@ -1140,25 +1176,81 @@ void Scheduler::handle_result(std::shared_ptr<workerapi::Result> result) {
     gpu->add_result(result);
 }
 
-void Scheduler::run() {
+// void Scheduler::process_requests() {
+//     // Process this many requests per iteration
+//     int max_requests = 50;
+//     std::vector<Request> requests;
+//     requests.reserve(max_requests);
 
-    // Start processing actions + results
+//     while (true) {
+//         // Dequeue up to `max_requests`
+//         Request request;
+//         while (requests.size() < max_requests && request_queue.try_pop(request)) {
+
+//             // Immediately drop requests to invalid models
+//             unsigned model_id = request->request.model_id;
+//             if (model_id > models.size() || models[model_id] == nullptr) {
+//                 request->set_error(clockworkError, "Invalid model ID");
+//                 CHECK(!request->complete(util::now(), -1)) << "Erroneous request should not be successful";
+//                 continue;
+//             }
+
+//             requests.push_back(request);
+//         }
+
+//         handle_requests(requests);
+
+//         requests.clear();
+//     }
+// }
+
+
+
+void Scheduler::run_admission_thread() {
+    // Process this many requests per iteration
+    int max_requests = 50;
+    std::vector<Request> requests;
+    requests.reserve(max_requests);
+
+    std::priority_queue<Request, std::deque<Request>, RequestImpl::DeadlineComparator> timeout_queue;
+
     while (true) {
+        // Dequeue up to `max_requests`
         Request request;
-        while (request_queue.try_pop(request)) {
-            handle_request(request);
+        while (requests.size() < max_requests && request_queue.try_pop(request)) {
+            // Immediately drop requests to invalid models
+            unsigned model_id = request->request.model_id;
+            if (model_id > models.size() || models[model_id] == nullptr) {
+                request->set_error(clockworkError, "Invalid model ID");
+                CHECK(!request->complete(util::now(), -1)) << "Erroneous request should not be successful";
+                continue;
+            }
+
+            requests.push_back(request);
+        }
+
+        if (requests.size() > 0) {
+            handle_requests(requests);
+
+            for (auto &request : requests) {
+                timeout_queue.push(request);
+            }
+
+            requests.clear();
         }
 
         // Drop any timed out requests
         uint64_t now = util::now();
-        while (!requests.empty()) {
-            auto &request = requests.front();
+        while (!timeout_queue.empty()) {
+            auto &request = timeout_queue.top();
 
             if (request->deadline > now) break;
 
             request->finalize();
-            requests.pop();
+            request->invalidate_strategies();
+            timeout_queue.pop();
         }
+
     }
 }
 
