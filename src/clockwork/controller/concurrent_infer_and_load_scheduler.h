@@ -59,6 +59,11 @@ class Scheduler : public clockwork::Scheduler {
         unsigned max_batch_size = 8, // max supported batchsize of 8
         std::string actions_filename = "/local/clockwork_action_log.tsv");
 
+    class StrategyImpl;
+    typedef std::shared_ptr<StrategyImpl> Strategy;
+
+    class RequestImpl;
+    typedef std::shared_ptr<RequestImpl> Request;
 
     class Model;
     class RequestImpl {
@@ -74,9 +79,11 @@ class Scheduler : public clockwork::Scheduler {
         clientapi::InferenceResponse response;
 
         LoadTracker::Demand demand;
+        std::vector<Strategy> strategies;
 
      private:
         std::atomic_bool locked;
+        std::atomic_flag response_sent;
 
         std::function<void(clientapi::InferenceResponse&)> callback;
 
@@ -91,14 +98,25 @@ class Scheduler : public clockwork::Scheduler {
         void set_result(char* output, size_t output_size);
         void set_error(int status, std::string message);
 
+        void invalidate_strategies() {
+            for (auto &strategy : strategies) {
+                strategy->valid = false;
+            }
+        }
+
         void lock();
 
         // Returns true if the result was successful and within the deadline
         void timeout();
         bool complete(uint64_t now, int gpu_id);
         void finalize();
+
+        struct DeadlineComparator {
+            bool operator()(const Request &lhs, const Request &rhs) {
+                return lhs->deadline > rhs->deadline;
+            }
+        };
     };
-    typedef std::shared_ptr<RequestImpl> Request;
 
     class InferAction {
     private:
@@ -159,17 +177,16 @@ class Scheduler : public clockwork::Scheduler {
 
     };
 
-    class InferStrategy;
     class GPU;
 
     class ModelInstance {
      public:
         GPU* gpu = nullptr;
         Model* model = nullptr;
-        bool loaded = false;
-        bool loading = false;
+        std::atomic_bool loaded;
+        std::atomic_bool loading;
         unsigned version = 0;
-        ModelInstance(GPU* gpu, Model* model): gpu(gpu), model(model) {}
+        ModelInstance(GPU* gpu, Model* model): gpu(gpu), model(model), loaded(false), loading(false) {}
     };
 
     class Model {
@@ -217,11 +234,12 @@ class Scheduler : public clockwork::Scheduler {
         void enqueue(ModelInstance* instance);
 
         // Gets actions to execute for this model
-        InferAction* try_dequeue(uint64_t gpu_free_at, unsigned gpu_clock, InferStrategy* strategy, bool &retry);
+        InferAction* try_dequeue(uint64_t gpu_free_at, unsigned gpu_clock, Strategy &strategy, bool &retry);
 
         // GPUs can add new measurements
         void add_measurement(unsigned batch_size, uint64_t duration, unsigned gpu_clock);
         void add_weights_measurement(uint64_t duration);
+        uint64_t estimate(unsigned batch_size);
 
      private:
 
@@ -229,21 +247,22 @@ class Scheduler : public clockwork::Scheduler {
         unsigned batch_lookup(unsigned num_requests);
 
         void check_timeouts(uint64_t free_at);
-        uint64_t estimate(unsigned batch_size);
         uint64_t estimate(unsigned batch_size, int clock);
     };
 
-    class InferStrategy {
+    class StrategyImpl {
     public:
+        std::atomic_bool valid;
+
         uint64_t priority;
         uint64_t deadline;
         uint64_t request_id;
         unsigned batch_size;
-        unsigned version;
-        ModelInstance* instance;
+
+        Model* model;
 
         struct Comparator {
-            bool operator()(const InferStrategy* lhs, const InferStrategy* rhs) {
+            bool operator()(const Strategy &lhs, const Strategy &rhs) {
                 return lhs->priority > rhs->priority;
             }
         };
@@ -253,6 +272,9 @@ class Scheduler : public clockwork::Scheduler {
             ss << "S p=" << priority << " d=" << deadline << " rid=" << request_id << " b=" << batch_size;
             return ss.str();
         }
+
+        StrategyImpl() : valid(true) {}
+
     };
 
     struct Loading {
@@ -279,16 +301,17 @@ class Scheduler : public clockwork::Scheduler {
         bool eviction_required = false;
         uint64_t last_load = 0;
         uint64_t last_exec = 0;
+        uint64_t last_print = 0;
         int loads = 0;
 
         std::queue<Loading> loading;
-        std::priority_queue<InferStrategy*, std::deque<InferStrategy*>, InferStrategy::Comparator> queue;
+        std::priority_queue<Strategy, std::deque<Strategy>, StrategyImpl::Comparator> strategy_queue;
 
-        // Strategies enqueued by models
-        tbb::concurrent_queue<InferStrategy*> strategies;
+        // Incoming strategies enqueued by models
+        tbb::concurrent_queue<Request> incoming_strategies;
 
         // Results enqueued by network
-        tbb::concurrent_queue<std::shared_ptr<workerapi::Result>> results;
+        tbb::concurrent_queue<std::shared_ptr<workerapi::Result>> incoming_results;
 
         // Pending actions on this GPU
         typedef std::function<void(std::shared_ptr<workerapi::Result>&)> action_callback;
@@ -303,13 +326,13 @@ class Scheduler : public clockwork::Scheduler {
             unsigned pages);
 
         // Thread safe
-        void add_strategy(InferStrategy* strategy) {
-            strategies.push(strategy);
+        void add_strategies(Request request) {
+            incoming_strategies.push(request);
         }
 
         // Thread safe
-        void add_result(std::shared_ptr<workerapi::Result> result) {
-            results.push(result);
+        void add_result(std::shared_ptr<workerapi::Result> &result) {
+            incoming_results.push(result);
         }
 
         // Not thread-safe.
@@ -322,7 +345,7 @@ class Scheduler : public clockwork::Scheduler {
         bool try_load(uint64_t available);
         std::vector<EvictWeightsAction*> evict_pages(unsigned required_pages);
 
-        void handle_result(std::shared_ptr<workerapi::Result> result);
+        void handle_result(std::shared_ptr<workerapi::Result> &result);
         void infer_error(InferAction* action, std::shared_ptr<workerapi::ErrorResult> &error);
         void infer_success(InferAction* action, std::shared_ptr<workerapi::InferResult> &result);
         void infer_result(InferAction* action, std::shared_ptr<workerapi::Result> &result);
@@ -343,13 +366,10 @@ class Scheduler : public clockwork::Scheduler {
     std::vector<Model*> models;
 
  private:
-    // All requests to time out
-    std::queue<Request> requests;
-
     // Threads
     std::string actions_filename;
     ControllerActionTelemetryLogger* printer;
-    std::thread thread;
+    std::vector<std::thread> admission_threads;
     std::vector<std::thread> gpu_threads;
 
     // Messages
@@ -387,12 +407,12 @@ class Scheduler : public clockwork::Scheduler {
     void print_status();
 
     // The main thread run methods
-    void run();
+    void run_admission_thread();
     void run_gpu_thread(std::vector<GPU*> gpus);
 
     // Logic of the dispatcher thread
-    void handle_result(std::shared_ptr<workerapi::Result> result);
-    void handle_request(Request request);
+    void handle_result(std::shared_ptr<workerapi::Result> &result);
+    void handle_requests(std::vector<Request> &requests);
 };
 
 }
