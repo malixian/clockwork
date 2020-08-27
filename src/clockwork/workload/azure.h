@@ -6,6 +6,7 @@
 #include <functional>
 #include <vector>
 #include "clockwork/client.h"
+#include "clockwork/util.h"
 #include "tbb/concurrent_queue.h"
 #include <random>
 #include <sstream>
@@ -21,7 +22,45 @@ std::string get_trace_dir() {
   return tracedir == nullptr ? "" : std::string(tracedir);	
 }
 
+std::string old_trace_filename(std::string tracedir, int workload_id) {
+  std::stringstream s;
+  s << tracedir << "/invocations_per_function_md.svls.anon.d";
+  if (workload_id < 10) s << "0";
+  s << workload_id << ".csv";
+  return s.str();
+}
+
+std::string new_trace_filename(std::string tracedir, int workload_id) {
+  std::stringstream s;
+  s << tracedir << "/invocations_per_function_md.anon.d";
+  if (workload_id < 10) s << "0";
+  s << workload_id << ".csv";
+  return s.str();
+}
+
 std::string get_trace(int workload_id = 1) {
+  std::string tracedir = get_trace_dir();
+  if (tracedir == "") {
+    std::cerr << "AZURE_TRACE_DIR variable not set, exiting" << std::endl;
+    exit(1);
+  }
+
+  if (workload_id < 1 || workload_id > 14) {
+  	std::cerr << "Azure workload_id must be between 1 and 14 inclusive.  Got " << workload_id << std::endl;
+    exit(1);
+  }
+
+  std::string filename = old_trace_filename(tracedir, workload_id);
+
+  if (!clockwork::util::exists(filename)) {
+  	filename = new_trace_filename(tracedir, workload_id);
+  }
+
+  return filename;
+}
+
+std::string get_old_trace(int workload_id = 1) {
+  // The old version of the dataset had differently named files
   std::string tracedir = get_trace_dir();
   if (tracedir == "") {
     std::cerr << "AZURE_TRACE_DIR variable not set, exiting" << std::endl;
