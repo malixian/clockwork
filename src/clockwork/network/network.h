@@ -6,6 +6,7 @@
 #include <queue>
 #include <boost/bind.hpp>
 #include <asio.hpp>
+#include <atomic>
 #include "clockwork/network/message.h"
 #include "tbb/concurrent_queue.h"
 #include "clockwork/util.h"
@@ -16,6 +17,68 @@ namespace network {
 
 class message_connection;
 
+class connection_stats {
+public:
+  std::atomic_uint64_t bytes_sent = 0;
+  std::atomic_uint64_t bytes_received = 0;
+  std::atomic_uint64_t messages_sent = 0;
+  std::atomic_uint64_t messages_received = 0;
+
+  void message_received(uint64_t size) {
+    bytes_received += size;
+    messages_received++;
+  }
+
+  void message_sent(uint64_t size) {
+    bytes_sent += size;
+    messages_sent++;
+  }
+
+  connection_stats& operator= (const connection_stats& rhs) {
+    (*this)+=rhs;
+    return *this;
+  }
+
+  connection_stats& operator+=(const connection_stats& rhs){
+    bytes_sent += rhs.bytes_sent;
+    bytes_received += rhs.bytes_received;
+    messages_sent += rhs.messages_sent;
+    messages_received += rhs.messages_received;
+    return *this;
+  }
+
+  connection_stats& operator-=(const connection_stats& rhs){
+    bytes_sent -= rhs.bytes_sent;
+    bytes_received -= rhs.bytes_received;
+    messages_sent -= rhs.messages_sent;
+    messages_received -= rhs.messages_received;
+    return *this;
+  }
+
+  connection_stats& operator/=(const float& rhs){
+    bytes_sent = bytes_sent / rhs;
+    bytes_received = bytes_received / rhs;
+    messages_sent = messages_sent / rhs;
+    messages_received = messages_received / rhs;
+    return *this;
+  }
+
+  // connection_stats& operator/=(const connection_stats& rhs){
+  //   bytes_sent += rhs.bytes_sent;
+  //   bytes_received += rhs.bytes_received;
+  //   messages_sent += rhs.messages_sent;
+  //   messages_received += rhs.messages_received;
+  // }
+
+  // connection_stats operator+ (const connection_stats& first) const {
+  //   connection_stats result;
+  //   result.bytes_sent = bytes_sent + first.bytes_sent;
+  //   result.bytes_received = bytes_received + first.bytes_received;
+  //   result.messages_sent = messages_sent + first.messages_sent;
+  //   result.messages_received = messages_received + first.messages_received;
+  //   return result;
+  // }
+};
 
 class message_handler {
 public:
@@ -171,6 +234,8 @@ private:
   asio::ip::tcp::socket socket_;
 public:
   asio::io_service& io_service_;
+
+  connection_stats stats;
 };
 
 

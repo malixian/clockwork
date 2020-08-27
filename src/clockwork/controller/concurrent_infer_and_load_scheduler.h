@@ -369,6 +369,7 @@ class Scheduler : public clockwork::Scheduler {
     // Threads
     std::string actions_filename;
     ControllerActionTelemetryLogger* printer;
+    std::thread network_printer;
     std::vector<std::thread> admission_threads;
     std::vector<std::thread> gpu_threads;
 
@@ -382,6 +383,7 @@ class Scheduler : public clockwork::Scheduler {
 
     // Diagnostic
     std::atomic_flag has_logged_inputs_status;
+
 
  public:
 

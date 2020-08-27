@@ -45,6 +45,9 @@ void message_sender::start_send(message_tx &req)
   pre_header[4] = util::now();
   pre_header[5] = handler_.local_delta_;
 
+  // Increment stats here, even though it hasn't sent yet. Simpler
+  conn_->stats.message_sent(pre_header[1] + 48);
+
   req_ = &req;
   asio::async_write(socket_, asio::buffer(pre_header),
       boost::bind(&message_sender::handle_prehdr_sent, this,
@@ -170,6 +173,9 @@ void message_receiver::handle_pre_read(const asio::error_code& error,
   }
 
   rx_begin_ = util::now();
+
+  // Increment stats here, even though it hasn't received yet. Simpler
+  conn_->stats.message_received(pre_header[1] + 48);
 
   asio::async_read(socket_, asio::buffer(header_buf, pre_header[0]),
       boost::bind(&message_receiver::handle_header_read, this,

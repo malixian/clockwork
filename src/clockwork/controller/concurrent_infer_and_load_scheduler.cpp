@@ -1093,6 +1093,44 @@ void Scheduler::initialize_model_instances() {
 }
 
 
+void networkPrintThread(std::vector<network::controller::WorkerConnection*> workers) {
+    uint64_t last_print = util::now();
+    uint64_t print_interval_nanos = 1000000000UL * 10;
+
+    network::connection_stats previous_stats;
+    while (true) {
+        uint64_t now = util::now();
+        if (last_print + print_interval_nanos > now) {
+            usleep(100000);
+            continue;
+        }
+
+        network::connection_stats stats;
+        for (auto &worker : workers) {
+            stats += worker->stats;
+        }
+        stats -= previous_stats;
+        previous_stats = stats;
+
+        float duration = (now - last_print) / 1000000000.0;
+        stats /= duration;
+
+        std::stringstream msg;
+        msg << std::fixed << std::setprecision(1);
+        msg << "Network->Workers: ";
+        msg << (stats.bytes_sent / (1024*1024.0)) << "MB/s ";
+        msg << "(" << stats.messages_sent << " msgs) snd, ";
+        msg << (stats.bytes_received / (1024*1024.0)) << "MB/s ";
+        msg << "(" << stats.messages_received << " msgs) rcv, ";
+        msg << std::endl;
+
+        std::cout << msg.str();
+
+        last_print = now;
+    }
+}
+
+
 // Called when model loading has completed
 void Scheduler::start(std::vector<network::controller::WorkerConnection*> workers,
                     ClockworkState &state) 
@@ -1109,8 +1147,10 @@ void Scheduler::start(std::vector<network::controller::WorkerConnection*> worker
         threading::initHighPriorityThread(admission_threads[i]);
     }
 
-    // Create and start the printer thread
+    // Create and start the printer threads
     this->printer = ControllerActionTelemetry::log_and_summarize(actions_filename, print_interval);
+    network_printer = std::thread(&networkPrintThread, workers);
+    threading::initLoggerThread(network_printer);
 
     // Allocate GPUs to threads
     uint64_t max_gpu_threads = 10;
