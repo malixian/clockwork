@@ -23,7 +23,6 @@ Engine* comparison_experiment(clockwork::Client* client,
 	double rate = total_rps / ((double) num_models);
 
 	for (int i = 0; i < num_models; i++) {
-		models[i]->disable_inputs();
 		engine->AddWorkload(new PoissonOpenLoop(
 			i,				// client id
 			models[i],  	// model
@@ -44,7 +43,6 @@ Engine* comparison_experiment_closed(clockwork::Client* client,
 	auto models = client->load_remote_models(modelpath, num_models);
 
 	for (int i = 0; i < num_models; i++) {
-		models[i]->disable_inputs();
 		engine->AddWorkload(new ClosedLoop(
 			i, 			// client id, just use the same for this
 			models[i],	// model
@@ -64,7 +62,6 @@ Engine* fill_memory(clockwork::Client* client) {
 
 	unsigned i = 0;
 	for (; i < 1; i++) {
-		models[i]->disable_inputs();
 		engine->AddWorkload(new PoissonOpenLoop(
 			i,				// client id
 			models[i],  	// model
@@ -73,7 +70,6 @@ Engine* fill_memory(clockwork::Client* client) {
 		));
 	}
 	for (; i < 11; i++) {
-		models[i]->disable_inputs();
 		engine->AddWorkload(new PoissonOpenLoop(
 			i,				// client id
 			models[i],  	// model
@@ -82,7 +78,6 @@ Engine* fill_memory(clockwork::Client* client) {
 		));
 	}
 	for (; i < 411; i++) {
-		models[i]->disable_inputs();
 		engine->AddWorkload(new PoissonOpenLoop(
 			i,				// client id
 			models[i],  	// model
@@ -102,7 +97,6 @@ Engine* simple(clockwork::Client* client) {
 	auto models = client->load_remote_models(modelpath, num_copies);
 
 	for (unsigned i = 0; i < models.size(); i++) {
-		models[i]->disable_inputs();
 		engine->AddWorkload(new ClosedLoop(
 			0, 			// client id, just use the same for this
 			models[i],	// model
@@ -181,7 +175,7 @@ Engine* simple_parametric(clockwork::Client* client, unsigned num_copies,
 
 		std::cout << "Adding ClosedLoop client " << i << " with models:";
 		for (auto const &model : models_subset) {
-			model->disable_inputs();
+			
 			std::cout << " " << model->id();
 		}
 		std::cout << std::endl;
@@ -289,7 +283,6 @@ Engine* spam(clockwork::Client* client, std::string model_name = "resnet50_v2") 
 	auto models = client->load_remote_models(modelpath, num_copies);
 
 	for (unsigned i = 0; i < models.size(); i++) {
-		models[i]->disable_inputs();
 		engine->AddWorkload(new ClosedLoop(
 			0, 			// client id, just use the same for this
 			models[i],	// model
@@ -308,7 +301,6 @@ Engine* spam2(clockwork::Client* client) {
 	auto models = client->load_remote_models(modelpath, num_copies);
 
 	for (unsigned i = 0; i < models.size(); i++) {
-		models[i]->disable_inputs();
 		engine->AddWorkload(new PoissonOpenLoop(
 			i,				// client id
 			models[i],  	// model
@@ -328,7 +320,6 @@ Engine* single_spam(clockwork::Client* client) {
 	auto models = client->load_remote_models(modelpath, num_copies);
 
 	for (unsigned i = 0; i < models.size(); i++) {
-		models[i]->disable_inputs();
 		engine->AddWorkload(new ClosedLoop(
 			0, 			// client id, just use the same for this
 			models[i],	// model
@@ -416,7 +407,7 @@ Engine* azure_small(clockwork::Client* client) {
 
 	for (unsigned i = 0; i < trace_data.size(); i++) {
 		auto model = models[i % models.size()];
-		model->disable_inputs();
+		
 		auto workload = trace_data[i];
 
 		Workload* replay = new PoissonTraceReplay(
@@ -451,7 +442,7 @@ Engine* azure_fast(clockwork::Client* client, unsigned trace_id = 1) {
 
 	for (unsigned i = 0; i < trace_data.size(); i++) {
 		auto model = models[i % models.size()];
-		model->disable_inputs();
+		
 		auto workload = trace_data[i];
 
 		Workload* replay = new PoissonTraceReplay(
@@ -529,7 +520,7 @@ Engine* bursty_experiment2(
 
 	for (unsigned i = 0; i < models.size(); i++) {
 		auto model = models[i];
-		model->disable_inputs();
+		
 		auto workload = interval_rates[i];
 
 		Workload* replay = new PoissonTraceReplay(
@@ -609,7 +600,7 @@ Engine* bursty_experiment(
 
 	for (unsigned i = 0; i < models.size(); i++) {
 		auto model = models[i];
-		model->disable_inputs();
+		
 		auto workload = interval_rates[i];
 
 		Workload* replay = new PoissonTraceReplay(
@@ -658,7 +649,6 @@ Engine* bursty_experiment1(clockwork::Client* client, unsigned trace_id = 1) {
 	for (unsigned i = 0; i < num_iterations; i++) {
 		unsigned iteration_max = increase_per_iteration * (i+1);
 		while (model_id < iteration_max && model_id < models.size()) {
-			models[model_id]->disable_inputs();
 			engine->AddWorkload(new PoissonOpenLoop(
 				model_id,				// client id
 				models[model_id],  	// model
@@ -687,7 +677,6 @@ Engine* bursty_experiment_simple(clockwork::Client* client, unsigned trace_id = 
 	}
 
 	for (unsigned i = 0; i < models.size(); i++) {
-		models[i]->disable_inputs();
 		engine->AddWorkload(new PoissonOpenLoop(
 			i,				// client id
 			models[i],  	// model
@@ -754,7 +743,7 @@ Engine* azure_parameterized(clockwork::Client* client,
 	for (unsigned i = 0; i < trace_data.size(); i++) {
 	// for (unsigned i = 0; i < models.size(); i++) {
 		auto model = models[i % models.size()];
-		model->disable_inputs();
+		
 		auto workload = trace_data[i];
 
 		Workload* replay = new PoissonTraceReplay(
