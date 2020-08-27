@@ -694,7 +694,8 @@ Engine* azure_parameterized(clockwork::Client* client,
 		unsigned interval_duration_seconds = 60,
 		bool randomise = false,
 		bool use_all_models = true,
-		unsigned num_models = 3100
+		unsigned num_models = 3100,
+		bool stripe = false
 	) {
 	Engine* engine = new Engine();
 
@@ -741,8 +742,12 @@ Engine* azure_parameterized(clockwork::Client* client,
 	}
 
 	for (unsigned i = 0; i < trace_data.size(); i++) {
-	// for (unsigned i = 0; i < models.size(); i++) {
-		auto model = models[i % models.size()];
+		Model* model;
+		if (stripe) {
+			model = models[i % models.size()];
+		} else {
+			model = models[(models.size() * i) / trace_data.size()];
+		}
 		
 		auto workload = trace_data[i];
 
