@@ -63,6 +63,9 @@ public:
   	// Memory allocated with cudaMallocHost doesn't play nicely with asio.
   	// Until we solve it, just do a memcpy here :(
   	infer_result_tx::set(result);
+  	if (result.output_size > 0) {
+  		body_ = new uint8_t[result.output_size];
+  	}
     //body_ = new uint8_t[result.output_size];
     //std::memcpy(body_, result.output, result.output_size);
     //host_io_pool->free(result.output);
