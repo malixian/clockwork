@@ -118,10 +118,15 @@ int main(int argc, char *argv[])
 	std::string workload = argv[2];
 	auto address = split(std::string(argv[1]));
 
-	std::cout << "Running " << workload
-	          << " on " << address.first 
+	std::cout << "Running workload `" << workload
+	          << "` on " << address.first 
 	          << ":" << address.second << std::endl;
 
+	if (util::client_inputs_disabled()) {
+		std::cout << "Client inputs are DISABLED.  Set CLOCKWORK_DISABLE_INPUTS=0 to enable inputs." << std::endl;
+	} else {
+		std::cout << "Client is sending inputs with requests.  Set CLOCKWORK_DISABLE_INPUTS=1 to disable inputs." << std::endl;		
+	}
 
 	bool verbose = false; // Log every request and response?
 	bool summary = true;  // Log summary once per second?

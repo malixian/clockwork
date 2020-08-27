@@ -1,6 +1,7 @@
 #ifndef _CLOCKWORK_WORKER_H_
 #define _CLOCKWORK_WORKER_H_
 
+#include <atomic>
 #include "clockwork/action.h"
 #include "clockwork/runtime.h"
 #include "clockwork/api/worker_api.h"
@@ -35,6 +36,9 @@ private:
 	void infer(std::shared_ptr<workerapi::Action> action);
 	void clearCache(std::shared_ptr<workerapi::Action> action);
 	void getWorkerState(std::shared_ptr<workerapi::Action> action);
+
+
+	std::atomic_flag has_logged_inputs_status;
 };
 
 class LoadModelFromDisk : public LoadModelFromDiskAction {

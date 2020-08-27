@@ -380,6 +380,9 @@ class Scheduler : public clockwork::Scheduler {
     std::atomic_flag actions_in_use;
     std::unordered_map<uint64_t, GPU*> outstanding_actions;
 
+    // Diagnostic
+    std::atomic_flag has_logged_inputs_status;
+
  public:
 
     // Called by GPU threads to register an action
