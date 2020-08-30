@@ -24,6 +24,7 @@
 #include <filesystem>
 #include <cstdlib>
 #include "clockwork/thread.h"
+#include <lz4.h>
 
 namespace clockwork {
 namespace util {
@@ -226,6 +227,98 @@ std::map<std::string, std::string> get_clockwork_modelzoo() {
   std::cout << "Found " << result.size() << " models in " << modelzoo << std::endl;
 
   return result;
+}
+
+InputGenerator::InputGenerator() {
+  std::string basedir = get_clockwork_directory() + "/resources/inputs/processed";
+  CHECK(exists(basedir)) << "Could not find Clockwork images directory";
+
+  size_t total_size = 0;
+  std::vector<std::string> all_inputs;
+  for (auto &p : std::filesystem::directory_iterator(basedir)) {
+    if (std::filesystem::is_directory(p)) {
+      for (auto &f : std::filesystem::directory_iterator(p)) {
+        std::string data;
+        readFileAsString(f.path().u8string(), data);
+        all_inputs.push_back(data);
+        total_size += data.size();
+        uncompressed_inputs[data.size()].push_back(data);
+
+
+        const int max_compress_size = LZ4_compressBound(data.size());
+        char* compressed = static_cast<char*>(malloc((size_t) max_compress_size));
+        const int compressed_size = LZ4_compress_default(data.data(), compressed, data.size(), max_compress_size);
+        std::string compressed_data = std::string(compressed, compressed_size);
+        compressed_inputs[data.size()].push_back(compressed_data);
+      }
+    }
+  }
+
+  this->all_inputs = new char[total_size];
+  size_t offset = 0;
+  for (auto &input : all_inputs) {
+    std::memcpy(this->all_inputs+offset, input.data(), input.size());
+    offset += input.size();
+  }
+
+}
+
+void InputGenerator::generateInput(size_t size, char** bufPtr) {
+  auto it = uncompressed_inputs.find(size);
+  if (it != uncompressed_inputs.end()) {
+    auto &inputs = it->second;
+    std::uniform_int_distribution<> d(0, inputs.size()-1);
+    auto &input = inputs[d(rng)];
+    CHECK(input.size() == size);
+    *bufPtr = new char[input.size()];
+    std::memcpy(*bufPtr, input.data(), input.size());
+    return;
+  }
+
+  if (size < this->all_inputs_size) {
+    std::uniform_int_distribution<> d(0, all_inputs_size - size - 1);
+    size_t start_offset = d(rng);
+    *bufPtr = new char[size];
+    std::memcpy(*bufPtr, all_inputs+start_offset, size);
+    return;
+  }
+
+  *bufPtr = new char[size];
+}
+
+void InputGenerator::generateCompressedInput(size_t size, char** bufPtr, size_t* compressed_size) {
+  auto it = compressed_inputs.find(size);
+  if (it != compressed_inputs.end()) {
+    auto &inputs = it->second;
+    std::uniform_int_distribution<> d(0, inputs.size()-1);
+    auto &input = inputs[d(rng)];
+    *compressed_size = input.size();
+    *bufPtr = new char[input.size()];
+    std::memcpy(*bufPtr, input.data(), input.size());
+    return;
+  }
+
+  CHECK (size < this->all_inputs_size) << size << " unsupported; too large";
+
+  std::uniform_int_distribution<> d(0, all_inputs_size - size - 1);
+  size_t start_offset = d(rng);
+
+  const int max_compress_size = LZ4_compressBound(size);
+  *bufPtr = static_cast<char*>(malloc((size_t) max_compress_size));
+  *compressed_size = LZ4_compress_default(all_inputs+start_offset, *bufPtr, size, max_compress_size);
+}
+
+void InputGenerator::generatePrecompressedInput(size_t size, char** bufPtr, size_t* compressed_size) {
+  auto it = compressed_inputs.find(size);
+  CHECK(it != compressed_inputs.end()) << "No precompressed input available for size " << size;
+  
+  auto &inputs = it->second;
+  std::uniform_int_distribution<> d(0, inputs.size()-1);
+  auto &input = inputs[d(rng)];
+  *compressed_size = input.size();
+  *bufPtr = new char[input.size()];
+  std::memcpy(*bufPtr, input.data(), input.size());
+  return;
 }
 
 bool client_inputs_disabled() {

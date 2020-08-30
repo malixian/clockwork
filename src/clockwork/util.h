@@ -10,6 +10,7 @@
 #include <thread>
 #include <atomic>
 #include <deque>
+#include <random>
 
 #define NUM_GPUS_1 1
 #define NUM_GPUS_2 2
@@ -84,6 +85,25 @@ std::string get_clockwork_model(std::string shortname);
 
 std::map<std::string, std::string> get_clockwork_modelzoo();
 bool client_inputs_disabled();
+
+class InputGenerator {
+ private:
+	std::minstd_rand rng;
+
+ 	char* all_inputs;
+ 	size_t all_inputs_size;
+
+ 	std::map<size_t, std::vector<std::string>> compressed_inputs;
+ 	std::map<size_t, std::vector<std::string>> uncompressed_inputs;
+
+
+ public:
+ 	InputGenerator();
+
+ 	void generateInput(size_t size, char** bufPtr);
+ 	void generateCompressedInput(size_t size, char** bufPtr, size_t* compressed_size);
+ 	void generatePrecompressedInput(size_t size, char** bufPtr, size_t* compressed_size);
+};
 
 /* A simple utility class that runs a background thread checking the GPU clock state */
 class GPUClockState {
