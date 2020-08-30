@@ -53,6 +53,7 @@ message ModelInferenceReqProto {
   required uint32 model_id = 2;
   required uint32 batch_size = 3;
   required float slo_factor = 4;
+  required bool compressed = 5;
 }
 
 message ModelInferenceRspProto {

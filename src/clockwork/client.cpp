@@ -62,11 +62,12 @@ public:
 
 	virtual void disable_inputs();
 
-	virtual std::vector<uint8_t> infer(std::vector<uint8_t> &input);
+	virtual std::vector<uint8_t> infer(std::vector<uint8_t> &input, bool compressed);
 	virtual void infer(std::vector<uint8_t> &input, 
 		std::function<void(std::vector<uint8_t>&)> onSuccess, 
-		std::function<void(int, std::string&)> onError);
-	virtual std::future<std::vector<uint8_t>> infer_async(std::vector<uint8_t> &input);
+		std::function<void(int, std::string&)> onError,
+		bool compressed);
+	virtual std::future<std::vector<uint8_t>> infer_async(std::vector<uint8_t> &input, bool compressed);
 	virtual void evict();
 	virtual std::future<void> evict_async();
 };
@@ -231,13 +232,13 @@ int ModelImpl::user_id() { return user_id_; }
 void ModelImpl::set_user_id(int user_id) { user_id_ = user_id; }
 void ModelImpl::disable_inputs() { inputs_enabled_ = false; }
 
-std::vector<uint8_t> ModelImpl::infer(std::vector<uint8_t> &input)
+std::vector<uint8_t> ModelImpl::infer(std::vector<uint8_t> &input, bool compressed)
 {
-	auto future = infer_async(input);
+	auto future = infer_async(input, compressed);
 	return future.get();
 }
 
-std::future<std::vector<uint8_t>> ModelImpl::infer_async(std::vector<uint8_t> &input)
+std::future<std::vector<uint8_t>> ModelImpl::infer_async(std::vector<uint8_t> &input, bool compressed)
 {
 	auto promise = std::make_shared<std::promise<std::vector<uint8_t>>>();
 
@@ -253,12 +254,12 @@ std::future<std::vector<uint8_t>> ModelImpl::infer_async(std::vector<uint8_t> &i
 		}
 	};
 
-	this->infer(input, onSuccess, onError);
+	this->infer(input, onSuccess, onError, compressed);
 
 	return promise->get_future();
 }
 
-void ModelImpl::infer(std::vector<uint8_t> &input, std::function<void(std::vector<uint8_t>&)> onSuccess, std::function<void(int, std::string&)> onError) {
+void ModelImpl::infer(std::vector<uint8_t> &input, std::function<void(std::vector<uint8_t>&)> onSuccess, std::function<void(int, std::string&)> onError, bool compressed) {
 	CHECK(input_size_ == input.size()) << "Infer called with incorrect input size";
 
 	auto input_data = new uint8_t[input.size()];
@@ -271,6 +272,7 @@ void ModelImpl::infer(std::vector<uint8_t> &input, std::function<void(std::vecto
 	request.batch_size = 1; // TODO: support batched requests in client
 	request.input_size = input.size();
 	request.input = input_data;
+	request.compressed = compressed;
 	request.slo_factor = slo_factor_;
 
 	if (!inputs_enabled_) {

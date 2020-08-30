@@ -37,9 +37,10 @@ public:
 	/* 
 	Perform an inference with the provided input and return the output.
 	Blocks until the inference has completed.
+	Input can be compressed using lz4 compression; if so, set compressed=true
 	Can throw exceptions.
 	*/
-	virtual std::vector<uint8_t> infer(std::vector<uint8_t> &input) = 0;
+	virtual std::vector<uint8_t> infer(std::vector<uint8_t> &input, bool compressed=false) = 0;
 
 	/*
 	Asynchronous version of infer.
@@ -47,11 +48,12 @@ public:
 	Returns a future that will receive the result of the inference (the output size and the output)
 	If an exception occurs, it will be thrown by calls to future.get().
 	*/
-	virtual std::future<std::vector<uint8_t>> infer_async(std::vector<uint8_t> &input) = 0;
+	virtual std::future<std::vector<uint8_t>> infer_async(std::vector<uint8_t> &input, bool compressed=false) = 0;
 
 	virtual void infer(std::vector<uint8_t> &input, 
 		std::function<void(std::vector<uint8_t>&)> onSuccess, 
-		std::function<void(int, std::string&)> onError) = 0;
+		std::function<void(int, std::string&)> onError,
+		bool compressed=false) = 0;
 
 	/*
 	This is a backdoor API call that's useful for testing.

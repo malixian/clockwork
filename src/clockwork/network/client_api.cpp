@@ -31,6 +31,7 @@ void msg_inference_req_tx::set(clientapi::InferenceRequest &request) {
   	msg.set_model_id(request.model_id);
   	msg.set_batch_size(request.batch_size);
     msg.set_slo_factor(request.slo_factor);
+    msg.set_compressed(request.compressed);
   	body_len_ = request.input_size;
   	body_ = request.input;
 }
@@ -42,6 +43,7 @@ void msg_inference_req_rx::get(clientapi::InferenceRequest &request) {
   request.slo_factor = msg.slo_factor();
 	request.input_size = body_len_;
 	request.input = body_;
+  request.compressed = msg.compressed();
 }
 
 void msg_inference_rsp_tx::set(clientapi::InferenceResponse &response) {
