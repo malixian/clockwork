@@ -65,7 +65,6 @@ struct InferenceRequest {
 	int batch_size;
 	size_t input_size;
 	void* input;
-	bool compressed;
 	uint64_t deadline = 0;
 	float slo_factor;
 

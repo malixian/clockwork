@@ -429,6 +429,23 @@ void Scheduler::InferAction::batch() {
         std::cout << msg.str();
     }
 
+    // Cases to deal with here:
+    // 1. Clients are sending real, non-compressed inputs. (simple batching)
+    // 2. Clients are sending real, compressed inputs (compressed batching)
+    // 3. Experiment mode - clients aren't sending inputs, generate_inputs is true.  Scheduler generates compressed inputs (compressed batching)
+    // 4. Experiment mode - clients aren't sending inputs, generate_inputs is false.  Scheduler sends zero-length input (simple batching)
+    // In reality, the system needs to only deal with 1. and 2. properly, and should probably 
+
+    bool zero_length_inputs_from_client = false;
+    for (auto &r : requests) {
+        if (r->request.input_size == 0) {
+            zero_length_inputs_from_client = true;
+            if (scheduler->generate_inputs) {
+                generated_inputs = true;
+            }
+        }
+    }
+
     for (auto &r : requests) {
         size_t request_input_size = r->request.input_size;
         if (request_input_size == 0 && scheduler->generate_inputs) {

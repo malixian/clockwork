@@ -220,6 +220,9 @@ public:
   	msg.set_latest(action.latest);
   	msg.set_expected_duration(action.expected_duration);
   	msg.set_batch_size(action.batch_size);
+    for (auto &size : action.input_sizes) {
+      msg.add_input_sizes(size);
+    }
   	body_len_ = action.input_size;
   	body_ = action.input;
   }
@@ -237,6 +240,9 @@ public:
   	action.expected_duration = msg.expected_duration();
   	action.batch_size = msg.batch_size();
   	action.input_size = body_len_;
+    for (unsigned i = 0; i < msg.input_sizes_size(); i++) {
+      action.input_sizes.push_back(msg.input_sizes(i));
+    }
   	action.input = static_cast<char*>(body_);
   }
 };

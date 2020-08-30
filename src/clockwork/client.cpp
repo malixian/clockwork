@@ -262,6 +262,14 @@ std::future<std::vector<uint8_t>> ModelImpl::infer_async(std::vector<uint8_t> &i
 void ModelImpl::infer(std::vector<uint8_t> &input, std::function<void(std::vector<uint8_t>&)> onSuccess, std::function<void(int, std::string&)> onError, bool compressed) {
 	CHECK(input_size_ == input.size()) << "Infer called with incorrect input size";
 
+	// if (!compressed) {
+		
+
+ //        const int max_dst_size = LZ4_compressBound(size);
+ //        char* compressed = static_cast<char*>(malloc((size_t) max_dst_size));
+ //        const int compressed_size = LZ4_compress_default(buf, compressed, size, max_dst_size);
+	// }
+
 	auto input_data = new uint8_t[input.size()];
 	std::memcpy(input_data, input.data(), input.size());
 
@@ -272,7 +280,6 @@ void ModelImpl::infer(std::vector<uint8_t> &input, std::function<void(std::vecto
 	request.batch_size = 1; // TODO: support batched requests in client
 	request.input_size = input.size();
 	request.input = input_data;
-	request.compressed = compressed;
 	request.slo_factor = slo_factor_;
 
 	if (!inputs_enabled_) {

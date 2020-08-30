@@ -148,6 +148,7 @@ public:
 	int batch_size;
 	int input_size;
 	char* input;
+	std::vector<size_t> input_sizes;
 
 	// Not actually sent to workers; here for convenience
 	int worker_id = -1;
