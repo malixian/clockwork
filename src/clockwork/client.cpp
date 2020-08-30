@@ -6,6 +6,7 @@
 #include "clockwork/api/client_api.h"
 #include "clockwork/network/client.h"
 #include "clockwork/telemetry/client_telemetry_logger.h"
+#include "lz4.h"
 
 namespace clockwork
 {
@@ -262,35 +263,37 @@ std::future<std::vector<uint8_t>> ModelImpl::infer_async(std::vector<uint8_t> &i
 void ModelImpl::infer(std::vector<uint8_t> &input, std::function<void(std::vector<uint8_t>&)> onSuccess, std::function<void(int, std::string&)> onError, bool compressed) {
 	CHECK(input_size_ == input.size()) << "Infer called with incorrect input size";
 
-	// if (!compressed) {
-		
-
- //        const int max_dst_size = LZ4_compressBound(size);
- //        char* compressed = static_cast<char*>(malloc((size_t) max_dst_size));
- //        const int compressed_size = LZ4_compress_default(buf, compressed, size, max_dst_size);
-	// }
-
-	auto input_data = new uint8_t[input.size()];
-	std::memcpy(input_data, input.data(), input.size());
 
 	clientapi::InferenceRequest request;
 	request.header.user_id = user_id_;
 	request.header.user_request_id = client->request_id_seed++;
 	request.model_id = model_id_;
 	request.batch_size = 1; // TODO: support batched requests in client
-	request.input_size = input.size();
-	request.input = input_data;
 	request.slo_factor = slo_factor_;
 
-	if (!inputs_enabled_) {
-		request.input_size = 0;
-		request.input = nullptr;
+	char* data = nullptr;
+	size_t data_size = 0;
+
+	if (inputs_enabled_) {
+		if (!compressed) {
+	        const int max_data_size = LZ4_compressBound(input.size());
+	        data = new char[max_data_size];
+	        char* input_data = static_cast<char*>(static_cast<void*>(input.data()));
+	        data_size = LZ4_compress_default(input_data, data, input.size(), max_data_size);
+		} else {
+			data = new char[input.size()];
+			data_size = input.size();
+			std::memcpy(data, input.data(), input.size());
+		}
 	}
+
+	request.input = data;
+	request.input_size = data_size;
 
 	if (print) std::cout << "<--  " << request.str() << std::endl;
 
 	uint64_t t_send = util::now();
-	client->connection->infer(request, [this, input_data, t_send, onSuccess, onError](clientapi::InferenceResponse &response) {
+	client->connection->infer(request, [this, data, t_send, onSuccess, onError](clientapi::InferenceResponse &response) {
 		uint64_t t_receive = util::now();
 		float duration_ms = (t_receive - t_send) / 1000000.0;
 		if (print) std::cout << " --> " << response.str() << " (" << duration_ms << " ms)" << std::endl;
@@ -308,7 +311,9 @@ void ModelImpl::infer(std::vector<uint8_t> &input, std::function<void(std::vecto
 				client->telemetry->log(user_id_, model_id_, 1, input_size_, output_size_, t_send, t_receive, false);
 			}
 		}
-		delete input_data;
+		if (data != nullptr) {
+			delete data;
+		}
 		free(response.output);
 	});
 }
