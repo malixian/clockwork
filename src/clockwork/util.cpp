@@ -307,6 +307,15 @@ void InputGenerator::generateCompressedInput(size_t size, char** bufPtr, size_t*
   *compressed_size = LZ4_compress_default(all_inputs+start_offset, *bufPtr, size, max_compress_size);
 }
 
+std::string& InputGenerator::getPrecompressedInput(size_t size) {
+  auto it = compressed_inputs.find(size);
+  CHECK(it != compressed_inputs.end()) << "Generated inputs not available for input size " << size;
+  
+  auto &inputs = it->second;
+  std::uniform_int_distribution<> d(0, inputs.size()-1);
+  return inputs[d(rng)];
+}
+
 void InputGenerator::generatePrecompressedInput(size_t size, char** bufPtr, size_t* compressed_size) {
   auto it = compressed_inputs.find(size);
   CHECK(it != compressed_inputs.end()) << "Generated inputs not available for input size " << size;

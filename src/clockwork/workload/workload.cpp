@@ -109,7 +109,10 @@ void Workload::Infer(unsigned model_index) {
 		<< " inferring on non-existent model ";
 	auto &model = models[model_index];
 
-	std::vector<uint8_t> input(model->input_size());
+	std::string& generated = engine->input_generator.getPrecompressedInput(model->input_size());
+	uint8_t* ptr = static_cast<uint8_t*>(static_cast<void*>(generated.data()));
+	std::vector<uint8_t> input(ptr, ptr+generated.size());
+
 
 	auto onSuccess = [this, model_index](std::vector<uint8_t> &output) {
 		engine->InferComplete(this, model_index);
@@ -119,7 +122,7 @@ void Workload::Infer(unsigned model_index) {
 		engine->InferError(this, model_index, status);
 	};
 
-	model->infer(input, onSuccess, onError);
+	model->infer(input, onSuccess, onError, true);
 }
 
 void Workload::SetTimeout(uint64_t timeout, std::function<void(void)> callback) {

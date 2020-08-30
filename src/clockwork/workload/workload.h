@@ -39,6 +39,7 @@ private:
 
 public:
 	std::atomic_int running = 0;
+	util::InputGenerator input_generator;
 
 	void AddWorkload(Workload* workload, uint64_t start_after = 0);
 	void SetTimeout(uint64_t timeout, std::function<void(void)> callback);

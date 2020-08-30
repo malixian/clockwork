@@ -261,7 +261,7 @@ std::future<std::vector<uint8_t>> ModelImpl::infer_async(std::vector<uint8_t> &i
 }
 
 void ModelImpl::infer(std::vector<uint8_t> &input, std::function<void(std::vector<uint8_t>&)> onSuccess, std::function<void(int, std::string&)> onError, bool compressed) {
-	CHECK(input_size_ == input.size()) << "Infer called with incorrect input size";
+	CHECK(compressed || input_size_ == input.size()) << "Infer called with incorrect input size";
 
 
 	clientapi::InferenceRequest request;

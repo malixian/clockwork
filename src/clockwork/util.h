@@ -104,6 +104,7 @@ class InputGenerator {
  	void generateInput(size_t size, char** bufPtr);
  	void generateCompressedInput(size_t size, char** bufPtr, size_t* compressed_size);
  	void generatePrecompressedInput(size_t size, char** bufPtr, size_t* compressed_size);
+ 	std::string& getPrecompressedInput(size_t size);
 };
 
 /* A simple utility class that runs a background thread checking the GPU clock state */
