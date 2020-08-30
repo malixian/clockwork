@@ -310,7 +310,7 @@ void InputGenerator::generateCompressedInput(size_t size, char** bufPtr, size_t*
 
 void InputGenerator::generatePrecompressedInput(size_t size, char** bufPtr, size_t* compressed_size) {
   auto it = compressed_inputs.find(size);
-  CHECK(it != compressed_inputs.end()) << "No precompressed input available for size " << size;
+  CHECK(it != compressed_inputs.end()) << "Generated inputs not available for input size " << size;
   
   auto &inputs = it->second;
   std::uniform_int_distribution<> d(0, inputs.size()-1);

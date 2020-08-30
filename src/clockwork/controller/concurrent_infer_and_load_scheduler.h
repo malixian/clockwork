@@ -384,6 +384,9 @@ class Scheduler : public clockwork::Scheduler {
     // Diagnostic
     std::atomic_flag has_logged_inputs_status;
 
+    // Used during experiments if we are generating inputs server-side
+    util::InputGenerator* input_generator = nullptr;
+
 
  public:
 

@@ -30,6 +30,10 @@ Scheduler::Scheduler(uint64_t default_slo, uint64_t latest_delta,
     std::cout << "\t max_batch_size=" << max_batch_size << std::endl;
     std::cout << "\t generate_inputs=" << generate_inputs << std::endl;
     std::cout << "\t max_gpus=" << max_gpus << std::endl;
+
+    if (generate_inputs) {
+        input_generator = new util::InputGenerator();
+    }
 }
 
 Scheduler::RequestImpl::RequestImpl(
@@ -429,41 +433,24 @@ void Scheduler::InferAction::batch() {
         std::cout << msg.str();
     }
 
-    // Cases to deal with here:
-    // 1. Clients are sending real, non-compressed inputs. (simple batching)
-    // 2. Clients are sending real, compressed inputs (compressed batching)
-    // 3. Experiment mode - clients aren't sending inputs, generate_inputs is true.  Scheduler generates compressed inputs (compressed batching)
-    // 4. Experiment mode - clients aren't sending inputs, generate_inputs is false.  Scheduler sends zero-length input (simple batching)
-    // In reality, the system needs to only deal with 1. and 2. properly, and should probably 
-
-    bool zero_length_inputs_from_client = false;
-    for (auto &r : requests) {
-        if (r->request.input_size == 0) {
-            zero_length_inputs_from_client = true;
-            if (scheduler->generate_inputs) {
-                generated_inputs = true;
-            }
-        }
-    }
-
-    for (auto &r : requests) {
-        size_t request_input_size = r->request.input_size;
-        if (request_input_size == 0 && scheduler->generate_inputs) {
-            request_input_size = model->input_size;
+    for (auto &req : requests) {
+        auto &r = req->request;
+        if (r.input_size == 0 && scheduler->generate_inputs) {
             generated_inputs = true;
+            char* generated_input;
+            scheduler->input_generator->generatePrecompressedInput(model->input_size, &generated_input, &r.input_size);
+            r.input = generated_input;
         }
-        action->input_size += request_input_size;
+        action->input_size += r.input_size;
     }
+
     action->input = new char[action->input_size];
     size_t offset = 0;
-    for (auto &r : requests) {
-        size_t request_input_size = r->request.input_size;
-        std::memcpy(action->input + offset, r->request.input, request_input_size);
-        if (request_input_size == 0 && scheduler->generate_inputs) {
-            offset += model->input_size;
-        } else {
-            offset += request_input_size;
-        }
+    for (auto &req : requests) {
+        auto &r = req->request;
+        std::memcpy(action->input + offset, r.input, r.input_size);
+        offset += r.input_size;
+        action->input_sizes.push_back(r.input_size);
     }
 }
 
