@@ -48,6 +48,8 @@ add_library(clockwork_proto ${PROTO_HDRS} ${PROTO_SRCS})
 target_link_libraries(clockwork_proto INTERFACE ${Protobuf_LIBRARIES})
 
 add_library( clockwork
+	external/lz4.c
+	external/lz4hc.c
 	src/clockwork/client.cpp
 	src/clockwork/task.cpp
 	src/clockwork/modeldef.cpp
@@ -112,8 +114,7 @@ target_link_libraries( clockwork PUBLIC
 	nvidia-ml
 	config++
 	rt
-	stdc++fs
-	lz4
+	stdc++fs	
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
@@ -139,7 +140,6 @@ target_link_libraries( convert
 	tbb
 	nvidia-ml
 	stdc++fs
-	lz4
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
@@ -157,7 +157,6 @@ target_link_libraries( cudafatbin
 	tbb
 	nvidia-ml
 	stdc++fs
-	lz4
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
@@ -177,7 +176,6 @@ target_link_libraries( check_model
 	tbb
 	nvidia-ml
 	stdc++fs
-	lz4
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
@@ -196,7 +194,6 @@ target_link_libraries( inflate
 	tbb
 	nvidia-ml
 	stdc++fs
-	lz4
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
@@ -237,7 +234,6 @@ target_link_libraries( tests
 	tbb
 	nvidia-ml
 	stdc++fs
-	lz4
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
@@ -266,7 +262,6 @@ target_link_libraries( profile
 	tbb
 	nvidia-ml
 	stdc++fs
-	lz4
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
@@ -284,7 +279,6 @@ target_link_libraries(
     cudart
     tvm_runtime
     stdc++fs
-	lz4
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
@@ -300,7 +294,6 @@ target_link_libraries(
     cudart
     tvm_runtime
     stdc++fs
-	lz4
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
@@ -318,7 +311,6 @@ target_link_libraries(
     cudart
     tvm_runtime
     stdc++fs
-	lz4
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
@@ -335,7 +327,6 @@ target_link_libraries(
     cudart
     tvm_runtime
     stdc++fs
-	lz4
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
@@ -352,7 +343,6 @@ target_link_libraries(
     cudart
     tvm_runtime
     stdc++fs
-	lz4
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
@@ -369,7 +359,6 @@ target_link_libraries(
     cudart
     tvm_runtime
     stdc++fs
-	lz4
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )
@@ -386,7 +375,6 @@ target_link_libraries(
     cudart
     tvm_runtime
     stdc++fs
-	lz4
     ${Boost_SYSTEM_LIBRARY}
     ${Boost_FILESYSTEM_LIBRARY}
 )

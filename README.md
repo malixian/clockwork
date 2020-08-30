@@ -46,16 +46,6 @@ apt-get install libasio-dev
 apt-get install libconfig++
 ```
 
-## 4. lz4 compression library
-
-Clockwork uses the lz4 compression library.
-```
-git clone https://github.com/lz4/lz4.git
-cd lz4
-make
-make install
-```
-
 # Building Clockwork
 
 ```
