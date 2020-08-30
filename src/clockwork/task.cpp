@@ -5,6 +5,7 @@
 #include "clockwork/api/worker_api.h"
 #include "clockwork/action.h"
 #include "clockwork/model/batched.h"
+#include "lz4.h"
 
 namespace clockwork {
 
@@ -283,6 +284,16 @@ CopyInputTask::CopyInputTask(MemoryManager* manager, int model_id,
 		input_size(input_size), input(input), rm(nullptr), io_memory(nullptr) {
 }
 
+
+CopyInputTask::CopyInputTask(MemoryManager* manager, int model_id,
+	uint64_t earliest, uint64_t latest, unsigned batch_size, size_t input_size,
+	char* &input, std::vector<size_t> &compressed_input_sizes, unsigned gpu_id, CudaEventPool* event_pool):
+		CudaAsyncTask(gpu_id, event_pool), manager(manager), model_id(model_id),
+		earliest(earliest), latest(latest), batch_size(batch_size),
+		input_size(input_size), input(input), compressed_input_sizes(compressed_input_sizes),
+		rm(nullptr), io_memory(nullptr) {
+}
+
 CopyInputTask::~CopyInputTask() {
 	io_memory = nullptr;
 }
@@ -320,14 +331,50 @@ void CopyInputTask::run(cudaStream_t stream) {
 		throw TaskError(copyInputInvalidBatchSize, err.str());
 	}
 
-	if (input_size == 0 && manager->allow_zero_size_inputs) {
+	if (input_size == 0) {
 		// Used in testing; allow client to send zero-size inputs and generate worker-side
+		CHECK(manager->allow_zero_size_inputs) << "Received zero-size input but disallowed by config";
+
 		input_size = rm->model->input_size(batch_size);
-		manager->host_io_pool->free(input);
 		input = manager->host_io_pool->alloc(input_size);
 		if (input == nullptr) {
 			throw TaskError(copyInputHostAlloc, "Unable to alloc from host_io_pool for infer action input");
 		}
+
+		size_t single_input_size = rm->model->input_size(1);
+		size_t offset = 0;
+		for (int i = 0; i < batch_size; i++) {
+			manager->input_generator->generateInput(single_input_size, input+offset);
+			offset += single_input_size;
+		}
+
+	} else if (compressed_input_sizes.size() > 0) {
+		if (compressed_input_sizes.size() > batch_size) {
+			throw TaskError(copyInputBadSizes, "More compressed inputs received than batch size");
+		}
+
+		size_t single_input_size = rm->model->input_size(1);
+		char* decompressed = manager->host_io_pool->alloc(rm->model->input_size(batch_size));
+		CHECK(decompressed!=nullptr) << "decompressed was nullptr";
+
+		size_t input_offset = 0;
+		size_t output_offset = 0;
+		for (auto &next_input_size : compressed_input_sizes) {
+			if (input_offset+next_input_size > input_size) {
+				throw TaskError(copyInputBadSizes, "Compressed inputs exceeded specified size");
+			}
+
+			int decompressed_size = LZ4_decompress_safe(input+input_offset, decompressed+output_offset, next_input_size, single_input_size);
+			if (decompressed_size != single_input_size) {
+				throw TaskError(copyInputBadDecompress, "Input decompressed to wrong size");
+			}
+
+			input_offset += next_input_size;
+			output_offset += single_input_size;
+		}
+
+		input = decompressed;
+		input_size = rm->model->input_size(batch_size);
 
 	} else if (rm->model->input_size(batch_size) != input_size) {
 		// Normal behavior requires correctly sized inputs

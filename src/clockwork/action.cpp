@@ -300,6 +300,7 @@ InferAction::CopyInputTaskImpl::CopyInputTaskImpl(InferAction* infer):
 				  infer->action->batch_size,
 				  infer->action->input_size,
 				  infer->action->input,
+				  infer->action->input_sizes,
 				  infer->action->gpu_id,
 				  infer->runtime->event_pools[infer->action->gpu_id]),
 	infer(infer) {

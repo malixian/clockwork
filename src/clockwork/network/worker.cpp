@@ -70,6 +70,20 @@ public:
 	}
 };
 
+class InferWithCompression : public workerapi::Infer {
+public:
+	char* original_input = nullptr;
+	clockwork::MemoryPool* host_io_pool;
+	InferWithCompression(clockwork::MemoryPool* host_io_pool):
+		host_io_pool(host_io_pool) {}
+	~InferWithCompression() {
+		if (input != original_input) {
+			host_io_pool->free(input);
+		}
+    	delete original_input;
+	}
+};
+
 Connection::Connection(asio::io_service &io_service, ClockworkWorker* worker, std::function<void(void)> on_close) :
 		message_connection(io_service, *this),
 		msg_tx_(this, *this),
@@ -141,7 +155,8 @@ message_rx* Connection::new_rx_message(message_connection *tcp_conn, uint64_t he
 		msg->set_msg_id(msg_id);
 		return msg;
 	} else if (msg_type == ACT_INFER) {
-		auto msg = new infer_action_rx_using_io_pool(worker->runtime->manager->host_io_pool);
+		// auto msg = new infer_action_rx_using_io_pool(worker->runtime->manager->host_io_pool);
+		auto msg = new infer_action_rx();
 		msg->set_body_len(body_len);
 		msg->set_msg_id(msg_id);
 		return msg;
@@ -185,9 +200,12 @@ void Connection::completed_receive(message_connection *tcp_conn, message_rx *req
 		actions.push_back(action);
 
 		stats.load++;
-	} else if (auto infer = dynamic_cast<infer_action_rx_using_io_pool*>(req)) {
-		auto action = std::make_shared<InferUsingIOPool>(worker->runtime->manager->host_io_pool);
+	// } else if (auto infer = dynamic_cast<infer_action_rx_using_io_pool*>(req)) {
+		// auto action = std::make_shared<InferUsingIOPool>(worker->runtime->manager->host_io_pool);
+	} else if (auto infer = dynamic_cast<infer_action_rx*>(req)) {
+		auto action = std::make_shared<InferWithCompression>(worker->runtime->manager->host_io_pool);
 		infer->get(*action);
+		action->original_input = action->input;
 		actions.push_back(action);
 
 		stats.infer++;

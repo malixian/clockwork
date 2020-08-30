@@ -278,7 +278,7 @@ void InferDummyAction::run(){
     }
     if (infer->input_size == 0 && myManager->allow_zero_size_inputs) {
         // Used in testing; allow client to send zero-size inputs and generate worker-side
-    }else if (rm->input_size(infer->batch_size) != infer->input_size) {
+    }else if (rm->input_size(infer->batch_size) != infer->input_size && infer->input_sizes.size() == 0) {
         // Normal behavior requires correctly sized inputs
         err << "CopyInputTask received incorrectly sized input"
             << " (expected " << rm->input_size(infer->batch_size) 

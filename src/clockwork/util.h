@@ -100,6 +100,7 @@ class InputGenerator {
  public:
  	InputGenerator();
 
+ 	void generateInput(size_t size, char* buf);
  	void generateInput(size_t size, char** bufPtr);
  	void generateCompressedInput(size_t size, char** bufPtr, size_t* compressed_size);
  	void generatePrecompressedInput(size_t size, char** bufPtr, size_t* compressed_size);

@@ -151,6 +151,9 @@ void MemoryManager::initialize(ClockworkWorkerConfig &config) {
 		io_pools.push_back(CUDAMemoryPool::create(config.io_pool_size, gpu_id));
 	}
 	allow_zero_size_inputs = config.allow_zero_size_inputs;
+	if (allow_zero_size_inputs) {
+		input_generator = new util::InputGenerator();
+	}
 }
 
 MemoryManager::MemoryManager(ClockworkWorkerConfig &config) :

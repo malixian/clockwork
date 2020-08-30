@@ -263,27 +263,26 @@ InputGenerator::InputGenerator() {
 
 }
 
-void InputGenerator::generateInput(size_t size, char** bufPtr) {
+void InputGenerator::generateInput(size_t size, char* buf) {
   auto it = uncompressed_inputs.find(size);
   if (it != uncompressed_inputs.end()) {
     auto &inputs = it->second;
     std::uniform_int_distribution<> d(0, inputs.size()-1);
     auto &input = inputs[d(rng)];
     CHECK(input.size() == size);
-    *bufPtr = new char[input.size()];
-    std::memcpy(*bufPtr, input.data(), input.size());
-    return;
-  }
+    std::memcpy(buf, input.data(), input.size());
 
-  if (size < this->all_inputs_size) {
+  } else if (size < this->all_inputs_size) {
     std::uniform_int_distribution<> d(0, all_inputs_size - size - 1);
     size_t start_offset = d(rng);
-    *bufPtr = new char[size];
-    std::memcpy(*bufPtr, all_inputs+start_offset, size);
-    return;
-  }
+    std::memcpy(buf, all_inputs+start_offset, size);
 
+  }
+}
+
+void InputGenerator::generateInput(size_t size, char** bufPtr) {
   *bufPtr = new char[size];
+  generateInput(size, *bufPtr);
 }
 
 void InputGenerator::generateCompressedInput(size_t size, char** bufPtr, size_t* compressed_size) {

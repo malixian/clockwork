@@ -53,6 +53,8 @@ const int copyInputInvalidBatchSize = 73;
 const int copyInputHostAlloc = 74;
 const int copyInputInvalidInput = 75;
 const int copyInputIOPoolExhausted = 76;
+const int copyInputBadSizes = 77;
+const int copyInputBadDecompress = 78;
 
 const int execTooEarly = 80;
 const int execTooLate = 81;

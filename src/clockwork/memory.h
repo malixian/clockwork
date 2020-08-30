@@ -95,6 +95,7 @@ class MemoryManager {
 public:
 	// Used for testing; Clockwork can be configured to generate model inputs server-side
 	bool allow_zero_size_inputs = false;
+	util::InputGenerator* input_generator = nullptr;
 
 	const size_t page_size;
 
