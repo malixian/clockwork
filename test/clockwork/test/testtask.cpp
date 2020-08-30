@@ -418,7 +418,7 @@ TEST_CASE("Load Weights Nonexistent Model", "[task]") {
     task.run(stream->stream);
     REQUIRE(task.is_error);
     REQUIRE(!task.is_success);
-    REQUIRE(task.status_code == actionErrorUnknownModel);
+    REQUIRE(task.status_code == loadWeightsUnknownModel);
 }
 
 TEST_CASE("Load Weights Earliest", "[task]") {
@@ -438,7 +438,7 @@ TEST_CASE("Load Weights Earliest", "[task]") {
     REQUIRE(task.is_complete());
     REQUIRE(!task.is_success);
     REQUIRE(task.is_error);
-    REQUIRE(task.status_code == actionErrorRuntimeError);
+    REQUIRE(task.status_code == loadWeightsTooEarly);
 }
 
 TEST_CASE("Load Weights Latest", "[task]") {
@@ -458,7 +458,7 @@ TEST_CASE("Load Weights Latest", "[task]") {
     REQUIRE(task.is_complete());
     REQUIRE(!task.is_success);
     REQUIRE(task.is_error);
-    REQUIRE(task.status_code == actionErrorCouldNotStartInTime);
+    REQUIRE(task.status_code == loadWeightsTooLate);
 }
 
 TEST_CASE("Load Weights Insufficient Cache", "[task]") {
@@ -478,7 +478,7 @@ TEST_CASE("Load Weights Insufficient Cache", "[task]") {
     REQUIRE(task.is_complete());
     REQUIRE(!task.is_success);
     REQUIRE(task.is_error);
-    REQUIRE(task.status_code == actionErrorRuntimeError);
+    REQUIRE(task.status_code == loadWeightsInsufficientCache);
 }
 
 TEST_CASE("Load Weights Version Update", "[task]") {
@@ -506,7 +506,7 @@ TEST_CASE("Load Weights Version Update", "[task]") {
 
     REQUIRE(!task.is_success);
     REQUIRE(task.is_error);
-    REQUIRE(task.status_code == actionErrorWeightsInUse);
+    REQUIRE(task.status_code == loadWeightsConcurrentModification);
 }
 
 TEST_CASE("Double Load Weights", "[task]") {
@@ -585,7 +585,7 @@ TEST_CASE("Evict Non-Existent Weights", "[task]") {
 
     REQUIRE(!evict.is_success);
     REQUIRE(evict.is_error);
-    REQUIRE(evict.status_code == actionErrorModelWeightsNotPresent);
+    REQUIRE(evict.status_code == evictWeightsNotInCache);
 }
 
 TEST_CASE("Double Evict", "[task]") {
@@ -619,7 +619,7 @@ TEST_CASE("Double Evict", "[task]") {
 
     REQUIRE(!evict2.is_success);
     REQUIRE(evict2.is_error);
-    REQUIRE(evict2.status_code == actionErrorModelWeightsNotPresent);
+    REQUIRE(evict2.status_code == evictWeightsNotInCache);
 }
 
 TEST_CASE("Evict Weights Nonexistent Model", "[task]") {
@@ -636,7 +636,7 @@ TEST_CASE("Evict Weights Nonexistent Model", "[task]") {
     task.run(stream->stream);
     REQUIRE(task.is_error);
     REQUIRE(!task.is_success);
-    REQUIRE(task.status_code == actionErrorUnknownModel);
+    REQUIRE(task.status_code == evictWeightsUnknownModel);
 }
 
 TEST_CASE("Copy Input", "[task]") {
@@ -677,7 +677,7 @@ TEST_CASE("Copy Input Wrong Size", "[task] [wrongsize]") {
 
     REQUIRE(!copyinput.is_success);
     REQUIRE(copyinput.is_error);
-    REQUIRE(copyinput.status_code == actionErrorInvalidInput);
+    REQUIRE(copyinput.status_code == copyInputInvalidInput);
 
     free(input);
 }
@@ -700,7 +700,7 @@ TEST_CASE("Copy Input Nonexistent Model", "[task]") {
     copyinput.run(stream->stream);
     REQUIRE(copyinput.is_error);
     REQUIRE(!copyinput.is_success);
-    REQUIRE(copyinput.status_code == actionErrorUnknownModel);
+    REQUIRE(copyinput.status_code == copyInputUnknownModel);
 }
 
 
@@ -772,7 +772,7 @@ TEST_CASE("Infer Without Weights", "[task]") {
     infer.run(stream->stream);
     REQUIRE(!infer.is_success);
     REQUIRE(infer.is_error);
-    REQUIRE(infer.status_code == actionErrorModelWeightsNotPresent);
+    REQUIRE(infer.status_code == execWeightsMissing);
 
     free(input);
 }
