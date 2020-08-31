@@ -138,14 +138,14 @@ void LoadWeightsDummyAction::run(){
         err << "LoadWeights ran before it was eligible"
             << " (now " << util::millis(start)
             << ", earliest " << util::millis(loadweights->earliest) << ")";
-        error(actionErrorRuntimeError, err.str());
+        error(loadWeightsTooEarly, err.str());
         return;
 
     }else if(start > loadweights->latest){
         err << "LoadWeights could not start in time"
             << " (now " << util::millis(start)
             << ", latest " << util::millis(loadweights->latest) << ")";
-        error(actionErrorCouldNotStartInTime, err.str());
+        error(loadWeightsTooLate, err.str());
         return;
     }
 
@@ -208,14 +208,14 @@ void EvictWeightsDummyAction::run(){
         err << "EvictWeights ran before it was eligible"
             << " (now " << util::millis(start)
             << ", earliest " << util::millis(evictweights->earliest) << ")";
-        error(actionErrorRuntimeError, err.str());
+        error(evictWeightsTooEarly, err.str());
         return;
 
     }else if(start > evictweights->latest){
         err << "EvictWeights could not start in time"
             << " (now " << util::millis(start)
             << ", latest " << util::millis(evictweights->latest) << ")";
-        error(actionErrorCouldNotStartInTime, err.str());
+        error(evictWeightsTooLate, err.str());
         return;
     }
 
@@ -253,13 +253,13 @@ void InferDummyAction::run(){
         err << "Infer ran before it was eligible"
             << " (now " << util::millis(start)
             << ", earliest " << util::millis(infer->earliest) << ")";
-        error(actionErrorRuntimeError, err.str());
+        error(execTooEarly, err.str());
         return;
     }else if(start > infer->latest){
         err << "Infer could not start in time"
             << " (now " << util::millis(start)
             << ", latest " << util::millis(infer->latest) << ")";
-        error(actionErrorCouldNotStartInTime, err.str());
+        error(execTooLate, err.str());
         return;
     }
 
