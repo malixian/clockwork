@@ -264,7 +264,7 @@ void EvictWeightsAction::submit() {
 	task = new EvictWeightsTaskImpl(this);
 	// Rather than have an entire new executor for this, just for now
 	// use the outputs executor because it's never even close to full utilization
-	runtime->outputs_executors[action->gpu_id]->enqueue(task);
+	runtime->weights_executors[action->gpu_id]->enqueue(task);
 }
 
 void EvictWeightsAction::handle_error(TaskError &error) {

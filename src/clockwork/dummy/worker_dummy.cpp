@@ -206,7 +206,7 @@ void ClockworkDummyWorker::evictWeights(std::shared_ptr<workerapi::Action> actio
         evict_weights->earliest = adjust_timestamp_dummy(evict_weights->earliest, evict_weights->clock_delta);
         evict_weights->latest = adjust_timestamp_dummy(evict_weights->latest, evict_weights->clock_delta);
 
-        runtime->outputs_executors[evict_weights->gpu_id]->new_action(evict_weights);
+        runtime->weights_executors[evict_weights->gpu_id]->new_action(evict_weights);
         
     } else {
         invalidAction(action);
