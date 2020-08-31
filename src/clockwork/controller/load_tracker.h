@@ -112,7 +112,7 @@ class LoadTracker {
     void distributeLoad(Model &model);
     void addGPU(Model &model, GPU &gpu);
     void addGPUcomplete(Model &model, GPU &gpu);
-    void removeGPU(Model &model, GPU &gpu);
+    void removeGPU(Model &model, GPU &gpu, bool evicted);
     void checkRequests(uint64_t now);
 
  public:

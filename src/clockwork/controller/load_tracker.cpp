@@ -6,6 +6,8 @@ namespace clockwork {
 
 void LoadTracker::attach(GPU &gpu) {
     for (auto &priority : gpu.detached) {
+        CHECK(priority->detached) << "Attaching model already attached";
+
         // Put back in to priority queues
         if (priority->model->loading[gpu.id]) {
             // Loading on a GPU is neither loadable nor evictable
@@ -64,12 +66,15 @@ void LoadTracker::refreshPriorities() {
 }
 
 void LoadTracker::updatePriority(Model &model) {
+    CHECK(model.stale) << "Updating priority on non-stale model";
+
     // Calculate each GPU's weight
     double total_weight = 0;
     for (unsigned i = 0; i < n_gpus; i++) {
         if (model.gpus[i]) {
             total_weight += gpus[i].weight;
         }
+        CHECK(model.priorities[i]->detached) << "Updating priority on attached model";
     }
 
     // Load priority is calculated differently to evict priority
@@ -143,6 +148,10 @@ void LoadTracker::addGPU(Model &model, GPU &gpu) {
     detach(model);
     invalidatePriorities(model);
 
+    CHECK(!model.gpus[gpu.id]) << "Adding model to GPU that already has it";
+    CHECK(!model.loading[gpu.id]) << "Adding model to GPU that is already loading it";
+    CHECK(!gpu.models[model.id]) << "Adding model to GPU that thinks it already has it";
+
     model.gpus[gpu.id] = true;
     model.loading[gpu.id] = true;
     gpu.models[model.id] = true;
@@ -156,15 +165,27 @@ void LoadTracker::addGPUcomplete(Model &model, GPU &gpu) {
     detach(model);
     invalidatePriorities(model);
 
+    CHECK(model.gpus[gpu.id]) << "Model load completed on GPU that didn't expect it";
+    CHECK(gpu.models[model.id]) << "Model load completed on GPU that didn't expect it";
+    CHECK(model.loading[gpu.id]) << "Model load completed on GPU that wasn't loading";
+
     model.loading[gpu.id] = false;
     model.last_used[gpu.id] = seqno_seed++;
 
     distributeLoad(model);
 }
 
-void LoadTracker::removeGPU(Model &model, GPU &gpu) {
+void LoadTracker::removeGPU(Model &model, GPU &gpu, bool evicted) {
     detach(model);
     invalidatePriorities(model);
+
+    CHECK(model.gpus[gpu.id]) << "Removing Model from GPU that doesn't have it";
+    CHECK(gpu.models[model.id]) << "Removing Model from GPU that doesn't think it has it";
+    if (evicted) {
+        CHECK(!model.loading[gpu.id]) << "Evicted loading model";
+    } else {
+        CHECK(model.loading[gpu.id]) << "Evicted model that is not loading";
+    }
     
     model.gpus[gpu.id] = false;
     model.loading[gpu.id] = false;
@@ -352,7 +373,7 @@ void LoadTracker::requestsCancelled(std::vector<Demand*> &demands) {
         auto &model = models[model_id];
         detach(model);
         invalidatePriorities(model);
-        distributeLoad(models[model_id]);
+        distributeLoad(model);
     }
 }
 
@@ -360,11 +381,12 @@ int LoadTracker::loadModel(int gpu_id, bool requires_eviction) {
     // Complete any pending requests
     checkRequests(util::now());
 
+    auto &gpu = gpus[gpu_id];
+
     // Update and re-enqueue all models
     refreshPriorities();
-    attach(gpus[gpu_id]);
+    attach(gpu);
 
-    auto &gpu = gpus[gpu_id];
     if (gpu.not_cached.size() == 0) return -1;
 
     auto &priority = *gpu.not_cached.begin();
@@ -383,7 +405,7 @@ void LoadTracker::loadModelComplete(int gpu_id, int model_id, bool success) {
     if (success) {
         addGPUcomplete(models[model_id], gpus[gpu_id]);
     } else {
-        removeGPU(models[model_id], gpus[gpu_id]);        
+        removeGPU(models[model_id], gpus[gpu_id], false);
     }
 }
 
@@ -397,7 +419,7 @@ int LoadTracker::evictModel(int gpu_id) {
 
     auto &priority = *gpu.cached.rbegin();
     Model &model = *(priority->model);
-    removeGPU(model, gpus[gpu_id]);
+    removeGPU(model, gpus[gpu_id], true);
     return model.id;
 }
 
