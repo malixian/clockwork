@@ -201,13 +201,78 @@ void WorkerManager::join() {
 	network_thread.join();
 }
 
-WorkerConnection* WorkerManager::connect(std::string host, std::string port, workerapi::Controller* controller) {
+uint32_t host_to_network(uint32_t host) {
+	uint8_t lolo = (host >> 0) & 0xFF;
+	uint8_t lohi = (host >> 8) & 0xFF;
+	uint8_t hilo = (host >> 16) & 0xFF;
+	uint8_t hihi = (host >> 24) & 0xFF;
+
+	uint32_t value = (hihi << 24)
+	               | (hilo << 16)
+	               | (lohi << 8)
+	               | (lolo << 0);
+    return value;
+}
+
+int bond(tcp::endpoint remote, tcp::endpoint local) {
+  // https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/drivers/net/bonding/bond_main.c#n3521
+  uint32_t hash = local.port();
+  hash << 16;
+  hash += remote.port();
+  hash ^= host_to_network(remote.address().to_v4().to_uint()) ^ host_to_network(local.address().to_v4().to_uint());
+  hash ^= (hash >> 16);
+  hash ^= (hash >> 8);
+  hash = hash >> 1;
+  return hash;
+}
+
+tcp::endpoint WorkerManager::resolve(std::string host, std::string port) {
+	asio::ip::tcp::resolver resolver_(io_service);
+	asio::ip::tcp::resolver::query query(host, port);
+	tcp::resolver::iterator endpoint_iterator = resolver_.resolve(query);
+    tcp::resolver::iterator end;
+    CHECK(endpoint_iterator != end) << "Unable to resolve " << host << ":" << port;
+    return *endpoint_iterator;
+}
+
+WorkerConnection* WorkerManager::connect(std::string host, std::string port, workerapi::Controller* controller, int interface) {
+
+	int localPort = 47524;
+
+	for (int localPort = 47524; localPort < 60999; localPort++) {
+		WorkerConnection* c = connect_(host, port, controller, localPort);
+		if (c == nullptr) continue;
+
+		int hash = bond(c->get_socket().remote_endpoint(), c->get_socket().local_endpoint());
+
+		if ((hash % 2) == (interface % 2)) {
+			return c;
+		}
+		c->close();
+		delete c;
+	}
+
+	CHECK(false) << "Exhausted ephemeral port range";
+}	
+
+WorkerConnection* WorkerManager::connect_(std::string host, std::string port, workerapi::Controller* controller, int localPort) {
+	WorkerConnection* c = new WorkerConnection(io_service, controller);
+
 	try {
-		WorkerConnection* c = new WorkerConnection(io_service, controller);
+		auto &socket = c->get_socket();
+		socket.open(tcp::v4());
+		socket.bind(tcp::endpoint(tcp::v4(), localPort));
+	} catch (std::exception& e) {
+		return nullptr;
+	} catch (const char* m) {
+		return nullptr;
+	}
+
+	try {
 		c->connect(host, port);
-		std::cout << "Connecting to worker " << host << ":" << port << std::endl;
 		while (alive.load() && !c->connected.load()); // If connection fails, alive sets to false
-		std::cout << "Connection established" << std::endl;
+		c->print();
+		std::cout << "Connection to worker " << host << ":" << port << " established" << std::endl;
 		return c;
 	} catch (std::exception& e) {
 		alive.store(false);
@@ -219,6 +284,11 @@ WorkerConnection* WorkerManager::connect(std::string host, std::string port, wor
 		CHECK(false) << "Exception in network thread: " << m;
 	}
 	return nullptr;
+}
+
+WorkerConnection* WorkerManager::connect(std::string host, std::string port, workerapi::Controller* controller) {
+	return connect(host, port, controller, 0);
+	// return connect(host, port, controller, connection_count++);
 }
 
 ClientConnection::ClientConnection(asio::io_service &io_service, clientapi::ClientAPI* api) :

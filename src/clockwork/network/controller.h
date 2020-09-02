@@ -59,6 +59,7 @@ private:
 	std::atomic_bool alive;
 	asio::io_service io_service;
 	std::thread network_thread;
+	std::atomic_int connection_count = 0;
 
 public:
 	WorkerManager();
@@ -69,6 +70,11 @@ public:
 
 	void join();
 	WorkerConnection* connect(std::string host, std::string port, workerapi::Controller* controller);
+	WorkerConnection* connect(std::string host, std::string port, workerapi::Controller* controller, int localPort);
+	WorkerConnection* connect_(std::string host, std::string port, workerapi::Controller* controller, int bond);
+
+private:
+	tcp::endpoint resolve(std::string host, std::string port);
 
 };
 

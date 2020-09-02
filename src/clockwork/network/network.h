@@ -214,6 +214,7 @@ public:
   void established();
   asio::ip::tcp::socket &get_socket();
   void close(const char* reason = nullptr);
+  void print();
 
 protected:
   virtual void ready();

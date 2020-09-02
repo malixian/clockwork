@@ -330,7 +330,13 @@ void message_connection::abort_connection(const char *msg) {
   close(msg);
 }
 
-
+void message_connection::print() {
+  std::string sClientIp = socket_.remote_endpoint().address().to_string();
+  unsigned short uiClientPort = socket_.remote_endpoint().port();
+  std::string sLocalIp = socket_.local_endpoint().address().to_string();
+  unsigned short sLocalPort = socket_.local_endpoint().port();
+  std::cout << "message_connection local=" << sLocalIp <<":"<<sLocalPort << " remote=" << sClientIp << ":" << uiClientPort << std::endl;
+}
 
 }
 }
