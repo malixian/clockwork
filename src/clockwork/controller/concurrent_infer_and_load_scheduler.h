@@ -186,7 +186,7 @@ class Scheduler : public clockwork::Scheduler {
         Model* model = nullptr;
         std::atomic_bool loaded;
         std::atomic_bool loading;
-        unsigned version = 0;
+        std::atomic_int version = 0;
         ModelInstance(GPU* gpu, Model* model): gpu(gpu), model(model), loaded(false), loading(false) {}
     };
 
@@ -231,11 +231,11 @@ class Scheduler : public clockwork::Scheduler {
         // Enqueues the request to this model, then enqueues InferStrategies to all active ModelInstances
         void enqueue(Request request);
 
-        // Enqueues InferStrategies for all requests to this ModelInstance
-        void enqueue(ModelInstance* instance);
+        // Get all currently queued requests; used to generate strategies
+        std::vector<Request> requests();
 
         // Gets actions to execute for this model
-        InferAction* try_dequeue(uint64_t gpu_free_at, unsigned gpu_clock, Strategy &strategy, bool &retry);
+        InferAction* try_dequeue(uint64_t gpu_free_at, unsigned gpu_clock, Strategy &strategy);
 
         // GPUs can add new measurements
         void add_measurement(unsigned batch_size, uint64_t duration, unsigned gpu_clock);
@@ -302,14 +302,14 @@ class Scheduler : public clockwork::Scheduler {
         tbb::spin_mutex loadweights_mutex;
         WorkerTracker loadweights;
 
-        unsigned free_pages;
+        std::atomic_int free_pages;
         bool eviction_required = false;
         uint64_t last_load = 0;
         uint64_t last_exec = 0;
         uint64_t last_print = 0;
         int loads = 0;
 
-        std::queue<Loading> loading;
+
         std::priority_queue<Strategy, std::deque<Strategy>, StrategyImpl::Comparator> strategy_queue;
 
         // Incoming strategies enqueued by models
@@ -318,9 +318,8 @@ class Scheduler : public clockwork::Scheduler {
         // Results enqueued by network
         tbb::concurrent_queue<std::shared_ptr<workerapi::Result>> incoming_results;
 
-        // Pending actions on this GPU
-        typedef std::function<void(std::shared_ptr<workerapi::Result>&)> action_callback;
-        std::unordered_map<uint64_t, action_callback> callbacks;
+        // Models that have been loaded, whose strategies should be included
+        tbb::concurrent_queue<ModelInstance*> newly_loaded_models;
 
     public:
         GPU(unsigned id,
@@ -340,17 +339,17 @@ class Scheduler : public clockwork::Scheduler {
             incoming_results.push(result);
         }
 
-        // Not thread-safe.
-        void check_pending();
+        bool schedule_infer();
+        bool schedule_load();
 
     private:
         void send_action(InferAction* action);
         void send_action(LoadWeightsAction* action);
         void send_action(EvictWeightsAction* action);
-        bool try_load(uint64_t available);
+
+
         std::vector<EvictWeightsAction*> evict_pages(unsigned required_pages);
 
-        void handle_result(std::shared_ptr<workerapi::Result> &result);
         void infer_error(InferAction* action, std::shared_ptr<workerapi::ErrorResult> &error);
         void infer_success(InferAction* action, std::shared_ptr<workerapi::InferResult> &result);
         void infer_result(InferAction* action, std::shared_ptr<workerapi::Result> &result);
@@ -376,15 +375,18 @@ class Scheduler : public clockwork::Scheduler {
     ControllerActionTelemetryLogger* printer;
     std::thread network_printer;
     std::vector<std::thread> admission_threads;
-    std::vector<std::thread> gpu_threads;
+    std::vector<std::thread> results_threads;
+    std::vector<std::thread> infer_threads;
+    std::vector<std::thread> load_threads;
 
     // Messages
     tbb::concurrent_queue<std::shared_ptr<workerapi::Result>> result_queue;
     tbb::concurrent_queue<Request> request_queue;
 
-    // Actions
-    tbb::spin_mutex actions_mutex;
-    std::unordered_map<uint64_t, GPU*> outstanding_actions;
+    // Callbacks
+    tbb::spin_mutex callbacks_mutex;
+    typedef std::function<void(std::shared_ptr<workerapi::Result>&)> Callback;
+    std::unordered_map<uint64_t, Callback> callbacks;
 
     // Diagnostic
     std::atomic_flag has_logged_inputs_status;
@@ -396,7 +398,7 @@ class Scheduler : public clockwork::Scheduler {
  public:
 
     // Called by GPU threads to register an action
-    void add_action(uint64_t action_id, GPU* gpu);
+    void add_callback(uint64_t action_id, Callback callback);
 
     // Called when model loading has completed
     virtual void start(std::vector<network::controller::WorkerConnection*> workers,
@@ -421,7 +423,9 @@ class Scheduler : public clockwork::Scheduler {
 
     // The main thread run methods
     void run_admission_thread();
-    void run_gpu_thread(std::vector<GPU*> gpus);
+    void run_results_thread();
+    void run_infer_thread(std::vector<GPU*> gpus);
+    void run_load_thread(std::vector<GPU*> gpus);
 
     // Logic of the dispatcher thread
     void handle_result(std::shared_ptr<workerapi::Result> &result);

@@ -324,6 +324,8 @@ void LoadTracker::requestCompleted(Demand &demand, int gpu_id) {
 }
 
 void LoadTracker::requestsCompleted(std::vector<Demand*> &demands, int gpu_id) {
+    if (demands.size() == 0) return;
+
     // Complete any pending requests
     checkRequests(util::now());
     

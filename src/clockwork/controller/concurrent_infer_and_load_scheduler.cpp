@@ -1,4 +1,5 @@
 #include "clockwork/controller/concurrent_infer_and_load_scheduler.h"
+#include <vector>
 
 namespace clockwork {
 namespace scheduler {
@@ -209,7 +210,7 @@ void Scheduler::Model::enqueue(Request request) {
     }
 }
 
-void Scheduler::Model::enqueue(ModelInstance* instance) {
+std::vector<Scheduler::Request> Scheduler::Model::requests() {
     tbb::queuing_mutex::scoped_lock lock(mutex);
 
     std::vector<uint64_t> batch_size_estimates(supported_batch_sizes.size());
@@ -220,9 +221,7 @@ void Scheduler::Model::enqueue(ModelInstance* instance) {
     Request newrequest;
     while (incoming.try_pop(newrequest)) queue.push_back(newrequest);
     
-    for (auto &request : queue) {
-        instance->gpu->add_strategies(request);
-    }
+    return std::vector<Request>(queue.begin(), queue.end());
 }
 
 void Scheduler::Model::check_timeouts(uint64_t free_at) {
@@ -241,27 +240,18 @@ void Scheduler::Model::check_timeouts(uint64_t free_at) {
 Scheduler::InferAction* Scheduler::Model::try_dequeue(
         uint64_t free_at,
         unsigned gpu_clock,
-        Strategy &strategy,
-        bool &retry)
+        Strategy &strategy)
 {   
     uint64_t exec_time = estimate(strategy->batch_size, gpu_clock);
     uint64_t completion_time = free_at + exec_time;
 
     if (!strategy->valid || strategy->deadline < completion_time) {
-        retry = false;
         return nullptr;
     }
 
     InferAction* action;    
     {
-        tbb::queuing_mutex::scoped_lock lock;
-
-        if (retry) {
-            if (!lock.try_acquire(mutex)) return nullptr;
-        } else {
-            lock.acquire(mutex);
-        }
-        retry = false;
+        tbb::queuing_mutex::scoped_lock lock(mutex);
 
         // Strategy or request may have been invalidated while we were waiting
         if (!strategy->valid || strategy->deadline <= completion_time) {
@@ -478,16 +468,15 @@ float Scheduler::InferAction::complete(uint64_t now, int gpu_id) {
     for (auto &request : requests) {
         if (request->complete(now, gpu_id)) {
             successful_requests += 1;
-            demands.push_back(&request->demand);
         }
+        demands.push_back(&(request->demand));
         total_requests += 1;
     }
 
-    {
+    if (demands.size() > 0) {
         tbb::queuing_mutex::scoped_lock lock(model->scheduler->tracker->mutex);
         model->scheduler->tracker->requestsCompleted(demands, gpu_id);
     }
-
 
     return successful_requests / total_requests;
 }
@@ -595,10 +584,10 @@ void Scheduler::GPU::send_action(InferAction* action) {
     }
 
     // Save the callback
-    callbacks[infer->id] = [this, action](std::shared_ptr<workerapi::Result> result) {
+    auto callback = [this, action](std::shared_ptr<workerapi::Result> result) {
         this->infer_result(action, result);
     };
-    scheduler->add_action(infer->id, this);
+    scheduler->add_callback(infer->id, callback);
 
     // Record the telemetry
     action->telemetry.set(infer);
@@ -635,10 +624,10 @@ void Scheduler::GPU::send_action(LoadWeightsAction* action) {
     }
 
     // Save the callback
-    callbacks[load->id] = [this, action](std::shared_ptr<workerapi::Result> result) {
+    auto callback = [this, action](std::shared_ptr<workerapi::Result> result) {
         this->load_result(action, result);
     };
-    scheduler->add_action(load->id, this);
+    scheduler->add_callback(load->id, callback);
 
     // Send the action
     worker->sendAction(load);
@@ -657,10 +646,10 @@ void Scheduler::GPU::send_action(EvictWeightsAction* action) {
     evict->worker_id = worker_id;
 
     // Save the callback
-    callbacks[evict->id] = [this, action](std::shared_ptr<workerapi::Result> result) {
+    auto callback = [this, action](std::shared_ptr<workerapi::Result> result) {
         this->evict_result(action, result);
     };
-    scheduler->add_action(evict->id, this);
+    scheduler->add_callback(evict->id, callback);
 
     // Send the action
     worker->sendAction(evict);
@@ -696,19 +685,26 @@ std::vector<Scheduler::EvictWeightsAction*> Scheduler::GPU::evict_pages(unsigned
     return ret;
 }
 
-bool Scheduler::GPU::try_load(uint64_t available) {
-    if (last_load + 100000UL > util::now()) return false;
+bool Scheduler::GPU::schedule_load() {
+    uint64_t now = util::now();
+    if (last_load + 100000UL > now) return false;
+
+    if (loads >= Scheduler::max_loads) return false;
+
+    uint64_t available;
+    {
+        tbb::spin_mutex::scoped_lock lock(loadweights_mutex);
+        available = loadweights.available();
+    }
+
+    if (available >= now + scheduler->schedule_ahead) return false;
 
     ModelInstance* instance;
     unsigned size;
     std::vector<EvictWeightsAction*> evict_actions;
     {
-        tbb::queuing_mutex::scoped_lock load_lock;
-        tbb::queuing_mutex::scoped_lock lock;
-
-        // if (!lock.try_acquire(scheduler->tracker->mutex)) return false;
-        load_lock.acquire(scheduler->tracker->load_mutex);
-        lock.acquire(scheduler->tracker->mutex);
+        tbb::queuing_mutex::scoped_lock load_lock(scheduler->tracker->load_mutex);
+        tbb::queuing_mutex::scoped_lock lock(scheduler->tracker->mutex);
 
         last_load = util::now();
 
@@ -749,20 +745,25 @@ bool Scheduler::GPU::try_load(uint64_t available) {
     action->set_expectations(available, expected_duration);
     loads++;
 
-    // uint64_t exec_may_begin_at = std::max(available, util::now() + latest_delta) + expected_duration;
-    // loading.push({instance, instance->version, exec_may_begin_at});
-
     send_action(action);
     return true;
 }
 
-void Scheduler::GPU::check_pending() {
+bool Scheduler::GPU::schedule_infer() {
     bool active = false;
 
-    // Handle all incoming results
-    std::shared_ptr<workerapi::Result> result;
-    while (incoming_results.try_pop(result)) {
-        handle_result(result);
+    // Handle all newly-loaded models, add to strategy queue
+    ModelInstance* newly_loaded;
+    while (newly_loaded_models.try_pop(newly_loaded)) {
+        auto requests = newly_loaded->model->requests();
+
+        for (auto &request : requests) {
+            for (auto &strategy : request->strategies) {
+                if (strategy->valid) {
+                    strategy_queue.push(strategy);
+                }
+            }
+        }
         active = true;
     }
 
@@ -813,10 +814,7 @@ void Scheduler::GPU::check_pending() {
 
         // Only valid strategies, for which this GPU has the model loaded
         if (strategy->valid && instances[strategy->model->id]->loaded) {
-            bool retry = false;
-            InferAction* action = strategy->model->try_dequeue(exec_at, clock, strategy, retry);
-
-            if (retry) break;
+            InferAction* action = strategy->model->try_dequeue(exec_at, clock, strategy);
 
             if (action != nullptr) {
                 send_action(action);
@@ -827,35 +825,7 @@ void Scheduler::GPU::check_pending() {
         strategy_queue.pop();
     }
 
-    // Schedule one load action
-    while (loads < Scheduler::max_loads) {
-        uint64_t load_at;
-        {
-            tbb::spin_mutex::scoped_lock lock(loadweights_mutex);
-            load_at = loadweights.available();
-        }
-
-        if (load_at >= schedule_until) break;
-
-        if (try_load(load_at)) {
-            active = true;
-        }
-    }
-
-    if (!active) {
-        usleep(100);
-    }
-}
-
-void Scheduler::GPU::handle_result(std::shared_ptr<workerapi::Result> &result) {
-    auto it = callbacks.find(result->id);
-    CHECK(it != callbacks.end()) 
-        << "Received result for non-existent action " << result->str();
-
-    auto callback = it->second;
-    callbacks.erase(it);
-
-    callback(result);
+    return active;
 }
 
 void Scheduler::GPU::infer_error(InferAction* action, std::shared_ptr<workerapi::ErrorResult> &error) {
@@ -961,7 +931,7 @@ void Scheduler::GPU::load_success(LoadWeightsAction* action, std::shared_ptr<wor
     action->instance->model->copies_loaded++;
 
     // Enable new requests
-    action->instance->model->enqueue(action->instance);
+    newly_loaded_models.push(action->instance);
 
     // TODO: change this?
     action->telemetry.goodput = 1.0;
@@ -1177,29 +1147,30 @@ void Scheduler::start(std::vector<network::controller::WorkerConnection*> worker
         threading::initHighPriorityThread(admission_threads[i]);
     }
 
+    uint64_t num_results_threads = 1;
+    for (int i = 0; i < num_results_threads; i++) {
+        results_threads.push_back(std::thread(&Scheduler::run_results_thread, this));
+        threading::initHighPriorityThread(results_threads[i]);
+    }
+
     // Create and start the printer threads
     this->printer = ControllerActionTelemetry::log_and_summarize(actions_filename, print_interval);
     network_printer = std::thread(&networkPrintThread, workers);
     threading::initLoggerThread(network_printer);
 
     // Allocate GPUs to threads
-    uint64_t max_gpu_threads = 10;
-    if (gpus.size() <= max_gpu_threads) {
-        // Create and start the GPU threads
-        for (unsigned i = 0; i < gpus.size(); i++) {
-            std::vector<GPU*> gpus_for_thread = {gpus[i]};
-            gpu_threads.push_back(std::thread(&Scheduler::run_gpu_thread, this, gpus_for_thread));
-            threading::initHighPriorityThread(gpu_threads[i]);
-        }
-    } else {
-        std::vector<std::vector<GPU*>> gpu_thread_allocations(max_gpu_threads);
-        for (unsigned i = 0; i < gpus.size(); i++) {
-            gpu_thread_allocations[i % max_gpu_threads].push_back(gpus[i]);
-        }
+    uint64_t max_gpu_threads = 5;
+    std::vector<std::vector<GPU*>> gpu_thread_allocations(max_gpu_threads);
+    for (unsigned i = 0; i < gpus.size(); i++) {
+        gpu_thread_allocations[i % max_gpu_threads].push_back(gpus[i]);
+    }
 
-        for (unsigned i = 0; i < gpu_thread_allocations.size(); i++) {
-            gpu_threads.push_back(std::thread(&Scheduler::run_gpu_thread, this, gpu_thread_allocations[i]));
-            threading::initHighPriorityThread(gpu_threads[i]);
+    for (unsigned i = 0; i < gpu_thread_allocations.size(); i++) {
+        if (gpu_thread_allocations[i].size() > 0) {
+            infer_threads.push_back(std::thread(&Scheduler::run_infer_thread, this, gpu_thread_allocations[i]));
+            threading::initHighPriorityThread(infer_threads[i]);
+            load_threads.push_back(std::thread(&Scheduler::run_load_thread, this, gpu_thread_allocations[i]));
+            threading::initHighPriorityThread(load_threads[i]);
         }
     }
 }
@@ -1241,58 +1212,28 @@ void Scheduler::handle_requests(std::vector<Request> &requests) {
     }
 }
 
-void Scheduler::add_action(uint64_t action_id, GPU* gpu) {
-    auto pair = std::make_pair(action_id, gpu);
+void Scheduler::add_callback(uint64_t action_id, Callback callback) {
+    auto pair = std::make_pair(action_id, callback);
 
-    tbb::spin_mutex::scoped_lock lock(actions_mutex);
-    outstanding_actions.insert(pair);
+    tbb::spin_mutex::scoped_lock lock(callbacks_mutex);
+    callbacks.insert(pair);
 }
 
 void Scheduler::handle_result(std::shared_ptr<workerapi::Result> &result) {
-    GPU* gpu;
+    Callback callback;
     {
-        tbb::spin_mutex::scoped_lock lock(actions_mutex);
+        tbb::spin_mutex::scoped_lock lock(callbacks_mutex);
 
-        auto it = outstanding_actions.find(result->id);
-        CHECK(it != outstanding_actions.end()) 
+        auto it = callbacks.find(result->id);
+        CHECK(it != callbacks.end()) 
             << "Received result for non-existent action " << result->str();
 
-        gpu = it->second;
-        outstanding_actions.erase(it);
+        callback = it->second;
+        callbacks.erase(it);
     }
 
-    gpu->add_result(result);
+    callback(result);
 }
-
-// void Scheduler::process_requests() {
-//     // Process this many requests per iteration
-//     int max_requests = 50;
-//     std::vector<Request> requests;
-//     requests.reserve(max_requests);
-
-//     while (true) {
-//         // Dequeue up to `max_requests`
-//         Request request;
-//         while (requests.size() < max_requests && request_queue.try_pop(request)) {
-
-//             // Immediately drop requests to invalid models
-//             unsigned model_id = request->request.model_id;
-//             if (model_id > models.size() || models[model_id] == nullptr) {
-//                 request->set_error(clockworkError, "Invalid model ID");
-//                 CHECK(!request->complete(util::now(), -1)) << "Erroneous request should not be successful";
-//                 continue;
-//             }
-
-//             requests.push_back(request);
-//         }
-
-//         handle_requests(requests);
-
-//         requests.clear();
-//     }
-// }
-
-
 
 void Scheduler::run_admission_thread() {
     // Process this many requests per iteration
@@ -1342,9 +1283,18 @@ void Scheduler::run_admission_thread() {
     }
 }
 
-void Scheduler::run_gpu_thread(std::vector<GPU*> gpus) {
+void Scheduler::run_results_thread() {
+    while (true) {
+        std::shared_ptr<workerapi::Result> result;
+        if (result_queue.try_pop(result)) {
+            handle_result(result);
+        }
+    }
+}
+
+void Scheduler::run_infer_thread(std::vector<GPU*> gpus) {
     std::stringstream msg;
-    msg << "GPU handler [ ";
+    msg << "GPU infer thread [ ";
     for (auto &gpu : gpus) {
         msg << gpu->id << " ";
     }
@@ -1352,10 +1302,35 @@ void Scheduler::run_gpu_thread(std::vector<GPU*> gpus) {
     std::cout << msg.str();
 
     while (true) {
+        bool active = false;
         for (auto &gpu : gpus) {
-            gpu->check_pending();
+            active |= gpu->schedule_infer();
+        }
+        if (!active) {
+            usleep(50);
         }
     }
+}
+
+void Scheduler::run_load_thread(std::vector<GPU*> gpus) {
+    std::stringstream msg;
+    msg << "GPU load thread [ ";
+    for (auto &gpu : gpus) {
+        msg << gpu->id << " ";
+    }
+    msg << "] started" << std::endl;
+    std::cout << msg.str();
+
+    while (true) {
+        bool active = false;
+        for (auto &gpu : gpus) {
+            active |= gpu->schedule_load();
+        }
+        if (!active) {
+            usleep(50);
+        }
+    }
+
 }
 
 // The actual scheduler interface implementation, invoked by worker network thread
@@ -1364,7 +1339,7 @@ void Scheduler::resultFromWorker(std::shared_ptr<workerapi::Result> result)
     if (print_debug) std::cout << ("Worker  --> " + result->str() + "\n");
 
     result->result_received = util::now();
-    handle_result(result);
+    result_queue.push(result);
 }
 
 // The actual scheduler interface implementation, invoked by client network thread
