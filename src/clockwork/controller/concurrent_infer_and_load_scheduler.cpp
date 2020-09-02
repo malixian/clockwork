@@ -1141,6 +1141,11 @@ void Scheduler::start(std::vector<network::controller::WorkerConnection*> worker
     initialize_model_instances();
     print_status();
 
+    // Create and start the printer threads
+    this->printer = ControllerActionTelemetry::log_and_summarize(actions_filename, print_interval);
+    network_printer = std::thread(&networkPrintThread, workers);
+    threading::initLoggerThread(network_printer);
+
     uint64_t num_admission_threads = 2;
     for (int i = 0; i < num_admission_threads; i++) {
         admission_threads.push_back(std::thread(&Scheduler::run_admission_thread, this));
@@ -1153,25 +1158,23 @@ void Scheduler::start(std::vector<network::controller::WorkerConnection*> worker
         threading::initHighPriorityThread(results_threads[i]);
     }
 
-    // Create and start the printer threads
-    this->printer = ControllerActionTelemetry::log_and_summarize(actions_filename, print_interval);
-    network_printer = std::thread(&networkPrintThread, workers);
-    threading::initLoggerThread(network_printer);
 
-    // Allocate GPUs to threads
-    uint64_t max_gpu_threads = 5;
-    std::vector<std::vector<GPU*>> gpu_thread_allocations(max_gpu_threads);
-    for (unsigned i = 0; i < gpus.size(); i++) {
-        gpu_thread_allocations[i % max_gpu_threads].push_back(gpus[i]);
+    int num_infer_threads = 5;
+    for (unsigned i = 0; i < num_infer_threads; i++) {
+        infer_threads.push_back(std::thread(&Scheduler::run_infer_thread, this, i));
+        threading::initHighPriorityThread(infer_threads[i]);
+    }
+    for (auto gpu : gpus) {
+        to_infer.push(gpu);
     }
 
-    for (unsigned i = 0; i < gpu_thread_allocations.size(); i++) {
-        if (gpu_thread_allocations[i].size() > 0) {
-            infer_threads.push_back(std::thread(&Scheduler::run_infer_thread, this, gpu_thread_allocations[i]));
-            threading::initHighPriorityThread(infer_threads[i]);
-            load_threads.push_back(std::thread(&Scheduler::run_load_thread, this, gpu_thread_allocations[i]));
-            threading::initHighPriorityThread(load_threads[i]);
-        }
+    int num_load_threads = 5;
+    for (unsigned i = 0; i < num_load_threads; i++) {
+        load_threads.push_back(std::thread(&Scheduler::run_load_thread, this, i));
+        threading::initHighPriorityThread(load_threads[i]);
+    }
+    for (auto gpu : gpus) {
+        to_load.push(gpu);
     }
 }
 
@@ -1292,42 +1295,56 @@ void Scheduler::run_results_thread() {
     }
 }
 
-void Scheduler::run_infer_thread(std::vector<GPU*> gpus) {
+void Scheduler::run_infer_thread(int id) {
     std::stringstream msg;
-    msg << "GPU infer thread [ ";
-    for (auto &gpu : gpus) {
-        msg << gpu->id << " ";
-    }
-    msg << "] started" << std::endl;
+    msg << "GPU infer thread [" << id << "] started" << std::endl;
     std::cout << msg.str();
 
+    int inactive = 0;
     while (true) {
-        bool active = false;
-        for (auto &gpu : gpus) {
-            active |= gpu->schedule_infer();
-        }
-        if (!active) {
+        GPU* gpu;
+        while (!to_infer.try_pop(gpu)) { 
             usleep(50);
+        }
+
+        bool active = gpu->schedule_infer();
+        if (active) {
+            inactive = 0;
+        } else {
+            inactive++;
+        }
+        to_infer.push(gpu);
+
+        if (inactive == 10) {
+            usleep(50);
+            inactive = 0;
         }
     }
 }
 
-void Scheduler::run_load_thread(std::vector<GPU*> gpus) {
+void Scheduler::run_load_thread(int id) {
     std::stringstream msg;
-    msg << "GPU load thread [ ";
-    for (auto &gpu : gpus) {
-        msg << gpu->id << " ";
-    }
-    msg << "] started" << std::endl;
+    msg << "GPU load thread [" << id << "] started" << std::endl;
     std::cout << msg.str();
 
+    int inactive = 0;
     while (true) {
-        bool active = false;
-        for (auto &gpu : gpus) {
-            active |= gpu->schedule_load();
-        }
-        if (!active) {
+        GPU* gpu;
+        while (!to_load.try_pop(gpu)) {
             usleep(50);
+        }
+
+        bool active = gpu->schedule_load();
+        if (active) {
+            inactive = 0;
+        } else {
+            inactive++;
+        }
+        to_load.push(gpu);
+
+        if (inactive == 10) {
+            usleep(50);
+            inactive = 0;
         }
     }
 

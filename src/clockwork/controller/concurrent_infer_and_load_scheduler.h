@@ -368,6 +368,8 @@ class Scheduler : public clockwork::Scheduler {
     // Non-mutable so thread-safe
     std::vector<GPU*> gpus;
     std::vector<Model*> models;
+    tbb::concurrent_queue<GPU*> to_load;
+    tbb::concurrent_queue<GPU*> to_infer;
 
  private:
     // Threads
@@ -424,8 +426,8 @@ class Scheduler : public clockwork::Scheduler {
     // The main thread run methods
     void run_admission_thread();
     void run_results_thread();
-    void run_infer_thread(std::vector<GPU*> gpus);
-    void run_load_thread(std::vector<GPU*> gpus);
+    void run_infer_thread(int id);
+    void run_load_thread(int id);
 
     // Logic of the dispatcher thread
     void handle_result(std::shared_ptr<workerapi::Result> &result);
