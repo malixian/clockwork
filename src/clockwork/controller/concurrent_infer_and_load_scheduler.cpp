@@ -106,11 +106,6 @@ bool Scheduler::RequestImpl::complete(uint64_t now, int gpu_id) {
 
     callback(response);
 
-    {
-        tbb::queuing_mutex::scoped_lock lock(model->scheduler->tracker->mutex);
-        model->scheduler->tracker->requestCompleted(demand, gpu_id);
-    }
-
     return response.header.status == clockworkSuccess && response.departure <= response.deadline;
 }
 
@@ -475,14 +470,25 @@ void Scheduler::InferAction::set_result(std::shared_ptr<workerapi::InferResult> 
 }
 
 float Scheduler::InferAction::complete(uint64_t now, int gpu_id) {
+    std::vector<LoadTracker::Demand*> demands;
+    demands.reserve(requests.size());
+
     float successful_requests = 0;
     float total_requests = 0;
     for (auto &request : requests) {
         if (request->complete(now, gpu_id)) {
             successful_requests += 1;
+            demands.push_back(&request->demand);
         }
         total_requests += 1;
     }
+
+    {
+        tbb::queuing_mutex::scoped_lock lock(model->scheduler->tracker->mutex);
+        model->scheduler->tracker->requestsCompleted(demands, gpu_id);
+    }
+
+
     return successful_requests / total_requests;
 }
 
@@ -863,11 +869,6 @@ void Scheduler::GPU::infer_error(InferAction* action, std::shared_ptr<workerapi:
         exec.error(error->id, util::now());
     }
 
-    // // Update model load tracking
-    // for (auto &request : action->requests) {
-    //     scheduler->tracker->requestCompleted(request->demand);
-    // }
-
     action->set_error(error);
     CHECK(action->complete(util::now(), id) == 0) << "ErrorResult should not result in successful requests";
 
@@ -886,11 +887,6 @@ void Scheduler::GPU::infer_success(InferAction* action, std::shared_ptr<workerap
         exec.success(result->id, result->exec.end);
         exec.update_clock(result->gpu_clock);
     }
-
-    // // Update model load tracking
-    // for (auto &request : action->requests) {
-    //     scheduler->tracker->requestCompleted(request->demand);
-    // }
 
     // Update model execution tracking
     action->model->add_measurement(
