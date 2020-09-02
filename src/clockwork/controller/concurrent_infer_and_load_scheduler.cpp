@@ -20,7 +20,6 @@ Scheduler::Scheduler(uint64_t default_slo, uint64_t latest_delta,
       generate_inputs(generate_inputs),
       max_gpus(max_gpus),
       actions_filename(actions_filename),
-      actions_in_use(ATOMIC_FLAG_INIT),
       has_logged_inputs_status(ATOMIC_FLAG_INIT) {
     std::cout << "ConcurrentInferAndLoadScheduler using:" << std::endl;
     std::cout << "\t default_slo=" << default_slo << std::endl;
@@ -148,8 +147,6 @@ Scheduler::Model::Model(Scheduler* scheduler, BatchedModelState &state)
     : scheduler(scheduler),
       id(state.id), 
       num_weights_pages(state.num_weights_pages),
-      weights_in_use(ATOMIC_FLAG_INIT),
-      estimates_in_use(ATOMIC_FLAG_INIT),
       input_size(state.input_size),
       output_size(state.output_size) {
     for (auto &batch_size : state.supported_batch_sizes) {
@@ -369,7 +366,7 @@ Scheduler::InferAction* Scheduler::Model::try_dequeue(
 const float Scheduler::estimate_percentile = 0.99;
 
 void Scheduler::Model::add_measurement(unsigned batch_size, uint64_t duration, unsigned gpu_clock) {
-    while(estimates_in_use.test_and_set());
+    tbb::spin_mutex::scoped_lock lock(estimates_mutex);
 
     auto it = estimators.find(batch_size);
     CHECK(it != estimators.end()) << "Unsupported batch size " << batch_size;
@@ -377,15 +374,13 @@ void Scheduler::Model::add_measurement(unsigned batch_size, uint64_t duration, u
     estimator->insert(duration * gpu_clock);
 
     estimates[batch_size] = estimator->get_percentile(Scheduler::estimate_percentile);
-
-    estimates_in_use.clear();
 }
 
 void Scheduler::Model::add_weights_measurement(uint64_t duration) {
-    while (weights_in_use.test_and_set());
+    tbb::spin_mutex::scoped_lock lock(weights_estimate_mutex);
+
     weights_estimator->insert(duration);
     weights_estimate = weights_estimator->get_percentile(Scheduler::estimate_percentile);
-    weights_in_use.clear();
 }
 
 uint64_t Scheduler::Model::estimate(unsigned batch_size) {
@@ -1253,22 +1248,22 @@ void Scheduler::handle_requests(std::vector<Request> &requests) {
 void Scheduler::add_action(uint64_t action_id, GPU* gpu) {
     auto pair = std::make_pair(action_id, gpu);
 
-    while (actions_in_use.test_and_set());
+    tbb::spin_mutex::scoped_lock lock(actions_mutex);
     outstanding_actions.insert(pair);
-    actions_in_use.clear();
 }
 
 void Scheduler::handle_result(std::shared_ptr<workerapi::Result> &result) {
-    while (actions_in_use.test_and_set());
+    GPU* gpu;
+    {
+        tbb::spin_mutex::scoped_lock lock(actions_mutex);
 
-    auto it = outstanding_actions.find(result->id);
-    CHECK(it != outstanding_actions.end()) 
-        << "Received result for non-existent action " << result->str();
+        auto it = outstanding_actions.find(result->id);
+        CHECK(it != outstanding_actions.end()) 
+            << "Received result for non-existent action " << result->str();
 
-    auto gpu = it->second;
-    outstanding_actions.erase(it);
-
-    actions_in_use.clear();
+        gpu = it->second;
+        outstanding_actions.erase(it);
+    }
 
     gpu->add_result(result);
 }

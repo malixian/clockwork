@@ -209,11 +209,11 @@ class Scheduler : public clockwork::Scheduler {
         std::vector<unsigned> batch_lookup_;
         unsigned max_batch_size;
 
-        std::atomic_flag estimates_in_use;
+        tbb::spin_mutex estimates_mutex;
         std::vector<uint64_t> estimates;
         std::map<unsigned, SlidingWindow*> estimators;
 
-        std::atomic_flag weights_in_use;
+        tbb::spin_mutex weights_estimate_mutex;
         SlidingWindow* weights_estimator;
         uint64_t weights_estimate;
 
@@ -383,7 +383,7 @@ class Scheduler : public clockwork::Scheduler {
     tbb::concurrent_queue<Request> request_queue;
 
     // Actions
-    std::atomic_flag actions_in_use;
+    tbb::spin_mutex actions_mutex;
     std::unordered_map<uint64_t, GPU*> outstanding_actions;
 
     // Diagnostic
