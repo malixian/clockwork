@@ -17,6 +17,7 @@
 #include "clockwork/sliding_window.h"
 #include "tbb/mutex.h"
 #include "tbb/queuing_mutex.h"
+#include "tbb/spin_mutex.h"
 
 namespace clockwork {
 namespace scheduler {
@@ -294,7 +295,11 @@ class Scheduler : public clockwork::Scheduler {
      private:
         network::controller::WorkerConnection* worker;
         Scheduler* scheduler;
+
+        tbb::spin_mutex exec_mutex;
         WorkerTracker exec;
+
+        tbb::spin_mutex loadweights_mutex;
         WorkerTracker loadweights;
 
         unsigned free_pages;

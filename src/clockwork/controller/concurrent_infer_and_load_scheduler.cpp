@@ -523,7 +523,8 @@ void Scheduler::LoadWeightsAction::set_expectations(uint64_t exec_start, uint64_
     uint64_t now = util::now();
     action->expected_duration = duration;
     action->expected_exec_complete = exec_start + duration;
-    action->earliest = std::max(now + future, exec_start - scheduler->latest_delta);
+    // action->earliest = std::max(now + future, exec_start - scheduler->latest_delta);
+    action->earliest = now;
     action->latest = std::max(now + future + scheduler->latest_delta, exec_start + scheduler->latest_delta);
 }
 
@@ -587,7 +588,10 @@ void Scheduler::GPU::send_action(InferAction* action) {
     infer->worker_id = worker_id;
 
     // Update GPU state
-    exec.add(infer->id, infer->expected_duration);
+    {
+        tbb::spin_mutex::scoped_lock lock(exec_mutex);
+        exec.add(infer->id, infer->expected_duration);
+    }
 
     // Save the callback
     callbacks[infer->id] = [this, action](std::shared_ptr<workerapi::Result> result) {
@@ -624,7 +628,10 @@ void Scheduler::GPU::send_action(LoadWeightsAction* action) {
     load->worker_id = worker_id;
 
     // Update PCI state
-    loadweights.add(load->id, load->expected_duration);
+    {
+        tbb::spin_mutex::scoped_lock lock(loadweights_mutex);
+        loadweights.add(load->id, load->expected_duration);
+    }
 
     // Save the callback
     callbacks[load->id] = [this, action](std::shared_ptr<workerapi::Result> result) {
@@ -789,15 +796,24 @@ void Scheduler::GPU::check_pending() {
     // }
 
     // Schedule infer actions
-    uint64_t exec_at;
     uint64_t schedule_until = now + scheduler->schedule_ahead;
-    while ((exec_at = exec.available()) < schedule_until && strategy_queue.size() > 0) {
+    while (strategy_queue.size() > 0) {
+        uint64_t exec_at;
+        int clock;
+        {
+            tbb::spin_mutex::scoped_lock lock(exec_mutex);
+            exec_at = exec.available();
+            clock = exec.clock();
+        }
+
+        if (exec_at >= schedule_until) break;
+
         Strategy strategy = strategy_queue.top();
 
         // Only valid strategies, for which this GPU has the model loaded
         if (strategy->valid && instances[strategy->model->id]->loaded) {
             bool retry = false;
-            InferAction* action = strategy->model->try_dequeue(exec_at, exec.clock(), strategy, retry);
+            InferAction* action = strategy->model->try_dequeue(exec_at, clock, strategy, retry);
 
             if (retry) break;
 
@@ -811,8 +827,15 @@ void Scheduler::GPU::check_pending() {
     }
 
     // Schedule one load action
-    uint64_t load_at;
-    if (loads < Scheduler::max_loads && (load_at = loadweights.available()) < schedule_until) {
+    while (loads < Scheduler::max_loads) {
+        uint64_t load_at;
+        {
+            tbb::spin_mutex::scoped_lock lock(loadweights_mutex);
+            load_at = loadweights.available();
+        }
+
+        if (load_at >= schedule_until) break;
+
         if (try_load(load_at)) {
             active = true;
         }
@@ -840,7 +863,10 @@ void Scheduler::GPU::infer_error(InferAction* action, std::shared_ptr<workerapi:
     action->telemetry.set(error);
     
     // Update GPU state tracking
-    exec.error(error->id, util::now());
+    {
+        tbb::spin_mutex::scoped_lock lock(exec_mutex);
+        exec.error(error->id, util::now());
+    }
 
     // // Update model load tracking
     // for (auto &request : action->requests) {
@@ -860,8 +886,11 @@ void Scheduler::GPU::infer_success(InferAction* action, std::shared_ptr<workerap
     action->telemetry.set(result);
 
     // Update GPU state tracking
-    exec.success(result->id, result->exec.end);
-    exec.update_clock(result->gpu_clock);
+    {
+        tbb::spin_mutex::scoped_lock lock(exec_mutex);
+        exec.success(result->id, result->exec.end);
+        exec.update_clock(result->gpu_clock);
+    }
 
     // // Update model load tracking
     // for (auto &request : action->requests) {
@@ -910,7 +939,10 @@ void Scheduler::GPU::load_error(LoadWeightsAction* action, std::shared_ptr<worke
     free_pages += action->instance->model->num_weights_pages;
 
     // Update PCI state tracking
-    loadweights.error(error->id, util::now());
+    {
+        tbb::spin_mutex::scoped_lock lock(loadweights_mutex);
+        loadweights.error(error->id, util::now());
+    }
 
     scheduler->printer->log(action->telemetry);
 
@@ -928,7 +960,10 @@ void Scheduler::GPU::load_success(LoadWeightsAction* action, std::shared_ptr<wor
     }
 
     // Update PCI state tracking
-    loadweights.success(result->id, result->end);
+    {
+        tbb::spin_mutex::scoped_lock lock(loadweights_mutex);
+        loadweights.success(result->id, result->end);
+    }
 
     // Update PCI tracking
     action->instance->model->add_weights_measurement(result->duration);
