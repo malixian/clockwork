@@ -228,6 +228,8 @@ Clockwork has a configuration file located under `config/default.cfg`.  You can 
 
 ## Check the environment is OK
 
+From Clockwork's `build` directory,
+
 ```
 ./profile [check]
 ```
@@ -247,6 +249,8 @@ Path should be the path to a model, e.g. from `clockwork-modelzoo-volta` in the 
 At least 3 machines are required in order to run Clockwork (1 worker, 1 controller, 1 client).
 
 Clockwork can run without GPUs using an emulated worker.
+
+The binaries used below exist in Clockwork's `build` directory
 
 ### 1. Start one or more workers
 
