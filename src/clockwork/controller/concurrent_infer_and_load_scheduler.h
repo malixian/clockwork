@@ -293,6 +293,9 @@ class Scheduler : public clockwork::Scheduler {
         std::vector<ModelInstance*> instances;
 
      private:
+        tbb::queuing_mutex infer_mutex;
+        tbb::queuing_mutex load_mutex;
+
         network::controller::WorkerConnection* worker;
         Scheduler* scheduler;
 
@@ -370,6 +373,8 @@ class Scheduler : public clockwork::Scheduler {
     std::vector<Model*> models;
     tbb::concurrent_queue<GPU*> to_load;
     tbb::concurrent_queue<GPU*> to_infer;
+    std::atomic_uint64_t next_load = 0;
+    std::atomic_uint64_t next_infer = 0;
 
  private:
     // Threads

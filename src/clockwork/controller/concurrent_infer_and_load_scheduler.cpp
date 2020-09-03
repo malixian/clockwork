@@ -206,7 +206,9 @@ void Scheduler::Model::enqueue(Request request) {
 
     // Enqueue strategies to all loaded models
     for (auto &instance : instances) {
-        instance->gpu->add_strategies(request);
+        if (instance->loaded) {
+            instance->gpu->add_strategies(request);
+        }
     }
 }
 
@@ -686,6 +688,8 @@ std::vector<Scheduler::EvictWeightsAction*> Scheduler::GPU::evict_pages(unsigned
 }
 
 bool Scheduler::GPU::schedule_load() {
+    tbb::queuing_mutex::scoped_lock lock(load_mutex);
+
     uint64_t now = util::now();
     if (last_load + 100000UL > now) return false;
 
@@ -733,15 +737,14 @@ bool Scheduler::GPU::schedule_load() {
         return false;
     }
 
-    instance->version++;
-    instance->loading = true;
-    instance->loaded = false;
     free_pages -= size;
 
     uint64_t expected_duration = instance->model->estimate_weights();
 
     LoadWeightsAction* action = new LoadWeightsAction(scheduler, instance);
-    action->version = instance->version;
+    action->version = ++instance->version;
+    instance->loading = true;
+    instance->loaded = false;
     action->set_expectations(available, expected_duration);
     loads++;
 
@@ -750,6 +753,8 @@ bool Scheduler::GPU::schedule_load() {
 }
 
 bool Scheduler::GPU::schedule_infer() {
+    tbb::queuing_mutex::scoped_lock lock(infer_mutex);
+
     bool active = false;
 
     // Handle all newly-loaded models, add to strategy queue
@@ -779,11 +784,10 @@ bool Scheduler::GPU::schedule_infer() {
     }
 
     // Drop any strategies already processed or with missed deadlines
-    uint64_t now = util::now();
     while (strategy_queue.size() > 0) {
         auto &strategy = strategy_queue.top();
 
-        if (strategy->valid && strategy->deadline > now) {
+        if (strategy->valid && strategy->deadline > util::now()) {
             break;
         }
 
@@ -798,7 +802,7 @@ bool Scheduler::GPU::schedule_infer() {
     // }
 
     // Schedule infer actions
-    uint64_t schedule_until = now + scheduler->schedule_ahead;
+    
     while (strategy_queue.size() > 0) {
         uint64_t exec_at;
         int clock;
@@ -808,6 +812,7 @@ bool Scheduler::GPU::schedule_infer() {
             clock = exec.clock();
         }
 
+        uint64_t schedule_until = util::now() + scheduler->schedule_ahead;
         if (exec_at >= schedule_until) break;
 
         Strategy strategy = strategy_queue.top();
@@ -1152,14 +1157,14 @@ void Scheduler::start(std::vector<network::controller::WorkerConnection*> worker
         threading::initHighPriorityThread(admission_threads[i]);
     }
 
-    uint64_t num_results_threads = 1;
+    uint64_t num_results_threads = 2;
     for (int i = 0; i < num_results_threads; i++) {
         results_threads.push_back(std::thread(&Scheduler::run_results_thread, this));
         threading::initHighPriorityThread(results_threads[i]);
     }
 
 
-    int num_infer_threads = 5;
+    int num_infer_threads = 10;
     for (unsigned i = 0; i < num_infer_threads; i++) {
         infer_threads.push_back(std::thread(&Scheduler::run_infer_thread, this, i));
         threading::initHighPriorityThread(infer_threads[i]);
@@ -1168,7 +1173,7 @@ void Scheduler::start(std::vector<network::controller::WorkerConnection*> worker
         to_infer.push(gpu);
     }
 
-    int num_load_threads = 5;
+    int num_load_threads = 10;
     for (unsigned i = 0; i < num_load_threads; i++) {
         load_threads.push_back(std::thread(&Scheduler::run_load_thread, this, i));
         threading::initHighPriorityThread(load_threads[i]);
@@ -1283,6 +1288,10 @@ void Scheduler::run_admission_thread() {
             timeout_queue.pop();
         }
 
+        std::this_thread::yield();
+
+        usleep(10);
+
     }
 }
 
@@ -1292,6 +1301,8 @@ void Scheduler::run_results_thread() {
         if (result_queue.try_pop(result)) {
             handle_result(result);
         }
+
+        std::this_thread::yield();
     }
 }
 
@@ -1301,24 +1312,38 @@ void Scheduler::run_infer_thread(int id) {
     std::cout << msg.str();
 
     int inactive = 0;
+    int n_gpus = gpus.size();
     while (true) {
-        GPU* gpu;
-        while (!to_infer.try_pop(gpu)) { 
+        // GPU* gpu;
+        // while (!to_infer.try_pop(gpu)) { 
+        //     usleep(50);
+        // }
+
+        // bool active = gpu->schedule_infer();
+        // if (active) {
+        //     inactive = 0;
+        // } else {
+        //     inactive++;
+        // }
+        // to_infer.push(gpu);
+
+        // if (inactive == 100) {
+        //     usleep(50);
+        //     inactive = 0;
+        // }
+
+        // usleep(10);
+
+        uint64_t i = (next_infer++) % n_gpus;
+        bool active = gpus[i]->schedule_infer();
+
+        inactive = active ? 0 : inactive+1;
+        if (inactive == 100) {
+            inactive = 0;
             usleep(50);
         }
 
-        bool active = gpu->schedule_infer();
-        if (active) {
-            inactive = 0;
-        } else {
-            inactive++;
-        }
-        to_infer.push(gpu);
-
-        if (inactive == 10) {
-            usleep(50);
-            inactive = 0;
-        }
+        std::this_thread::yield();
     }
 }
 
@@ -1328,24 +1353,38 @@ void Scheduler::run_load_thread(int id) {
     std::cout << msg.str();
 
     int inactive = 0;
+    int n_gpus = gpus.size();
     while (true) {
-        GPU* gpu;
-        while (!to_load.try_pop(gpu)) {
+        // GPU* gpu;
+        // while (!to_load.try_pop(gpu)) {
+        //     usleep(50);
+        // }
+
+        // bool active = gpu->schedule_load();
+        // if (active) {
+        //     inactive = 0;
+        // } else {
+        //     inactive++;
+        // }
+        // to_load.push(gpu);
+
+        // if (inactive == 100) {
+        //     usleep(50);
+        //     inactive = 0;
+        // }
+
+        // std::this_thread::yield();
+
+        uint64_t i = (next_load++) % n_gpus;
+        bool active = gpus[i]->schedule_load();
+
+        inactive = active ? 0 : inactive+1;
+        if (inactive == 100) {
+            inactive = 0;
             usleep(50);
         }
 
-        bool active = gpu->schedule_load();
-        if (active) {
-            inactive = 0;
-        } else {
-            inactive++;
-        }
-        to_load.push(gpu);
-
-        if (inactive == 10) {
-            usleep(50);
-            inactive = 0;
-        }
+        std::this_thread::yield();
     }
 
 }
