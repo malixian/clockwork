@@ -2,7 +2,11 @@
 
 A multi-tenant managed inference server, backed by a modified version of TVM.
 
-If this README hasn't been updated, it means the system is still a work-in-progress.
+This README file describes the pre-requisites and steps required to build and run Clockwork.  If you follow these steps but encounter errors, please e-mail the mailing list.
+
+Clockwork is not feature complete, but we welcome contributions from others!
+
+Mailing List: clockwork-users@googlegroups.com
 
 # Pre-requisites
 
@@ -57,18 +61,18 @@ make -j40
 
 Set the environment variable `CLOCKWORK_CONFIG_FILE` to override the default path of Clockwork worker configurations. An example configuration file is given in `config/default.cfg`
 
-# Highly Recommended Environment Modifications
+# Required Environment Modifications
 
-Clockwork is a high-performance system that depends upon predictability.  There are various tweaks to your environment that will make executions more predictable:
+Clockwork is a high-performance system that depends upon predictability.  There are various tweaks to your environment that will make executions more predictable.  These environment modifications should be made for Clockwork's worker, controller, and client processes. Some are optional but recommended.
 
-## 1. Disable CPU frequency autoscaling
+## Check your environment
 
-Set the "performance" governor to prevent CPU clock scaling
+You can check your environment by running Clockwork's:
 ```
-echo performance | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
+./profile [check]
 ```
 
-## 2. Increase file, memlock, and rtprio limits
+## 1. Increase resource limits (memlock, nofile, rtprio)
 
 Limits on the number of open files, and the amount of page-locked memory, reduce the total number of DNNs clockwork can keep in memory at any point in time.  A limit of 1024 is too low.  A limit of 16k or higher is acceptable.
 
@@ -91,9 +95,10 @@ Note: for MPI cluster machines with the default Debian distribution, you will al
 ```
 DefaultLimitNOFILE=65535
 ```
-4. Restart
+4. Restart to take effect
+5. Upon restarting, use Clockwork's `./profile [check]` to check if the settings took effect
 
-## 3. Increase mmap limits
+## 2. Increase mmap limits
 
 Clockwork uses a lot of shared objects, and we need to increase the mmap limit.  As root, run
 ```
@@ -105,21 +110,47 @@ In general you can check mmap limits with:
 sysctl vm.max_map_count
 ```
 
-## 3. Disable CUDA JIT
+This normally does not require a restart.  You can check using Clockwork's `./profile [check]`.
 
-None of the models we feed to Clockwork should have CUDA PTX code (JIT'able code) -- to make sure, set the `CUDA_CACHE_DISABLE=1` environment variable
+This normally does not require a restart.  You can check using Clockwork's `./profile [check]`.
 
-## 4. Disable GPU frequency autoscaling
+## 3. GPU Settings
 
-Enable persistence mode.  NOTE: This must be done on every restart
+## 3.1. Disable CUDA JIT
+
+Prevent CUDA from caching compiled kernels (note: the models used by Clockwork do not compile to PTX anyway, but if choose to compile JITable models, this setting is important)
+```
+export CUDA_CACHE_DISABLE=1
+```
+
+### 3.1 Enable persistence mode.
+
 ```
 nvidia-smi -pm 1
 ```
 
-Disable auto boost
+NOTE: This must be done on every restart
+
+### 3.2 Enable exclusive process mode
+
+```
+nvidia-smi -c 3
+```
+
+NOTE: This must be done on every restart
+
+
+### 3.3 Optional: Disable auto boost
+
 ```
 nvidia-smi --auto-boost-default=DISABLED
 ```
+
+NOTE: This must be done on every restart
+
+### 3.4 Optional: Configure GPU clocks
+
+You can specify which clock frequencies to use.  This does not override built-in temperature auto-scaling.
 
 List available GPU clock frequencies
 ```
@@ -139,27 +170,56 @@ nvidia-smi -ac 877,1380
 nvidia-smi -lgc 1380
 ```
 
-FYI:
-Graphics cards have CPU core affinity, and this can be checked with `nvidia-smi topo -m`
+NOTE: This must be done on every restart
 
-## 5. Check
+## 4. Optional: Disable CPU frequency autoscaling
 
-Some of these values can be checked by running the Clockwork profiler with:
+Set the "performance" governor to prevent CPU clock scaling
 ```
-./profile [check]
+echo performance | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
 ```
-
-IMPORTANT: when you restart your machine, you will need to set persistence mode again.  Run the checker frequently!
 
 # Environment Variables
 
-You may need to set the below environment variables depending on what you are running
+In addition to the environment setup above, Clockwork has several environment variables of its own.
 
-Set `CLOCKWORK_DISABLE_INPUTS=1` to disable client-side sending of inputs.  This is useful for experimentation.  This value can be overridden with the `disable_inputs()` method call on the `Client` class.  The controller also has command-line options for disabling inputs (clients will send inputs, but the controller will not forward them to workers).
+## Required: CLOCKWORK_MODEL_DIR
 
-Set `CLOCKWORK_MODEL_DIR` to the location of your modelzoo checkout (e.g. `clockwork-modelzoo-volta`).
+This is required by Clockwork's `./worker` process.
 
-Set `AZURE_TRACE_DIR` to the location of your `azure-functions` trace checkout.
+`CLOCKWORK_MODEL_DIR` should point to a local directory containing compiled models.
+
+Pre-compiled models used by Clockwork can be found at the `clockwork-modelzoo-volta` repository: https://gitlab.mpi-sws.org/cld/ml/clockwork-modelzoo-volta
+
+The process of compiling models is not fully automated currently (please contribute!).
+
+## Recommended: CLOCKWORK_LOG_DIR
+
+This is required by Clockwork's `./controller` process.
+
+`CLOCKWORK_LOG_DIR` should point to a directory where the controller can write its output request logs.  Be aware that for long experiments, these files can be GB large.
+
+If not specified or left blank, Clockwork's controller will write to `/local`.  If this does not exist on your machine or is not writable, the controller will not output anything.
+
+Please ensure the directory exists; Clockwork will not create the directory for you.  Upon startup, the controller will print the location it is writing its request and action logs to.
+
+## Optional: AZURE_TRACE_DIR
+
+This is required by Clockwork's `./client` process if you are running the `azure` workload.
+
+`AZURE_TRACE_DIR` should point to a local directory containing the `AzureFunctionsDataset2019` from Microsoft Azure.
+
+The original traces can be found by following the instructions on Microsoft's GitHub repository: https://github.com/Azure/AzurePublicDataset.
+
+Alternatively, a repository containing the traces can be found here: https://gitlab.mpi-sws.org/cld/trace-datasets/azure-functions.
+
+## Optional: CLOCKWORK_DISABLE_INPUTS
+
+This is used by Clockwork's `./client` process.
+
+For some experiments you will want to generate model inputs at the controller rather than sending them over the network.
+
+Setting `CLOCKWORK_DISABLE_INPUTS=1` will disable clients from sending inputs.
 
 # Troubleshooting
 
