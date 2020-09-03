@@ -11,7 +11,6 @@
 #include "clockwork/task.h"
 #include "clockwork/memory.h"
 #include "clockwork/config.h"
-#include "clockwork/controller/infer_and_load_scheduler.h"
 #include "clockwork/sliding_window.h"
 #include <catch2/catch.hpp>
 #include <stdio.h>
@@ -162,62 +161,62 @@ TEST_CASE("Test batch lookup", "[batchlookup] [util]") {
 }
 
 
-TEST_CASE("Test scheduler work tracker", "[scheduler] [worktracker]") {
-    clockwork::scheduler::infer3::Scheduler::WorkTracker2 tracker(4, 4);
+// TEST_CASE("Test scheduler work tracker", "[scheduler] [worktracker]") {
+//     clockwork::scheduler::infer3::Scheduler::WorkTracker2 tracker(4, 4);
 
-    tracker.addRequest(1, 70000000UL, 100000000UL);
-    tracker.addRequest(2, 40000000UL, 100000000UL);
-    tracker.addRequest(3, 50000000UL, 100000000UL);
+//     tracker.addRequest(1, 70000000UL, 100000000UL);
+//     tracker.addRequest(2, 40000000UL, 100000000UL);
+//     tracker.addRequest(3, 50000000UL, 100000000UL);
 
-    REQUIRE(tracker.loadModel(0) == 1);
-    REQUIRE(tracker.loadModel(0) == 3);
-    REQUIRE(tracker.loadModel(0) == 2);
-    REQUIRE(tracker.loadModel(0) == 0);
-}
-
-
-TEST_CASE("Test scheduler work tracker 2", "[scheduler] [worktracker]") {
-    clockwork::scheduler::infer3::Scheduler::WorkTracker2 tracker(4, 4);
-
-    tracker.addRequest(1, 30000000UL, 100000000UL);
-    REQUIRE(tracker.loadModel(0) == 1);
-
-    for (unsigned i = 0; i < 100; i++) {
-        tracker.addRequest(1, 30000000UL, 100000000UL);
-    }
-    tracker.addRequest(2, 30000000UL, 100000000UL);
-    tracker.addRequest(3, 20000000UL, 100000000UL);
-    tracker.addRequest(0, 40000000UL, 100000000UL);
-
-    REQUIRE(tracker.loadModel(1) == 1);
-    REQUIRE(tracker.loadModel(2) == 1);
-    REQUIRE(tracker.loadModel(3) == 1);
-    REQUIRE(tracker.loadModel(0) == 0);
-    REQUIRE(tracker.loadModel(0) == 2);
-    REQUIRE(tracker.loadModel(0) == 3);
-}
+//     REQUIRE(tracker.loadModel(0) == 1);
+//     REQUIRE(tracker.loadModel(0) == 3);
+//     REQUIRE(tracker.loadModel(0) == 2);
+//     REQUIRE(tracker.loadModel(0) == 0);
+// }
 
 
-TEST_CASE("Test scheduler work tracker 3", "[scheduler] [worktracker]") {
-    clockwork::scheduler::infer3::Scheduler::WorkTracker2 tracker(4, 4);
+// TEST_CASE("Test scheduler work tracker 2", "[scheduler] [worktracker]") {
+//     clockwork::scheduler::infer3::Scheduler::WorkTracker2 tracker(4, 4);
 
-    tracker.loadModelComplete(0, tracker.loadModel(0), true);
-    tracker.loadModelComplete(0, tracker.loadModel(0), true);
-    tracker.loadModelComplete(0, tracker.loadModel(0), true);
-    tracker.loadModelComplete(0, tracker.loadModel(0), true);
+//     tracker.addRequest(1, 30000000UL, 100000000UL);
+//     REQUIRE(tracker.loadModel(0) == 1);
+
+//     for (unsigned i = 0; i < 100; i++) {
+//         tracker.addRequest(1, 30000000UL, 100000000UL);
+//     }
+//     tracker.addRequest(2, 30000000UL, 100000000UL);
+//     tracker.addRequest(3, 20000000UL, 100000000UL);
+//     tracker.addRequest(0, 40000000UL, 100000000UL);
+
+//     REQUIRE(tracker.loadModel(1) == 1);
+//     REQUIRE(tracker.loadModel(2) == 1);
+//     REQUIRE(tracker.loadModel(3) == 1);
+//     REQUIRE(tracker.loadModel(0) == 0);
+//     REQUIRE(tracker.loadModel(0) == 2);
+//     REQUIRE(tracker.loadModel(0) == 3);
+// }
 
 
-    tracker.addRequest(1, 30000000UL, 100000000UL);
+// TEST_CASE("Test scheduler work tracker 3", "[scheduler] [worktracker]") {
+//     clockwork::scheduler::infer3::Scheduler::WorkTracker2 tracker(4, 4);
 
-    for (unsigned i = 0; i < 10; i++) {
-        tracker.addRequest(1, 30000000UL, 100000000UL);
-    }
-    tracker.addRequest(2, 30000000UL, 100000000UL);
-    tracker.addRequest(3, 20000000UL, 100000000UL);
-    tracker.addRequest(0, 40000000UL, 100000000UL);
+//     tracker.loadModelComplete(0, tracker.loadModel(0), true);
+//     tracker.loadModelComplete(0, tracker.loadModel(0), true);
+//     tracker.loadModelComplete(0, tracker.loadModel(0), true);
+//     tracker.loadModelComplete(0, tracker.loadModel(0), true);
 
-    REQUIRE(tracker.evictModel(0) == 3);
-    REQUIRE(tracker.evictModel(0) == 2);
-    REQUIRE(tracker.evictModel(0) == 0);
-    REQUIRE(tracker.evictModel(0) == 1);
-}
+
+//     tracker.addRequest(1, 30000000UL, 100000000UL);
+
+//     for (unsigned i = 0; i < 10; i++) {
+//         tracker.addRequest(1, 30000000UL, 100000000UL);
+//     }
+//     tracker.addRequest(2, 30000000UL, 100000000UL);
+//     tracker.addRequest(3, 20000000UL, 100000000UL);
+//     tracker.addRequest(0, 40000000UL, 100000000UL);
+
+//     REQUIRE(tracker.evictModel(0) == 3);
+//     REQUIRE(tracker.evictModel(0) == 2);
+//     REQUIRE(tracker.evictModel(0) == 0);
+//     REQUIRE(tracker.evictModel(0) == 1);
+// }

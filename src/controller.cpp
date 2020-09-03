@@ -1,14 +1,7 @@
 #include "clockwork/network/controller.h"
 #include "clockwork/controller/direct_controller.h"
-#include "clockwork/controller/closed_loop_controller.h"
-#include "clockwork/controller/fifo_controller.h"
-#include "clockwork/controller/cache_aware_fifo_controller.h"
-#include "clockwork/controller/random_controller.h"
 #include "clockwork/controller/stress_test_controller.h"
-#include "clockwork/controller/infer_only_scheduler.h"
 #include "clockwork/controller/smart_scheduler.h"
-#include "clockwork/controller/infer_only_scheduler_2.h"
-#include "clockwork/controller/infer_and_load_scheduler.h"
 #include "clockwork/controller/concurrent_infer_and_load_scheduler.h"
 #include "clockwork/telemetry/controller_request_logger.h"
 #include <csignal>
@@ -53,15 +46,10 @@ void show_usage() {
     s << "  Run the controller of the given TYPE. Connects to the specified workers. All  \n";
     s << "  subsequent options are controller-specific and passed to that controller.     \n";
     s << "TYPE\n";
-    s << "  CLOSED_LOOP\n";
-    s << "  DIRECT\n";
-    s << "  ECHO\n";
-    s << "  SIMPLE\n";
-    s << "  STRESS\n";
-    s << "  INFER\n";
-    s << "  INFER1    Older variant of INFER with greedy batching\n";
-    s << "  INFER2    Older variant of INFER with better batching\n";
-    s << "  INFER4    Up-to-date scheduler with loads and infers, supports the following options:\n";
+    s << "  DIRECT    Used for testing\n";
+    s << "  ECHO      Used for testing\n";
+    s << "  STRESS    Used for testing\n";
+    s << "  INFER4    The Clockwork Scheduler.  You should usually be using this.  Options:\n";
     s << "       generate_inputs    (bool, default false)  Should inputs and outputs be generated if not present.  Set to true to test network capacity\n";
     s << "       max_gpus           (int, default 100)  Set to a lower number to limit the number of GPUs.\n";
     s << "       schedule_ahead     (int, default 10000000)  How far ahead, in nanoseconds, should the scheduler schedule.  If generate_inputs is set to true, the default value for this is 15ms, otherwise 5ms.\n";
@@ -116,71 +104,14 @@ int main(int argc, char *argv[]) {
 
     int client_requests_listen_port = 12346;
 
-    if ( controller_type == "CLOSED_LOOP"){
-        int batch_size = atoi(argv[3]);
-        ClosedLoopControllerImpl* controller = new ClosedLoopControllerImpl(client_requests_listen_port, worker_host_port_pairs, batch_size);
-        controller->join();
-    } else if (controller_type == "DIRECT") {
+    std::string actions_filename = util::get_controller_log_dir() + "/clockwork_action_log.tsv";
+    std::string requests_filename = util::get_controller_log_dir() + "/clockwork_request_log.tsv";
+
+    if (controller_type == "DIRECT") {
         DirectControllerImpl* controller = new DirectControllerImpl(client_requests_listen_port, worker_host_port_pairs);
         controller->join();
     } else if (controller_type == "STRESS") {
         StressTestController* controller = new StressTestController(client_requests_listen_port, worker_host_port_pairs);
-        controller->join();
-    } else if (controller_type == "INFER") {
-        Scheduler* scheduler = new scheduler::infer2::InferOnlyScheduler();
-        controller::ControllerWithStartupPhase* controller = new controller::ControllerWithStartupPhase(
-            client_requests_listen_port,
-            worker_host_port_pairs,
-            100000000UL, // 10s load stage timeout
-            new controller::ControllerStartup(), // in future the startup type might be customizable
-            scheduler,
-            ControllerRequestTelemetry::log_and_summarize(
-                "/local/clockwork_request_log.tsv",     // 
-                10000000000UL           // print request summary every 10s
-            )
-        );
-        controller->join();
-    } else if (controller_type == "INFER1") {
-        Scheduler* scheduler = new InferOnlyScheduler();
-        controller::ControllerWithStartupPhase* controller = new controller::ControllerWithStartupPhase(
-            client_requests_listen_port,
-            worker_host_port_pairs,
-            100000000UL, // 10s load stage timeout
-            new controller::ControllerStartup(), // in future the startup type might be customizable
-            scheduler,
-            ControllerRequestTelemetry::log_and_summarize(
-                "/local/clockwork_request_log.tsv",     // 
-                10000000000UL           // print request summary every 10s
-            )
-        );
-        controller->join();
-    } else if (controller_type == "INFER2") {
-        Scheduler* scheduler = new scheduler::infer2::InferOnlyScheduler();
-        controller::ControllerWithStartupPhase* controller = new controller::ControllerWithStartupPhase(
-            client_requests_listen_port,
-            worker_host_port_pairs,
-            100000000UL, // 10s load stage timeout
-            new controller::ControllerStartup(), // in future the startup type might be customizable
-            scheduler,
-            ControllerRequestTelemetry::log_and_summarize(
-                "/local/clockwork_request_log.tsv",     // 
-                10000000000UL           // print request summary every 10s
-            )
-        );
-        controller->join();
-    } else if (controller_type == "INFER3") {
-        Scheduler* scheduler = new scheduler::infer3::Scheduler();
-        controller::ControllerWithStartupPhase* controller = new controller::ControllerWithStartupPhase(
-            client_requests_listen_port,
-            worker_host_port_pairs,
-            100000000UL, // 10s load stage timeout
-            new controller::ControllerStartup(), // in future the startup type might be customizable
-            scheduler,
-            ControllerRequestTelemetry::log_and_summarize(
-                "/local/clockwork_request_log.tsv",     // 
-                10000000000UL           // print request summary every 10s
-            )
-        );
         controller->join();
     } else if (controller_type == "INFER4") {
         int i = 2;
@@ -190,13 +121,16 @@ int main(int argc, char *argv[]) {
         uint64_t default_slo = argc > ++i ? std::stoull(argv[i]) : 100000000UL;
         uint64_t max_exec_time = argc > ++i ? std::stoull(argv[i]) : 250000000UL;
         int max_batch_size = argc > ++i ? atoi(argv[i]) : 8;
+        std::cout << "Logging requests to " << requests_filename << std::endl;
+        std::cout << "Logging actions to " << actions_filename << std::endl;
         Scheduler* scheduler = new scheduler::infer4::Scheduler(
             default_slo,
             schedule_ahead, schedule_ahead,
             generate_inputs,
             max_gpus,
             max_exec_time,
-            max_batch_size
+            max_batch_size,
+            actions_filename
         );
         controller::ControllerWithStartupPhase* controller = new controller::ControllerWithStartupPhase(
             client_requests_listen_port,
@@ -205,7 +139,7 @@ int main(int argc, char *argv[]) {
             new controller::ControllerStartup(max_batch_size, max_exec_time), // in future the startup type might be customizable
             scheduler,
             ControllerRequestTelemetry::log_and_summarize(
-                "/local/clockwork_request_log.tsv",     // 
+                requests_filename,     // 
                 10000000000UL
             )
         );
@@ -219,28 +153,9 @@ int main(int argc, char *argv[]) {
             new controller::ControllerStartup(), // in future the startup type might be customizable
             scheduler,
             ControllerRequestTelemetry::log_and_summarize(
-                "/local/clockwork_request_log.tsv",     // 
+                requests_filename,     // 
                 10000000000UL           // print request summary every 10s
             )
-        );
-        controller->join();
-    } else if (controller_type == "SIMPLE") {
-        Scheduler* scheduler = new EchoScheduler(); // TODO
-        std::string request_telemetry_file = argv[3];
-        if (request_telemetry_file == "STDOUT") {
-            logger = ControllerRequestTelemetry::summarize(10000000000UL);
-        } else {
-            logger = ControllerRequestTelemetry::log_and_summarize(
-                request_telemetry_file, 10000000000UL);
-        }
-        controller::ControllerWithStartupPhase* controller =
-            new controller::ControllerWithStartupPhase(
-            client_requests_listen_port,
-            worker_host_port_pairs,
-            10000000000UL, // 10s load stage timeout
-            new controller::ControllerStartup(),
-            scheduler,
-            logger
         );
         controller->join();
     } else if (controller_type == "SMART") {
@@ -250,7 +165,7 @@ int main(int argc, char *argv[]) {
         uint64_t default_slo = argc > ++i ? std::stoull(argv[i]) : 100000000UL;
         uint64_t max_exec_time = argc > ++i ? std::stoull(argv[i]) : 250000000UL;
         int max_batch_size = argc > ++i ? atoi(argv[i]) : 8;
-		std::string action_telemetry_file = argc > ++i ? argv[i] : "/local/clockwork_controller_action_log.csv";
+		std::string action_telemetry_file = argc > ++i ? argv[i] : actions_filename;
         Scheduler* scheduler = new SmartScheduler(
             default_slo,
             max_gpus,
@@ -266,7 +181,7 @@ int main(int argc, char *argv[]) {
             new controller::ControllerStartup(), // in future the startup type might be customizable
             scheduler,
             ControllerRequestTelemetry::log_and_summarize(
-                "/local/clockwork_request_log.tsv",     // 
+                requests_filename,     // 
                 10000000000UL           // print request summary every 10s
             )
         );

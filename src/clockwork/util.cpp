@@ -205,6 +205,14 @@ std::string get_example_model_path(std::string clockwork_directory, std::string 
   return clockwork_directory + "/resources/" + model_name + "/model";
 }
 
+std::string get_controller_log_dir() {
+  auto logdir = std::getenv("CLOCKWORK_LOG_DIR");
+  if (logdir == nullptr) return "/local";
+  std::string logdirs = std::string(logdir);
+  if (logdirs == "") return "/local";
+  return logdirs;
+}
+
 std::string get_modelzoo_dir() {
   auto modelzoo = std::getenv("CLOCKWORK_MODEL_DIR");
   if (modelzoo == nullptr) { return ""; }

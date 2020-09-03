@@ -55,9 +55,9 @@ class Scheduler : public clockwork::Scheduler {
         uint64_t schedule_ahead, // 10ms
         bool generate_inputs, // if clients send no input, should we generate real inputs, or forward the size-0?
         int max_gpus, // max GPUs to use
-        uint64_t max_allowable_exec_time = 18000000UL, // 18ms
-        unsigned max_batch_size = 8, // max supported batchsize of 8
-        std::string actions_filename = "/local/clockwork_action_log.tsv");
+        uint64_t max_allowable_exec_time, // don't use batch sizes with higher exec time than this
+        unsigned max_batch_size, // max allowed batch size
+        std::string actions_filename);
 
     class StrategyImpl;
     typedef std::shared_ptr<StrategyImpl> Strategy;

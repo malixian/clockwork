@@ -74,16 +74,9 @@ add_library( clockwork
 	src/clockwork/network/controller.cpp
 	src/clockwork/controller/controller.cpp
 	src/clockwork/controller/load_tracker.cpp
-	src/clockwork/controller/closed_loop_controller.cpp
 	src/clockwork/controller/direct_controller.cpp
-	src/clockwork/controller/fifo_controller.cpp
-	src/clockwork/controller/cache_aware_fifo_controller.cpp
-	src/clockwork/controller/random_controller.cpp
 	src/clockwork/controller/scheduler.cpp
 	src/clockwork/controller/smart_scheduler.cpp
-	src/clockwork/controller/infer_only_scheduler.cpp
-	src/clockwork/controller/infer_only_scheduler_2.cpp
-	src/clockwork/controller/infer_and_load_scheduler.cpp
 	src/clockwork/controller/concurrent_infer_and_load_scheduler.cpp
 	src/clockwork/config.cpp
 	src/clockwork/network/client.cpp
