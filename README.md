@@ -34,7 +34,7 @@ cd protobuf
 ./autogen.sh && ./configure 
 make -j $(nproc) 
 make install
-ldconfig
+/sbin/ldconfig
 cd ..
 ```
 
@@ -114,12 +114,12 @@ DefaultLimitNOFILE=1048576
 
 Clockwork uses a lot of shared objects, and we need to increase the mmap limit.  As root, run
 ```
-/usr/sbin/sysctl -w vm.max_map_count=10000000
+/sbin/sysctl -w vm.max_map_count=10000000
 ```
 
 In general you can check mmap limits with:
 ```
-sysctl vm.max_map_count
+/sbin/sysctl vm.max_map_count
 ```
 
 This normally does not require a restart.  You can check using Clockwork's `./profile [check]`.
