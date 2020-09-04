@@ -33,6 +33,8 @@ The following pages step through the things required to build and run Clockwork
 * [Clockwork Workflow](docs/workflow.md) An overview of Clockwork's current workflow
 * [Customizing Your Environment](docs/customizing.md) Tweaks needed if you have different machines and GPUs
 * [Running Without GPUs](docs/withoutgpus.md) Instructions for running without GPUs
+
+### Additional Information
 * [Telemetry](docs/telemetry.md) Description of telemetry logged by Clockwork
 * [Troubleshooting Guide](docs/troubleshooting.md) Common error messages
 * Experiment documentation in the [`clockwork-results`](https://gitlab.mpi-sws.org/cld/ml/clockwork-results) repository.
