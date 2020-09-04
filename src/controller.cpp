@@ -163,7 +163,7 @@ int main(int argc, char *argv[]) {
 		int i = 2;
         int max_gpus = argc > ++i ? std::stoull(argv[i]) : 100;
         uint64_t default_slo = argc > ++i ? std::stoull(argv[i]) : 100000000UL;
-        uint64_t max_exec_time = argc > ++i ? std::stoull(argv[i]) : 250000000UL;
+        uint64_t max_exec_time = argc > ++i ? std::stoull(argv[i]) : 25000000UL;
         int max_batch_size = argc > ++i ? atoi(argv[i]) : 8;
 		std::string action_telemetry_file = argc > ++i ? argv[i] : actions_filename;
         Scheduler* scheduler = new SmartScheduler(
