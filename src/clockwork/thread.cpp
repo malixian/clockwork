@@ -33,8 +33,10 @@ public:
 	std::vector<unsigned> default_pool;
 
 	CoreManager() : in_use(coreCount(), false) {
-		in_use[0] = true; // Don't use core 0
-		in_use[1] = true; // Don't use core 1
+		in_use[0] = true;
+		in_use[1] = true;
+		init_pool.push_back(0);
+		init_pool.push_back(1);
 
 		unsigned gpu_count = util::get_num_gpus();
 		for (unsigned i = 0; i < gpu_count; i++) {
@@ -46,8 +48,8 @@ public:
 			init_pool.push_back(alloc(i % gpu_count));
 		}
 
-		for (unsigned i = 0; i < default_pool_size; i++) {
-			default_pool.push_back(alloc(i % gpu_count));
+		for (auto core : init_pool) {
+			default_pool.push_back(core);
 		}
 	}
 

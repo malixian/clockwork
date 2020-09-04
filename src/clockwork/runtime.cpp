@@ -24,7 +24,7 @@ void BaseExecutor::join() {
 
 CPUExecutor::CPUExecutor(TaskType type) : BaseExecutor(type) {
 	threads.push_back(std::thread(&CPUExecutor::executorMain, this, 0));
-	for (auto &thread : threads) threading::initGPUThread(0, thread);
+	for (auto &thread : threads) threading::initLowPriorityThread(thread);
 }
 
 void CPUExecutor::executorMain(unsigned executor_id) {
@@ -88,7 +88,7 @@ void GPUExecutorExclusive::executorMain(unsigned executor_id) {
 
 AsyncTaskChecker::AsyncTaskChecker() : alive(true) {
 	threads.push_back(std::thread(&AsyncTaskChecker::executorMain, this, 0));
-	for (auto &thread : threads) threading::initGPUThread(1, thread);
+	for (auto &thread : threads) threading::initHighPriorityThread(thread);
 }
 
 void AsyncTaskChecker::enqueue(AsyncTask* task) {
