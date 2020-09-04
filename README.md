@@ -453,3 +453,9 @@ If this happens, the GPU ran out of memory.  To fix it, you can:
 
 Installing protocol buffers is annoying.  The compiler version must match the library version.  Check where the `protoc` command leads to (`which protoc`).  Applications like `conda` sometimes install their own, different version of the protocol buffers compiler.  If you are on a Google Cloud VM, modify your `PATH` variable to remove conda.
 
+## All cores exhausted
+
+Clockwork workers require a minimum of 12 CPU cores (3 cores + 9 cores per GPU).
+
+Clockwork controller requires 32 cores.
+
