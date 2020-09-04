@@ -55,7 +55,7 @@ void show_usage() {
     s << "       schedule_ahead     (int, default 10000000)  How far ahead, in nanoseconds, should the scheduler schedule.\n";
     s << "       default_slo        (int, default 100000000)  The default SLO to use if client's don't specify slo_factor.  Default 100ms\n";
     s << "       max_exec        (int, default 25000000)  Don't use batch sizes >1, whose exec time exceeds this number.  Default 25ms \n";
-    s << "       max_batch        (int, default 8)  Don't use batch sizes that exceed this number.  Default 8. \n";
+    s << "       max_batch        (int, default 16)  Don't use batch sizes that exceed this number.  Default 16. \n";
     s << "WORKERS\n";
     s << "  Comma-separated list of worker host:port pairs.  e.g.:                        \n";
     s << "    volta03:12345,volta04:12345,volta05:12345                                   \n";
@@ -120,7 +120,7 @@ int main(int argc, char *argv[]) {
         uint64_t schedule_ahead = argc > ++i ? std::stoull(argv[i]) : 10000000UL;
         uint64_t default_slo = argc > ++i ? std::stoull(argv[i]) : 100000000UL;
         uint64_t max_exec_time = argc > ++i ? std::stoull(argv[i]) : 250000000UL;
-        int max_batch_size = argc > ++i ? atoi(argv[i]) : 8;
+        int max_batch_size = argc > ++i ? atoi(argv[i]) : 16;
         std::cout << "Logging requests to " << requests_filename << std::endl;
         std::cout << "Logging actions to " << actions_filename << std::endl;
         Scheduler* scheduler = new scheduler::infer4::Scheduler(
