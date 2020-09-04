@@ -14,7 +14,9 @@ Mailing List: clockwork-users@googlegroups.com
 ## 1. NVIDIA Driver and CUDA 
 
 
-Make sure NVIDIA driver and CUDA are installed and CUDA is on your PATH. MPI cluster machines have CUDA 9 installed by default. You can check if CUDA is installed and the version by running `nvcc --version`
+Make sure NVIDIA driver and CUDA are installed and CUDA is on your PATH. MPI cluster machines have CUDA 9 installed by default; however Clockwork may also work with other CUDA versions. You can check if CUDA is installed and the version by running `nvcc --version`.
+
+**Google Cloud VMs** We have tested the below instructions using Operating System `Deep Learning on Linux`, Version `Deep Learning Image: Base m55 (with CUDA 10.0)`.  This image comes with CUDA pre-installed.  If you use this image, remove `conda` from your `PATH` variable, else you will see protobuf version mismatch errors.
 
 ## 2. Required Packages
 
@@ -446,3 +448,8 @@ While loading models, the client may exit with:
 If this happens, the GPU ran out of memory.  To fix it, you can:
 * Use fewer models for your experiment
 * Reduce the amount of GPU memory used for `weights_cache_size`.  You can modify this in `config/default.cfg` on workers.  Reducing weights cache will leave more memory available for kernels.
+
+## Protobuf compiler version doesn't match library version
+
+Installing protocol buffers is annoying.  The compiler version must match the library version.  Check where the `protoc` command leads to (`which protoc`).  Applications like `conda` sometimes install their own, different version of the protocol buffers compiler.  If you are on a Google Cloud VM, modify your `PATH` variable to remove conda.
+
