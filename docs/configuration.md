@@ -21,7 +21,7 @@ This is required by Clockwork's `./worker` process.
 
 `CLOCKWORK_MODEL_DIR` should point to a local directory containing compiled models.
 
-Pre-compiled models used by Clockwork can be found at the `clockwork-modelzoo-volta` repository: https://gitlab.mpi-sws.org/cld/ml/clockwork-modelzoo-volta
+Pre-compiled models used by Clockwork can be found in the [`clockwork-modelzoo-volta`](https://gitlab.mpi-sws.org/cld/ml/clockwork-modelzoo-volta) repository.
 
 The process of compiling models is not fully automated currently (please contribute!).
 
