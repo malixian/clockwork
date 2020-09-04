@@ -97,10 +97,10 @@ void printUsage() {
 			  << "\t\t\t use_all_models: (bool, default 1) load all models or just resnet50_v2" << std::endl
 			  << "\t\t\t load_factor: (float, default 1.0) the workload will generate approximately this much load to the system.  e.g. 0.5 will load by approximately 1/2; 2.0 will overload by a factor of 2" << std::endl
 			  << "\t\t\t memory_load_factor: (1, 2, 3, or 4; default 4):" << std::endl
-			  << "\t\t\t\t 1: loads enough models to fit in 1 GPU's memory" << std::endl
-			  << "\t\t\t\t 2: loads enough models to exceed 1 worker's (2 GPUs) memory by a factor of 2" << std::endl
-			  << "\t\t\t\t 3: loads enough models to fit in all GPUs aggregate memory" << std::endl
-			  << "\t\t\t\t 4: loads the maximum possible models (upper limit of 50 copies)" << std::endl
+			  << "\t\t\t\t 1: loads approx. 200 models" << std::endl
+			  << "\t\t\t\t 2: loads approx. 800 models" << std::endl
+			  << "\t\t\t\t 3: loads approx. 1800 models" << std::endl
+			  << "\t\t\t\t 4: loads approx. 4000 models" << std::endl
 			  << "\t\t\t interval: (int, default 60) interval duration in seconds" << std::endl
 			  << "\t\t\t trace: (int, 1 to 13 inclusive, default 1) trace ID to replay" << std::endl
 			  << "\t\t\t randomise: (bool, default false) randomize each client's starting point in the trace" << std::endl
