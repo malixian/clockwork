@@ -33,6 +33,8 @@ The following pages step through the things required to build and run Clockwork
 * [Telemetry](docs/telemetry.md) Description of telemetry logged by Clockwork
 * [Troubleshooting Guide](docs/troubleshooting.md) Common error messages
 * Experiment documentation in the [`clockwork-results`](https://gitlab.mpi-sws.org/cld/ml/clockwork-results) repository.
+* [Workloads](docs/workloads.md) Available client workloads
+* [Controller](docs/controller.md) Controller options
 
 # Contacts
 
