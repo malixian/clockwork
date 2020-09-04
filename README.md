@@ -1,6 +1,6 @@
 # Clockwork
 
-A multi-tenant managed inference server, backed by a modified version of TVM.
+A multi-tenant managed inference server, backed by a modified version of TVM.  Read about Clockwork in our [OSDI 2020 Preprint](https://arxiv.org/pdf/2006.02464.pdf)
 
 This README file describes the pre-requisites and steps required to build and run Clockwork.  If you follow these steps but encounter errors, please e-mail the mailing list.
 
@@ -10,7 +10,7 @@ Mailing List: clockwork-users@googlegroups.com
 
 # Resources
 
-## Other Repositories
+### Other Repositories
 
 The following other repositories are relevant and will be referenced here and there.
 
@@ -18,7 +18,7 @@ The following other repositories are relevant and will be referenced here and th
 * [`clockwork-modelzoo-volta`](https://gitlab.mpi-sws.org/cld/ml/clockwork-modelzoo-volta) contains pre-compiled models that can be used for experimentation
 * [`azure-functions`](https://gitlab.mpi-sws.org/cld/trace-datasets/azure-functions) contains workload traces from Microsoft Azure that can be used for experimentation
 
-## Getting Started
+### Getting Started
 
 The following pages step through the things required to build and run Clockwork
 
@@ -28,17 +28,19 @@ The following pages step through the things required to build and run Clockwork
 * [Clockwork Configuration](docs/configuration.md)
 * [Running Clockwork for the first time](docs/firstrun.md)
 
-## Next Steps
+### Next Steps
 * [Clockwork Workflow](docs/workflow.md) An overview of Clockwork's current workflow
 * [Troubleshooting Guide](docs/troubleshooting.md) Common error messages
 
+# Contacts
 
+#### Mailing List
 
-## Testing with GPUs
+clockwork-users@googlegroups.com
 
-Repeat the above steps, but instead of running `worker_dummy`, run `worker`.  To see the options available, run `worker -h`.  By default, `worker` will use all available GPUs.
+#### People
+Arpan Gujarati, Reza Karimi, Safya Alzayat, Antoine Kaufmann, Ymir Vigfusson, Jonathan Mace
 
-The outputs from each process should be the same.
-
-
-
+#### Organizations
+Max Planck Institute for Software Systems
+Emory University
