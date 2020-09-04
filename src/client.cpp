@@ -104,7 +104,8 @@ void printUsage() {
 			  << "\t\t\t interval: (int, default 60) interval duration in seconds" << std::endl
 			  << "\t\t\t trace: (int, 1 to 13 inclusive, default 1) trace ID to replay" << std::endl
 			  << "\t\t\t randomise: (bool, default false) randomize each client's starting point in the trace" << std::endl
-			  << "\tbursty_experiment" << std::endl;
+			  << "\tbursty_experiment" << std::endl
+			  << "\t\t\t num_models: (int, default 3600) number of 'major' workload models" << std::endl;
 }
 
 int main(int argc, char *argv[])
@@ -223,9 +224,11 @@ int main(int argc, char *argv[])
 		engine = workload::azure_single(client);
 	else if (workload == "azure_fast")
 		engine = workload::azure_fast(client);
-	else if (workload == "bursty_experiment")
-		engine = workload::bursty_experiment2(client);
-	else {
+	else if (workload == "bursty_experiment") {
+		int i = 2;
+		unsigned num_models = argc > ++i ? atoi(argv[i]) : 3600;
+		engine = workload::bursty_experiment2(client, 1, 1, num_models);
+	} else {
 		std::cout << "Unknown workload " << workload << std::endl << std::endl;
 		printUsage();
 		return 1;
