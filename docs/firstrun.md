@@ -2,7 +2,9 @@
 
 This page describes how to run Clockwork for the first time.  Make sure you have followed the previous build and configuration steps.
 
-Running Clockwork will require three machines - 1 worker, 1 controller, and 1 client.
+**It is possible to run Clockwork without any GPUs**.  This will be mentioned in-line in these instructions.
+
+This tutorial will require three machines - 1 worker, 1 controller, and 1 client.
 
 ## Check the environment is OK
 
