@@ -10,53 +10,65 @@ Mailing List: clockwork-users@googlegroups.com
 
 # Step 1: Pre-Requisites
 
-## 1. CUDA
 
-Make sure CUDA is installed and on your PATH.  MPI cluster machines have CUDA 9 installed by default.  You can check if CUDA is installed and the version by running `nvcc --version`
+## 1. NVIDIA Driver and CUDA 
 
-## 2. Installing TVM
 
-Clone our modified TVM and check out our modified branch (`clockwork-v0.6`):
-```
-git clone --recursive https://gitlab.mpi-sws.org/cld/ml/tvm
-cd tvm
-git checkout clockwork-v0.6
-```
+Make sure NVIDIA driver and CUDA are installed and CUDA is on your PATH. MPI cluster machines have CUDA 9 installed by default. You can check if CUDA is installed and the version by running `nvcc --version`
 
-Build TVM
-```
-cd build
-cmake ..
-make -j40
-cd ..
-```
-
-Set `TVM_HOME` environment variable
-```
-echo "export TVM_HOME=`pwd`" >> ~/.bashrc
-source ~/.bashrc
-```
-
-Add `$TVM_HOME/build` to your `LD_LIBRARY_PATH` and `DYLD_LIBRARY_PATH` environment variables
-
-## 3. Apt packages
+## 2. Required Packages
 
 The following apt packages pre-requisites:
 
 ```
-apt-get install libtbb-dev
-apt-get install libasio-dev
-apt-get install libconfig++-dev
+apt install libtbb-dev libasio-dev libconfig++-dev g++-8 make cmake automake autoconf libtool curl unzip clang llvm
+```
+## 3. Installing Protobuf
+
+```
+git clone --recursive -b v3.12.0 https://github.com/protocolbuffers/protobuf.git
+cd protobuf
+./autogen.sh && ./configure 
+make -j $(nproc) 
+make install
+ldconfig
+cd ..
+```
+
+## 4. Installing TVM
+
+Clone our modified TVM and check out our modified branch (`clockwork-v0.6`):
+```
+git clone --recursive -b clockwork-v0.6 https://gitlab.mpi-sws.org/cld/ml/tvm
+```
+
+Build TVM
+```
+cd tvm/build
+cmake ..
+make -j $(nproc)
+cd ../..
+```
+
+Set `TVM_HOME` environment variable and add `$TVM_HOME/build` to your `LD_LIBRARY_PATH` and `DYLD_LIBRARY_PATH` environment variables
+```
+echo "export TVM_HOME=`pwd`" >> ~/.bashrc
+echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$TVM_HOME/build" >> ~/.bashrc
+echo "export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:$TVM_HOME/build" >> ~/.bashrc
+source ~/.bashrc
 ```
 
 # Step 2: Building Clockwork
 
 ```
+git clone --recursive https://gitlab.mpi-sws.org/cld/ml/clockwork.git
+cd clockwork
 mkdir build
 cd build
 cmake ..
-make -j40
+make -j $(nproc)
 ```
+
 
 # Step 3: Environment Configuration
 
