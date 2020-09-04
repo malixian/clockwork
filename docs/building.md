@@ -2,6 +2,31 @@
 
 Make sure you have completed the [Installation Pre-Requisites](prerequisites.md)
 
+## Modified TVM
+
+Clone our modified TVM and check out our modified branch (`clockwork-v0.6`):
+```
+git clone --recursive -b clockwork-v0.6 https://gitlab.mpi-sws.org/cld/ml/tvm
+```
+
+Build TVM
+```
+cd tvm/build
+cmake ..
+make -j $(nproc)
+cd ..
+```
+
+Set `TVM_HOME` environment variable and add `$TVM_HOME/build` to your `LD_LIBRARY_PATH` and `DYLD_LIBRARY_PATH` environment variables
+```
+echo "export TVM_HOME=`pwd`" >> ~/.bashrc
+echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$TVM_HOME/build" >> ~/.bashrc
+echo "export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:$TVM_HOME/build" >> ~/.bashrc
+source ~/.bashrc
+```
+
+## Clockwork
+
 Check out Clockwork
 
 ```
@@ -17,6 +42,33 @@ cd build
 cmake ..
 make -j $(nproc)
 ```
+
+## Recommended: Models
+
+Pre-compiled models can be downloaded from the [clockwork-modelzoo-volta](https://gitlab.mpi-sws.org/cld/ml/clockwork-modelzoo-volta) repository.  You will need these models if you are running the experiments described in [clockwork-results](https://gitlab.mpi-sws.org/cld/ml/clockwork-results).
+
+Models are only needed on worker machines.
+
+```
+git clone https://gitlab.mpi-sws.org/cld/ml/clockwork-results.git
+```
+
+Set `CLOCKWORK_MODEL_DIR` to point to your checkout
+
+## Recommended: Azure Traces
+
+Some of the experiments described in [clockwork-results](https://gitlab.mpi-sws.org/cld/ml/clockwork-results) use workload traces from Microsoft Azure.  You will need these if you are running those experiments.
+
+Traces are only needed on client machines
+
+```
+git clone https://gitlab.mpi-sws.org/cld/trace-datasets/azure-functions
+```
+
+Set `AZURE_TRACE_DIR` to point to your checkout
+
+**Note for artifact evaluators:** The Clockwork submission used a pre-release dataset of azure-functions that differs substantially from the above dataset.  The pre-release dataset is deprecated and not public.  We will make the pre-release dataset available privately for artifact evaluation only.
+
 
 ## Troubleshooting
 

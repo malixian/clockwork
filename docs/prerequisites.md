@@ -30,25 +30,3 @@ make install
 cd ..
 ```
 
-## 4. Installing TVM
-
-Clone our modified TVM and check out our modified branch (`clockwork-v0.6`):
-```
-git clone --recursive -b clockwork-v0.6 https://gitlab.mpi-sws.org/cld/ml/tvm
-```
-
-Build TVM
-```
-cd tvm/build
-cmake ..
-make -j $(nproc)
-cd ..
-```
-
-Set `TVM_HOME` environment variable and add `$TVM_HOME/build` to your `LD_LIBRARY_PATH` and `DYLD_LIBRARY_PATH` environment variables
-```
-echo "export TVM_HOME=`pwd`" >> ~/.bashrc
-echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$TVM_HOME/build" >> ~/.bashrc
-echo "export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:$TVM_HOME/build" >> ~/.bashrc
-source ~/.bashrc
-```
