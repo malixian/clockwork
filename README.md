@@ -21,7 +21,8 @@ Make sure NVIDIA driver and CUDA are installed and CUDA is on your PATH. MPI clu
 The following apt packages pre-requisites:
 
 ```
-apt install libtbb-dev libasio-dev libconfig++-dev g++-8 make cmake automake autoconf libtool curl unzip clang llvm
+apt install libtbb-dev libasio-dev libconfig++-dev g++-8 \
+make cmake automake autoconf libtool curl unzip clang llvm
 ```
 ## 3. Installing Protobuf
 
