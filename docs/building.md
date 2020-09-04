@@ -30,7 +30,7 @@ source ~/.bashrc
 Check out Clockwork
 
 ```
-git clone https://gitlab.mpi-sws.org/cld/ml/clockwork.git
+git clone --recursive https://gitlab.mpi-sws.org/cld/ml/clockwork.git
 ```
 
 Build Clockwork
