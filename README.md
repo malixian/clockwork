@@ -10,7 +10,7 @@ Mailing List: clockwork-users@googlegroups.com
 
 # Resources
 
-[Troubleshooting Guide](docs/troubleshooting)
+[Troubleshooting Guide](docs/troubleshooting.md)
 
 # Step 1: Pre-Requisites
 
