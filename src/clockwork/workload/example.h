@@ -794,20 +794,17 @@ Engine* azure2(clockwork::Client* client,
 		if (use_all_models)
 			copies_per_model = 3;
 		else
-			copies_per_model = 201;
+			copies_per_model = 200;
 	} else if (memory_load_factor == 2) {
 		if (use_all_models)
-			copies_per_model = 6;
+			copies_per_model = 13;
 		else
-			copies_per_model = 402;
+			copies_per_model = 800;
 	} else if (memory_load_factor == 3) {
-		if (use_all_models) {
-			copies_per_model = num_workers * 6;
-			if (copies_per_model > 50)
-				copies_per_model = 50;
-		}
+		if (use_all_models)
+			copies_per_model = 29;
 		else
-			copies_per_model = num_workers * 402;
+			copies_per_model = 1800;
 	} else if (memory_load_factor == 4) {
 		if (use_all_models)
 			copies_per_model = 66;
