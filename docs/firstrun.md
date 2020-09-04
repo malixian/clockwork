@@ -68,7 +68,7 @@ IO service thread listening on 0.0.0.0:12345
 
 Workers use all available GPUs.
 
-By default the worker will listen on port 12345.  Run `./worker -h` for more options.
+By default the worker will listen for incoming controller connections on port 12345.  Run `./worker -h` for more options.
 
 
 ### Option 2: Start a Worker without a GPU
@@ -90,7 +90,7 @@ IO service thread listening on 0.0.0.0:12345
 
 The simulated worker behaves and responds similar to the real worker.  However, instead of performing actual inferences, it simply waits for the profiled execution time before responding.  It is useful for development and environment preparation before running experiments.
 
-By default the worker will listen on port 12345.  Run `./worker_dummy -h` for more options.
+By default the worker will listen for incoming controller connections on port 12345.  Run `./worker_dummy -h` for more options.
 
 ## Start the controller
 
@@ -129,7 +129,7 @@ GPU 0 29.8819 GB (1912 pages) 0 loaded models
 (Startup-3) Awaiting LoadModel requests from clients
 ```
 
-By default, the controller will listen for client connections on port 12346.  Run `./controller -h` for more options.
+By default, the controller will listen for incoming client connections on port 12346.  Run `./controller -h` for more options.
 
 ### Start a client
 

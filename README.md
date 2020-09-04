@@ -18,7 +18,9 @@ The following other repositories are relevant and will be referenced here and th
 * [`clockwork-modelzoo-volta`](https://gitlab.mpi-sws.org/cld/ml/clockwork-modelzoo-volta) contains pre-compiled models that can be used for experimentation
 * [`azure-functions`](https://gitlab.mpi-sws.org/cld/trace-datasets/azure-functions) contains workload traces from Microsoft Azure that can be used for experimentation
 
-## Getting Started Guide
+## Getting Started
+
+The following pages step through the things required to build and run Clockwork
 
 * [Installation Pre-Requisites](docs/prerequisites.md)
 * [Building Clockwork](docs/building.md)
@@ -26,8 +28,9 @@ The following other repositories are relevant and will be referenced here and th
 * [Clockwork Configuration](docs/configuration.md)
 * [Running Clockwork for the first time](docs/firstrun.md)
 
-## Other Resources
-* [Troubleshooting Guide](docs/troubleshooting.md)
+## Next Steps
+* [Clockwork Workflow](docs/workflow.md) An overview of Clockwork's current workflow
+* [Troubleshooting Guide](docs/troubleshooting.md) Common error messages
 
 
 
