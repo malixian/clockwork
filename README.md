@@ -49,5 +49,7 @@ clockwork-users@googlegroups.com
 Arpan Gujarati, Reza Karimi, Safya Alzayat, Antoine Kaufmann, Ymir Vigfusson, Jonathan Mace
 
 #### Organizations
+
 Max Planck Institute for Software Systems
+
 Emory University
