@@ -43,11 +43,6 @@ public:
 			gpu_affinity.push_back(getGPUCoreAffinity(i));
 		}
 
-		if (gpu_count == 0) gpu_count = 1;
-		for (unsigned i = 0; i < init_pool_size; i++) {
-			init_pool.push_back(alloc(i % gpu_count));
-		}
-
 		for (auto core : init_pool) {
 			default_pool.push_back(core);
 		}
