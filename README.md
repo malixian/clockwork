@@ -14,9 +14,9 @@ Mailing List: clockwork-users@googlegroups.com
 
 The following other repositories are relevant and will be referenced here and there.
 
-* [clockwork-results](https://gitlab.mpi-sws.org/cld/ml/clockwork-results) contains experiment scripts and documentation for reproducing results from the OSDI 2020 Clockwork paper.
-* [clockwork-modelzoo-volta](https://gitlab.mpi-sws.org/cld/ml/clockwork-modelzoo-volta) contains pre-compiled models that can be used for experimentation
-* [azure-functions](https://gitlab.mpi-sws.org/cld/trace-datasets/azure-functions) contains workload traces from Microsoft Azure that can be used for experimentation
+* [`clockwork-results`](https://gitlab.mpi-sws.org/cld/ml/clockwork-results) contains experiment scripts and documentation for reproducing results from the OSDI 2020 Clockwork paper.
+* [`clockwork-modelzoo-volta`](https://gitlab.mpi-sws.org/cld/ml/clockwork-modelzoo-volta) contains pre-compiled models that can be used for experimentation
+* [`azure-functions`](https://gitlab.mpi-sws.org/cld/trace-datasets/azure-functions) contains workload traces from Microsoft Azure that can be used for experimentation
 
 ## Getting Started Guide
 

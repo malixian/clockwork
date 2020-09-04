@@ -39,11 +39,11 @@ Please ensure the directory exists; Clockwork will not create the directory for 
 
 This is required by Clockwork's `./client` process if you are running the `azure` workload.
 
-`AZURE_TRACE_DIR` should point to a local directory containing the `AzureFunctionsDataset2019` from Microsoft Azure.
+`AZURE_TRACE_DIR` should point to a local directory containing Microsoft Azure Functions traces.
 
-The original traces can be found by following the instructions on Microsoft's GitHub repository: https://github.com/Azure/AzurePublicDataset.
+The traces can be found in the [`azure-functions`](https://gitlab.mpi-sws.org/cld/trace-datasets/azure-functions) repository.
 
-Alternatively, a repository containing the traces can be found here: https://gitlab.mpi-sws.org/cld/trace-datasets/azure-functions.
+The trace dataset is a clone of the `AzureFunctionsDataset2019` from Microsoft Azure, which can be found by following the instructions on Microsoft's GitHub repository at [this](https://github.com/Azure/AzurePublicDataset) link.
 
 ## Optional: CLOCKWORK_DISABLE_INPUTS
 
