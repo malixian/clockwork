@@ -1,5 +1,7 @@
 # Troubleshooting
 
+Please e-mail clockwork-users@googlegroups.com if you encounter any issues.
+
 ## Cannot find nvidia-ml
 
 Currently, the CMakeLists assumes CUDA lives in either `/usr/local/cuda/lib64` (the default location in Ubuntu 14.x) or `/usr/lib/x86_64-linux-gnu/nvidia/current` (the default location for MPI cluster machines).  If you get build errors saying cannot find CUDA or cannot find nvidia-ml, then you'll need to update the `include_directories` and `link_directories` directives in the CMakeLists.txt with the CUDA location on your machine.
