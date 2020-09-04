@@ -46,3 +46,5 @@ This is the main controller phase.  Infer requests are scheduled by the schedule
 
 ## Outputs
 
+Clockwork's controller outputs telemetry about client requests, and about actions sent to workers.  See [Telemetry](telemetry.md) for more information.
+
