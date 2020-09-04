@@ -48,7 +48,7 @@ Build TVM
 cd tvm/build
 cmake ..
 make -j $(nproc)
-cd ../..
+cd ..
 ```
 
 Set `TVM_HOME` environment variable and add `$TVM_HOME/build` to your `LD_LIBRARY_PATH` and `DYLD_LIBRARY_PATH` environment variables
