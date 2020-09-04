@@ -55,3 +55,7 @@ Installing protocol buffers is annoying.  The compiler version must match the li
 Clockwork workers require a minimum of 12 CPU cores (3 cores + 9 cores per GPU).
 
 Clockwork controller requires 32 cores.
+
+## cuModuleLoadData Error: CUDA_ERROR_NO_BINARY_FOR_GPU
+
+This may happen when using models from [clockwork-modelzoo-volta](https://gitlab.mpi-sws.org/cld/ml/clockwork-modelzoo-volta).  All models are compiled specifically for `sm_70` GPUs (Volta architecture).  While it is possible to compile models for different architectures, this process is not automated.  If possible, the easiest solution is to use `Tesla v100` GPUs.

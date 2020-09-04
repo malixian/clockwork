@@ -1,4 +1,4 @@
-# Environment Configuration
+# Environment Setup
 
 Clockwork is a high-performance system that depends upon predictability.  There are various tweaks to your environment that will make executions more predictable.  These environment modifications should be made for Clockwork's worker, controller, and client processes. Some are optional but recommended.
 

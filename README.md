@@ -12,7 +12,7 @@ Mailing List: clockwork-users@googlegroups.com
 
 * [Installation Pre-Requisites](docs/prerequisites.md)
 * [Building Clockwork](docs/building.md)
-* [Environment Configuration](docs/environment.md)
+* [Environment Setup](docs/environment.md)
 * [Clockwork Configuration](docs/configuration.md)
 * [Troubleshooting Guide](docs/troubleshooting.md)
 

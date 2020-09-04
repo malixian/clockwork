@@ -59,3 +59,48 @@ This is used by Clockwork's `./worker` process.
 
 Clockwork has a configuration file located under `config/default.cfg`.  You can specify your own configuration elsewhere and set its path using `CLOCKWORK_CONFIG_FILE`.
 
+The default setting is listed below:
+
+```
+WorkerConfig:
+{
+	memory_settings:
+	{
+		weights_cache_size = 23085449216L;
+		weights_cache_page_size = 16777216L;
+		io_pool_size = 536870912L;
+		workspace_pool_size = 536870912L;
+		host_io_pool_size = 536870912L;
+	};
+
+	telemetry_settings:
+	{
+		enable_task_telemetry = false;
+		enable_action_telemetry = false;
+	};
+
+	log_dir:
+	{
+		telemetry_log_dir = "./";
+	};
+
+	allow_zero_size_inputs = true;
+
+};
+```
+
+### weights_cache_size
+
+This specifies how much GPU memory should be used for model weights.  This memory is pre-allocated by workers on worker startup.  **The default value for `weights_cache_size` assumes you have 32GB GPU memory**.
+
+### memory_settings
+
+The other memory settings relate to how memory is allocated internally in Clockwork, and do not need to be modified.
+
+### allow_zero_size_inputs
+
+If `false`, workers will reject any actions lacking a payload.  If `true` and an infer action is received without a payload, workers will generate an input.  This feature is only required for [sec65_table](https://gitlab.mpi-sws.org/cld/ml/clockwork-results/-/tree/master/sec65_table).
+
+### telemetry_settings and log_dir
+
+Workers can log telemetry for debugging purposes.  This does not need to be enabled for any experiments.
