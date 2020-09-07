@@ -196,6 +196,9 @@ void LoadTracker::removeGPU(Model &model, GPU &gpu, bool evicted) {
         if (model.priorities[i]->preference > pref) {
             model.priorities[i]->preference--;
         }
+        if (model.gpus[i]) {
+            model.priorities[i]->last_used = seqno_seed++;
+        }
     }
 
     distributeLoad(model);
