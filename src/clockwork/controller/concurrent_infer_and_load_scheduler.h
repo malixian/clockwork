@@ -39,6 +39,7 @@ class Scheduler : public clockwork::Scheduler {
     static const uint64_t future = 1000000UL; // used for setting earliest timestamp; expect 1ms lag getting to worker
     static const int max_loads = 2; // max number of outstanding loads
     static const uint64_t max_loadweights_slo = 25000000UL;
+    static const unsigned network_concurrency = 2; // max number of concurrent network xfers
 
     // Scheduler parameters configurable by ./controller binary
 
@@ -363,6 +364,91 @@ class Scheduler : public clockwork::Scheduler {
         void evict_success(EvictWeightsAction* action, std::shared_ptr<workerapi::EvictWeightsResult> &result);
         void evict_result(EvictWeightsAction* action, std::shared_ptr<workerapi::Result> &result);
     };
+
+    class NetworkExecutor {
+     private:
+
+        struct NetworkAction {
+            network::controller::WorkerConnection* worker;
+            std::shared_ptr<workerapi::Action> action;
+            uint64_t start_send_by;
+            uint64_t send_error_at;
+        };
+
+        tbb::spin_mutex mutex;
+        unsigned idle;
+        std::deque<NetworkAction> pending;
+        std::function<void(std::shared_ptr<workerapi::Result>)> error_callback;
+
+     public:
+        NetworkExecutor(unsigned concurrency, 
+            std::function<void(std::shared_ptr<workerapi::Result>)> error_callback) : 
+        idle(concurrency), error_callback(error_callback) {}
+
+        void send(network::controller::WorkerConnection* worker, 
+                  std::shared_ptr<workerapi::Action> action,
+                  uint64_t start_send_by,
+                  uint64_t send_error_at) {
+
+            NetworkAction toSend;
+            {
+                tbb::spin_mutex::scoped_lock lock(mutex);
+
+                pending.push_back({worker, action, start_send_by, send_error_at});
+
+                if (idle == 0) return;
+
+                if (!next(toSend)) return;
+
+                idle--;
+            }
+
+            toSend.worker->sendAction(toSend.action);            
+        }
+
+        void sendComplete() {
+            NetworkAction toSend;
+            {
+                tbb::spin_mutex::scoped_lock lock(mutex);
+                if (!next(toSend)) {
+                    idle++;
+                    return;
+                }
+            }
+
+            toSend.worker->sendAction(toSend.action);
+        }
+
+    private:
+
+        bool next(NetworkAction &toSend) {
+            uint64_t now = util::now();
+            while (pending.size() > 0) {
+                toSend = pending.front();
+                pending.pop_front();
+
+                if (toSend.start_send_by >= now) {
+                    return true;
+                }
+
+                auto action = toSend.action;
+                auto result = std::make_shared<workerapi::ErrorResult>();
+                result->id = action->id;
+                result->action_type = action->action_type;
+                result->status = networkSendTooLate;
+                result->action_received = now;
+                result->result_sent = now;
+                result->result_received = now;
+                result->message = "Could not send action to worker in time";
+
+                error_callback(result);
+
+            }
+            return false;
+        }
+
+
+    };
  public:
 
     // Thread-safe clockwork state
@@ -385,6 +471,9 @@ class Scheduler : public clockwork::Scheduler {
     std::vector<std::thread> results_threads;
     std::vector<std::thread> infer_threads;
     std::vector<std::thread> load_threads;
+
+    // Network executor
+    NetworkExecutor* network = nullptr;
 
     // Messages
     tbb::concurrent_queue<std::shared_ptr<workerapi::Result>> result_queue;
@@ -417,6 +506,7 @@ class Scheduler : public clockwork::Scheduler {
 
     // The actual scheduler interface implementation, invoked by worker network thread
     virtual void resultFromWorker(std::shared_ptr<workerapi::Result> result);
+    virtual void resultFromNetworkTimeout(std::shared_ptr<workerapi::Result> result);
 
  private:
 
@@ -426,6 +516,7 @@ class Scheduler : public clockwork::Scheduler {
     void initialize_gpus(std::vector<network::controller::WorkerConnection*> workers,
                     ClockworkState &state);
     void initialize_model_instances();
+    void initialize_network(std::vector<network::controller::WorkerConnection*> workers);
     void print_status();
 
     // The main thread run methods

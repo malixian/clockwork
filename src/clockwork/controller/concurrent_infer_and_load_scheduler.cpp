@@ -1135,6 +1135,21 @@ void networkPrintThread(std::vector<network::controller::WorkerConnection*> work
     }
 }
 
+void Scheduler::initialize_network(std::vector<network::controller::WorkerConnection*> workers) {
+    auto transmitComplete = [this]() {
+        this->network->sendComplete();
+    };
+    auto transmitError = [this](std::shared_ptr<workerapi::Result> result) {
+        this->resultFromNetworkTimeout(result);
+    };
+
+    this->network = new NetworkExecutor(network_concurrency, transmitError);
+
+    for (auto worker : workers) {
+        // worker->setTransmitCallback(transmitComplete);
+    }
+}
+
 
 // Called when model loading has completed
 void Scheduler::start(std::vector<network::controller::WorkerConnection*> workers,
@@ -1144,6 +1159,8 @@ void Scheduler::start(std::vector<network::controller::WorkerConnection*> worker
     initialize_models(state);
     initialize_gpus(workers, state);
     initialize_model_instances();
+    initialize_network(workers);
+
     print_status();
 
     // Create and start the printer threads
@@ -1173,7 +1190,7 @@ void Scheduler::start(std::vector<network::controller::WorkerConnection*> worker
         to_infer.push(gpu);
     }
 
-    int num_load_threads = 10;
+    int num_load_threads = 1;
     for (unsigned i = 0; i < num_load_threads; i++) {
         load_threads.push_back(std::thread(&Scheduler::run_load_thread, this, i));
         threading::initHighPriorityThread(load_threads[i]);
@@ -1377,12 +1394,13 @@ void Scheduler::run_load_thread(int id) {
 
         uint64_t i = (next_load++) % n_gpus;
         bool active = gpus[i]->schedule_load();
+        usleep(100);
 
-        inactive = active ? 0 : inactive+1;
-        if (inactive == 100) {
-            inactive = 0;
-            usleep(50);
-        }
+        // inactive = active ? 0 : inactive+1;
+        // if (inactive == 100) {
+        //     inactive = 0;
+        //     usleep(50);
+        // }
 
         std::this_thread::yield();
     }
@@ -1395,6 +1413,11 @@ void Scheduler::resultFromWorker(std::shared_ptr<workerapi::Result> result)
     if (print_debug) std::cout << ("Worker  --> " + result->str() + "\n");
 
     result->result_received = util::now();
+    result_queue.push(result);
+}
+
+// If the network times out an action and doesn't bother sending it.
+void Scheduler::resultFromNetworkTimeout(std::shared_ptr<workerapi::Result> result) {
     result_queue.push(result);
 }
 
