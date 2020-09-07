@@ -871,7 +871,6 @@ void Scheduler::GPU::infer_success(InferAction* action, std::shared_ptr<workerap
         result->exec.duration, 
         (result->gpu_clock + result->gpu_clock_before) / 2
     );
-    // action->model->add_measurement(action->action->batch_size, result->exec.duration, action->action->expected_gpu_clock);
 
     action->set_result(result);
     action->telemetry.goodput = action->complete(util::now(), id);
@@ -1141,8 +1140,8 @@ void Scheduler::initialize_network(std::vector<network::controller::WorkerConnec
     auto transmitComplete = [this]() {
         this->network->sendComplete();
     };
-    auto transmitError = [this](std::shared_ptr<workerapi::Result> result) {
-        this->resultFromNetworkTimeout(result);
+    auto transmitError = [this](uint64_t timeout_at, std::shared_ptr<workerapi::Result> result) {
+        network_timeout_queue.push({timeout_at, result});
     };
 
     this->network = new NetworkExecutor(network_concurrency, transmitError);
@@ -1315,10 +1314,24 @@ void Scheduler::run_admission_thread() {
 }
 
 void Scheduler::run_results_thread() {
+    bool should_timeout = false;
+    TimeoutResult next_timeout;
+
     while (true) {
         std::shared_ptr<workerapi::Result> result;
         if (result_queue.try_pop(result)) {
             handle_result(result);
+        }
+
+        if (!should_timeout) {
+            should_timeout = network_timeout_queue.try_pop(next_timeout);
+        }
+
+        if (should_timeout) {
+            if (next_timeout.timeout_at <= util::now()) {
+                handle_result(next_timeout.result);
+                should_timeout = false;
+            }
         }
 
         std::this_thread::yield();
@@ -1418,11 +1431,6 @@ void Scheduler::resultFromWorker(std::shared_ptr<workerapi::Result> result)
     result_queue.push(result);
 }
 
-// If the network times out an action and doesn't bother sending it.
-void Scheduler::resultFromNetworkTimeout(std::shared_ptr<workerapi::Result> result) {
-    result_queue.push(result);
-}
-
 // The actual scheduler interface implementation, invoked by client network thread
 void Scheduler::clientInfer(clientapi::InferenceRequest &request, 
     std::function<void(clientapi::InferenceResponse&)> callback)
@@ -1430,6 +1438,70 @@ void Scheduler::clientInfer(clientapi::InferenceRequest &request,
     if (print_debug) std::cout << ("Client  --> " + request.str() + "\n");
 
     request_queue.push(std::make_shared<RequestImpl>(this, request, callback));
+}
+
+Scheduler::NetworkExecutor::NetworkExecutor(unsigned concurrency, 
+    std::function<void(uint64_t, std::shared_ptr<workerapi::Result>)> error_callback) : 
+idle(concurrency), error_callback(error_callback) {}
+
+void Scheduler::NetworkExecutor::send(network::controller::WorkerConnection* worker, 
+          std::shared_ptr<workerapi::Action> action,
+          uint64_t start_send_by,
+          uint64_t send_error_at) {
+
+    NetworkAction toSend;
+    {
+        tbb::spin_mutex::scoped_lock lock(mutex);
+
+        pending.push_back({worker, action, start_send_by, send_error_at});
+
+        if (idle == 0) return;
+
+        if (!next(toSend)) return;
+
+        idle--;
+    }
+
+    toSend.worker->sendAction(toSend.action);            
+}
+
+void Scheduler::NetworkExecutor::sendComplete() {
+    NetworkAction toSend;
+    {
+        tbb::spin_mutex::scoped_lock lock(mutex);
+        if (!next(toSend)) {
+            idle++;
+            return;
+        }
+    }
+
+    toSend.worker->sendAction(toSend.action);
+}
+
+bool Scheduler::NetworkExecutor::next(NetworkAction &toSend) {
+    uint64_t now = util::now();
+    while (pending.size() > 0) {
+        toSend = pending.front();
+        pending.pop_front();
+
+        if (toSend.start_send_by >= now) {
+            return true;
+        }
+
+        auto action = toSend.action;
+        auto result = std::make_shared<workerapi::ErrorResult>();
+        result->id = action->id;
+        result->action_type = action->action_type;
+        result->status = networkSendTooLate;
+        result->action_received = now;
+        result->result_sent = now;
+        result->result_received = now;
+        result->message = "Could not send action to worker in time";
+
+        error_callback(toSend.send_error_at, result);
+
+    }
+    return false;
 }
 
 }
