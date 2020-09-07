@@ -4,6 +4,7 @@
 #include <atomic>
 #include <string>
 #include <asio.hpp>
+#include <functional>
 #include "clockwork/worker.h"
 #include "clockwork/network/network.h"
 #include "clockwork/network/worker_api.h"
@@ -15,12 +16,15 @@ namespace controller {
 
 using asio::ip::tcp;
 
+typedef std::function<void(void)> Callback;
+
 /* Controller side of the Controller<>Worker API network impl.
 Represents a connection to a single worker. */
 class WorkerConnection : public message_connection, public message_handler, public workerapi::Worker  {
 private:
 	workerapi::Controller* controller;
 	message_sender msg_tx_;
+	Callback callback_;
 
 public:
 	std::atomic_bool connected;
@@ -47,6 +51,8 @@ public:
 	virtual void sendActions(std::vector<std::shared_ptr<workerapi::Action>> &actions);
 
 	void sendAction(std::shared_ptr<workerapi::Action> action);
+
+	void setTransmitCallback(Callback callback);
 
 };
 

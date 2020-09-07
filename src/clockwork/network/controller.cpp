@@ -10,6 +10,7 @@ WorkerConnection::WorkerConnection(asio::io_service &io_service, workerapi::Cont
 		msg_tx_(this, *this),
 		controller(controller),
 		connected(false) {
+	this->callback_ = [](){};
 }
 
 message_rx* WorkerConnection::new_rx_message(message_connection *tcp_conn, uint64_t header_len,
@@ -120,6 +121,7 @@ void WorkerConnection::completed_receive(message_connection *tcp_conn, message_r
 }
 
 void WorkerConnection::completed_transmit(message_connection *tcp_conn, message_tx *req) {
+	callback_();
 	delete req;
 }
 
@@ -168,6 +170,10 @@ void WorkerConnection::sendAction(std::shared_ptr<workerapi::Action> action) {
 	} else {
 		CHECK(false) << "Sending an unsupported action type";
 	}
+}
+
+void WorkerConnection::setTransmitCallback(Callback callback) {
+	this->callback_ = callback;
 }
 
 WorkerManager::WorkerManager() : alive(true), network_thread(&WorkerManager::run, this) {
