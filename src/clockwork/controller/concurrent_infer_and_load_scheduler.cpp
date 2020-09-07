@@ -493,6 +493,8 @@ void Scheduler::InferAction::set_expectations(uint64_t exec_start, uint64_t dura
     // action->earliest = std::max(util::now() + future, exec_start - Scheduler::latest_delta);
     action->earliest = now;
     action->latest = std::max(now + future + scheduler->latest_delta, exec_start + scheduler->latest_delta);
+    send_by = std::max(now + future, action->latest - 5000000UL);
+    report_error_at = action->latest + duration;
     // action->earliest = util::now() - Scheduler::schedule_ahead;
     // action->latest = action->expected_exec_complete + Scheduler::latest_delta;
 }
@@ -597,7 +599,7 @@ void Scheduler::GPU::send_action(InferAction* action) {
     action->telemetry.copies_loaded = action->model->copies_loaded;
 
     // Send the action
-    worker->sendAction(infer);
+    scheduler->network->send(worker, infer, action->send_by, action->report_error_at);
 
     // Immediately mark the requests as executing for load balancer
     {
@@ -632,7 +634,7 @@ void Scheduler::GPU::send_action(LoadWeightsAction* action) {
     scheduler->add_callback(load->id, callback);
 
     // Send the action
-    worker->sendAction(load);
+    scheduler->network->send(worker, load, UINT64_MAX, 0);
 
     // Record the telemetry
     action->telemetry.set(load);
@@ -654,7 +656,7 @@ void Scheduler::GPU::send_action(EvictWeightsAction* action) {
     scheduler->add_callback(evict->id, callback);
 
     // Send the action
-    worker->sendAction(evict);
+    scheduler->network->send(worker, evict, UINT64_MAX, 0);
 
     // Record the telemetry
     action->telemetry.set(evict);
@@ -1146,7 +1148,7 @@ void Scheduler::initialize_network(std::vector<network::controller::WorkerConnec
     this->network = new NetworkExecutor(network_concurrency, transmitError);
 
     for (auto worker : workers) {
-        // worker->setTransmitCallback(transmitComplete);
+        worker->setTransmitCallback(transmitComplete);
     }
 }
 

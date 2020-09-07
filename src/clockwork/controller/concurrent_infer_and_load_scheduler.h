@@ -131,6 +131,8 @@ class Scheduler : public clockwork::Scheduler {
         std::shared_ptr<workerapi::ErrorResult> error = nullptr;
         std::shared_ptr<workerapi::InferResult> result = nullptr;
         std::vector<Request> requests;
+        uint64_t send_by;
+        uint64_t report_error_at;
 
         explicit InferAction(Scheduler* scheduler, Model* model);
         ~InferAction();
