@@ -50,7 +50,7 @@ Pre-compiled models can be downloaded from the [clockwork-modelzoo-volta](https:
 Models are only needed on worker machines.
 
 ```
-git clone https://gitlab.mpi-sws.org/cld/ml/clockwork-results.git
+git clone https://gitlab.mpi-sws.org/cld/ml/clockwork-modelzoo-volta.git
 ```
 
 Set `CLOCKWORK_MODEL_DIR` to point to your checkout
