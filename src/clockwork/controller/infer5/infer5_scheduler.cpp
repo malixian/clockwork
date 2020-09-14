@@ -137,6 +137,10 @@ unsigned Scheduler::Model::batch_lookup(unsigned num_requests) {
     return num_requests > max_batch_size ? max_batch_size : batch_lookup_[num_requests];
 }
 
+unsigned Scheduler::Model::index_lookup(unsigned batch_size) {
+    return batch_size > max_batch_size ? max_batch_size : index_lookup_[batch_size];
+}
+
 Scheduler::Model::Model(Scheduler* scheduler, BatchedModelState &state)
     : scheduler(scheduler),
       id(state.id), 
@@ -168,12 +172,15 @@ Scheduler::Model::Model(Scheduler* scheduler, BatchedModelState &state)
         } else {
             std::cout << "Excluding b" << batch_size << " with estimate " << estimate << "model=" << state.model_path << std::endl;
         }
+
+        queues.push_back(new ModelQueue(batch_size));
     }
 
     weights_estimator = new SlidingWindow(Scheduler::estimate_window_size);
     weights_estimate = state.weights_transfer_duration;
 
     batch_lookup_ = util::make_batch_lookup(supported_batch_sizes);
+    index_lookup_ = util::make_reverse_batch_lookup(supported_batch_sizes);
     max_batch_size = batch_lookup_.size() - 1;
 
     b1_exec = estimate(1); // Use this for slo_factor
@@ -188,165 +195,245 @@ void Scheduler::Model::enqueue(Request request) {
 
     // Create the request's strategies
     request->id = request_id_seed_++;
-    request->strategies.reserve(batch_size_estimates.size());
-    for (int i = batch_size_estimates.size()-1; i >= 0; i--) {
-        Strategy strategy = std::make_shared<StrategyImpl>();
-        strategy->priority = request->deadline - batch_size_estimates[i];
-        strategy->deadline = request->deadline;
-        strategy->batch_size = supported_batch_sizes[i];
-        strategy->request_id = request->id;
-        strategy->model = this;
-        request->strategies.push_back(strategy);
-    }
+    // request->strategies.reserve(batch_size_estimates.size());
+    // for (int i = batch_size_estimates.size()-1; i >= 0; i--) {
+    //     Strategy strategy = std::make_shared<StrategyImpl>();
+    //     strategy->priority = request->deadline - batch_size_estimates[i];
+    //     strategy->deadline = request->deadline;
+    //     strategy->batch_size = supported_batch_sizes[i];
+    //     strategy->request_id = request->id;
+    //     strategy->model = this;
+    //     request->strategies.push_back(strategy);
+    // }
 
-    // Enqueue the request
+    incoming_requests.push(request);
     requests_queued++;
-    incoming.push(request);
 
-    // Enqueue strategies to all loaded models
     for (auto &instance : instances) {
-        if (instance->loaded) {
-            instance->gpu->add_strategies(request);
+        instance->activate();
+    }
+}
+
+void Scheduler::Model::pull_incoming_requests() {
+    Request request;
+    while (incoming_requests.try_pop(request)) {
+        request->seqno = seqno_seed++;
+        for (auto &queue : queues) {
+            queue->push(request);
         }
     }
 }
 
-std::vector<Scheduler::Request> Scheduler::Model::requests() {
+std::vector<Scheduler::StrategyImpl> Scheduler::Model::new_strategies(int gpu_id, unsigned gpu_clock) {
     tbb::queuing_mutex::scoped_lock lock(mutex);
 
-    std::vector<uint64_t> batch_size_estimates(supported_batch_sizes.size());
-    for (unsigned i = 0; i < supported_batch_sizes.size(); i++) {
-        batch_size_estimates[i] = estimate(supported_batch_sizes[i]);
+    pull_incoming_requests();
+
+    std::vector<StrategyImpl> strategies;
+    for (int i = queues.size()-1; i >= 0; i--) {
+        auto &queue = queues[i];
+
+        if (queue->size() == 0) continue;
+
+        StrategyImpl strategy;
+        strategy.priority = queue->front()->deadline - estimate(queue->batchsize);
+        strategy.batch_size = queue->batchsize;
+        strategy.instance = instances[gpu_id];
+        strategies.push_back(strategy);
+
+        // if (queues[i]->has_demand()) {
+        //     break;
+        // }
     }
 
-    Request newrequest;
-    while (incoming.try_pop(newrequest)) queue.push_back(newrequest);
-    
-    return std::vector<Request>(queue.begin(), queue.end());
-}
-
-void Scheduler::Model::check_timeouts(uint64_t free_at) {
-    while (!queue.empty()) {
-        Request request = queue.front();
-        if (request->deadline >= free_at) break;
-
-        request->set_error(clockworkControllerCouldNotStartInTime, "");
-        request->invalidate_strategies();
-        requests_queued--;
-
-        queue.pop_front();
-    }
+    return strategies;
 }
 
 Scheduler::InferAction* Scheduler::Model::try_dequeue(
         uint64_t free_at,
         unsigned gpu_clock,
-        Strategy &strategy)
+        int min_batchsize)
 {   
-    uint64_t exec_time = estimate(strategy->batch_size, gpu_clock);
-    uint64_t completion_time = free_at + exec_time;
+    // Drain all requests from all queues that wouldn't be satisfiable
+    // If specified batchsize is not achievable, return
+    // Use maximum possible batch size
+    // Drain requests from all queues to catch up to id of drained req
+    // TODO: properly maintain requests_queued counter
+    tbb::queuing_mutex::scoped_lock lock(mutex);
 
-    if (!strategy->valid || strategy->deadline < completion_time) {
-        return nullptr;
-    }
+    // Drain incoming requests to batchsize queues
+    pull_incoming_requests();
 
-    InferAction* action;    
-    {
-        tbb::queuing_mutex::scoped_lock lock(mutex);
+    uint64_t size_before = queues[0]->size();
 
-        // Strategy or request may have been invalidated while we were waiting
-        if (!strategy->valid || strategy->deadline <= completion_time) {
-            return nullptr;
-        }
+    // Drop requests from batchsize queues that won't complete in time
+    for (auto &queue : queues) {
+        uint64_t exec_time = estimate(queue->batchsize, gpu_clock);
+        uint64_t completion_time = free_at + exec_time;
 
-        // Pull any new requests
-        Request newrequest;
-        while (incoming.try_pop(newrequest)) queue.push_back(newrequest);
-
-        // Drop any timed out requests
-        check_timeouts(free_at);
-
-        // Insufficient requests queued
-        if (queue.size() < strategy->batch_size) return nullptr;
-
-        // The request that generated this strategy has already completed (e.g. as part of a previous batch)
-        // (Now that strategies are explicitly invalidated, this check should be unnecessary)
-        // if (queue.front()->id > strategy->request_id) return nullptr;
-
-        // See if the strategy can actually execute given the current GPU clock
-        // (This check is done before acquiring the lock)
-        // exec_time = estimate(strategy->batch_size, gpu_clock);
-        // completion_time = free_at + exec_time;
-        // if (completion_time > strategy->deadline) return nullptr;
-
-        // See if this strategy has enough requests to fill its batch
-        //   ie. that (batch_size-1) new requests arrived after this request arrived
-        // Note that this is not simply queue.size()
-        unsigned available_requests = 1 + queue.back()->id - strategy->request_id;
-        if (available_requests < strategy->batch_size) {
-
-            // All is not lost; scan the queue in reverse
-            available_requests = 0;
-            for (auto it = queue.rbegin(); it != queue.rend(); it++) {
-                if ((*it)->deadline > completion_time) break;
-                available_requests++;
-                if (available_requests == strategy->batch_size) {
-                    // Have to inherit new deadline
-                    strategy->deadline = (*it)->deadline;
-                    strategy->request_id = (*it)->id;
-                    break;
-                }
-            }
-
-            // Truly insufficient requests
-            if (available_requests < strategy->batch_size) return nullptr;
-        }
-
-        // Skip this request if:
-        // *  a greater batch size might be achievable by a subsequent request
-        // *  there is insufficient time to execute both
-        unsigned candidate_batchsize = batch_lookup(available_requests);
-        if (strategy->batch_size < candidate_batchsize) {
-            uint64_t candidate_exec_time = estimate(candidate_batchsize, gpu_clock);
-            uint64_t candidate_completion_time = free_at + candidate_exec_time;
-
-            // We can't bump up to the candidate batch size
-            if (candidate_completion_time > strategy->deadline) return nullptr;
-
-            strategy->batch_size = candidate_batchsize;
-            exec_time = candidate_exec_time;
-            completion_time = candidate_completion_time;
-        }
-
-        // Drop any requests that came before this strategy and can't be included
-        while (queue.size() > 0 
-                && queue.front()->id != strategy->request_id
-                && queue.front()->deadline < completion_time) {
-            Request request = queue.front();
-            request->set_error(clockworkControllerSkipped, "");
-            requests_queued--;
-            request->invalidate_strategies();
-            queue.pop_front();
-        }
-
-        // This shouldn't happen
-        if (queue.size() < strategy->batch_size) return nullptr;
-
-        action = new InferAction(scheduler, this);
-        for (unsigned i = 0; i < strategy->batch_size; i++) {
-            auto &request = queue.front();
-            request->lock();
-            action->requests.push_back(request);
-            request->invalidate_strategies();
-            requests_queued--;
-            queue.pop_front();
+        while (queue->size() > 0 && queue->front()->deadline < completion_time) {
+            queue->pop();
         }
     }
-    action->set_expectations(free_at, exec_time, gpu_clock);
+
+    // Find the appropriate queue
+    int i = index_lookup(min_batchsize);
+    while (i < queues.size()-1 && queues[i]->has_demand()) {
+        i++;
+    }
+
+    // Not enough requests available at the requested batchsize
+    auto &queue = queues[i];
+    if (!queue->has_demand()) return nullptr;
+
+    // Create the action
+    uint64_t seqno = 0;
+    auto action = new InferAction(scheduler, this);
+    for (unsigned i = 0; i < queue->batchsize; i++) {
+        auto &request = queue->front();
+        request->lock();
+        action->requests.push_back(request);
+        seqno = request->seqno;
+        queue->pop();
+    }
+    action->set_expectations(free_at, estimate(queue->batchsize, gpu_clock), gpu_clock);
     action->batch();
+
+    // Catch up the queues
+    for (auto &queue : queues) {
+        while (queue->size() > 0 && queue->front()->seqno <= seqno) {
+            queue->pop();
+        }
+    }
+
+    uint64_t size_after = queues[0]->size();
+    requests_queued -= (size_before - size_after);
 
     return action;
 }
+
+// void Scheduler::Model::check_timeouts(uint64_t free_at) {
+//     while (!queue.empty()) {
+//         Request request = queue.front();
+//         if (request->deadline >= free_at) break;
+
+//         request->set_error(clockworkControllerCouldNotStartInTime, "");
+//         request->invalidate_strategies();
+//         requests_queued--;
+
+//         queue.pop_front();
+//     }
+// }
+
+// Scheduler::InferAction* Scheduler::Model::try_dequeue(
+//         uint64_t free_at,
+//         unsigned gpu_clock,
+//         Strategy &strategy)
+// {   
+//     uint64_t exec_time = estimate(strategy->batch_size, gpu_clock);
+//     uint64_t completion_time = free_at + exec_time;
+
+//     if (!strategy->valid || strategy->deadline < completion_time) {
+//         return nullptr;
+//     }
+
+//     InferAction* action;    
+//     {
+//         tbb::queuing_mutex::scoped_lock lock(mutex);
+
+//         // Strategy or request may have been invalidated while we were waiting
+//         if (!strategy->valid || strategy->deadline <= completion_time) {
+//             return nullptr;
+//         }
+
+//         // Pull any new requests
+//         Request newrequest;
+//         while (incoming.try_pop(newrequest)) queue.push_back(newrequest);
+
+//         // Drop any timed out requests
+//         check_timeouts(free_at);
+
+//         // Insufficient requests queued
+//         if (queue.size() < strategy->batch_size) return nullptr;
+
+//         // The request that generated this strategy has already completed (e.g. as part of a previous batch)
+//         // (Now that strategies are explicitly invalidated, this check should be unnecessary)
+//         // if (queue.front()->id > strategy->request_id) return nullptr;
+
+//         // See if the strategy can actually execute given the current GPU clock
+//         // (This check is done before acquiring the lock)
+//         // exec_time = estimate(strategy->batch_size, gpu_clock);
+//         // completion_time = free_at + exec_time;
+//         // if (completion_time > strategy->deadline) return nullptr;
+
+//         // See if this strategy has enough requests to fill its batch
+//         //   ie. that (batch_size-1) new requests arrived after this request arrived
+//         // Note that this is not simply queue.size()
+//         unsigned available_requests = 1 + queue.back()->id - strategy->request_id;
+//         if (available_requests < strategy->batch_size) {
+
+//             // All is not lost; scan the queue in reverse
+//             available_requests = 0;
+//             for (auto it = queue.rbegin(); it != queue.rend(); it++) {
+//                 if ((*it)->deadline > completion_time) break;
+//                 available_requests++;
+//                 if (available_requests == strategy->batch_size) {
+//                     // Have to inherit new deadline
+//                     strategy->deadline = (*it)->deadline;
+//                     strategy->request_id = (*it)->id;
+//                     break;
+//                 }
+//             }
+
+//             // Truly insufficient requests
+//             if (available_requests < strategy->batch_size) return nullptr;
+//         }
+
+//         // Skip this request if:
+//         // *  a greater batch size might be achievable by a subsequent request
+//         // *  there is insufficient time to execute both
+//         unsigned candidate_batchsize = batch_lookup(available_requests);
+//         if (strategy->batch_size < candidate_batchsize) {
+//             uint64_t candidate_exec_time = estimate(candidate_batchsize, gpu_clock);
+//             uint64_t candidate_completion_time = free_at + candidate_exec_time;
+
+//             // We can't bump up to the candidate batch size
+//             if (candidate_completion_time > strategy->deadline) return nullptr;
+
+//             strategy->batch_size = candidate_batchsize;
+//             exec_time = candidate_exec_time;
+//             completion_time = candidate_completion_time;
+//         }
+
+//         // Drop any requests that came before this strategy and can't be included
+//         while (queue.size() > 0 
+//                 && queue.front()->id != strategy->request_id
+//                 && queue.front()->deadline < completion_time) {
+//             Request request = queue.front();
+//             request->set_error(clockworkControllerSkipped, "");
+//             requests_queued--;
+//             request->invalidate_strategies();
+//             queue.pop_front();
+//         }
+
+//         // This shouldn't happen
+//         if (queue.size() < strategy->batch_size) return nullptr;
+
+//         action = new InferAction(scheduler, this);
+//         for (unsigned i = 0; i < strategy->batch_size; i++) {
+//             auto &request = queue.front();
+//             request->lock();
+//             action->requests.push_back(request);
+//             request->invalidate_strategies();
+//             requests_queued--;
+//             queue.pop_front();
+//         }
+//     }
+//     action->set_expectations(free_at, exec_time, gpu_clock);
+//     action->batch();
+
+//     return action;
+// }
 
 
 const float Scheduler::estimate_percentile = 0.99;
@@ -552,6 +639,16 @@ void Scheduler::EvictWeightsAction::set_result(std::shared_ptr<workerapi::EvictW
     this->result = result;
 }
 
+void Scheduler::ModelInstance::activate() {
+    if (!active.test_and_set()) {
+        gpu->activated.push(this);
+    }
+}
+
+void Scheduler::ModelInstance::deactivate() {
+    active.clear();
+}
+
 Scheduler::GPU::GPU(
     unsigned id,
     Scheduler* scheduler, 
@@ -743,58 +840,40 @@ bool Scheduler::GPU::schedule_load() {
     return true;
 }
 
+void Scheduler::GPU::add_model_strategies(ModelInstance* instance) {
+    instance->strategies = instance->model->new_strategies(id, exec.clock());
+    if (instance->strategies.size() == 0) {
+        // Strategy should be deactivated
+        // There is an unimportant race condition here if requests are concurrently enqueued
+        instance->deactivate();
+    }
+
+    for (auto &strategy : instance->strategies) {
+        this->strategies.insert(strategy);
+    }
+}
+
 bool Scheduler::GPU::schedule_infer() {
+    // TODO: skip and deactivate models that have been evicted
+    // TODO: what to do when we run out of reqs
+
     tbb::queuing_mutex::scoped_lock lock(infer_mutex);
 
+    // All activated instances start dirty
+    std::vector<ModelInstance*> newly_activated;
+    ModelInstance* instance;
+    while (activated.try_pop(instance)) {
+        newly_activated.push_back(instance);
+    }
+
+    // Get and incorporate strategies for activated instances
+    for (auto &instance : newly_activated) {
+        add_model_strategies(instance);
+    }
+
+    // If model is empty, set active to false, then drain queue just in case
     bool active = false;
-
-    // Handle all newly-loaded models, add to strategy queue
-    ModelInstance* newly_loaded;
-    while (newly_loaded_models.try_pop(newly_loaded)) {
-        auto requests = newly_loaded->model->requests();
-
-        for (auto &request : requests) {
-            for (auto &strategy : request->strategies) {
-                if (strategy->valid) {
-                    strategy_queue.push(strategy);
-                }
-            }
-        }
-        active = true;
-    }
-
-    // Drain all incoming strategies, add to strategy_queue
-    Request request;
-    while (incoming_strategies.try_pop(request)) {
-        for (auto &strategy : request->strategies) {
-            if (strategy->valid) {
-                strategy_queue.push(strategy);
-            }
-        }
-        active = true;
-    }
-
-    // Drop any strategies already processed or with missed deadlines
-    while (strategy_queue.size() > 0) {
-        auto &strategy = strategy_queue.top();
-
-        if (strategy->valid && strategy->deadline > util::now()) {
-            break;
-        }
-
-        strategy_queue.pop();
-    }
-
-    // if (last_print + 1000000000UL < now) {
-    //     last_print = now;
-    //     std::stringstream s;
-    //     s << "GPU " << id << " strategy queue " << strategy_queue.size() << std::endl;
-    //     std::cout << s.str();
-    // }
-
-    // Schedule infer actions
-    
-    while (strategy_queue.size() > 0) {
+    while (strategies.size() > 0) {
         uint64_t exec_at;
         int clock;
         {
@@ -806,23 +885,121 @@ bool Scheduler::GPU::schedule_infer() {
         uint64_t schedule_until = util::now() + scheduler->schedule_ahead;
         if (exec_at >= schedule_until) break;
 
-        Strategy strategy = strategy_queue.top();
+        auto strategy = *strategies.begin();
 
-        // Only valid strategies, for which this GPU has the model loaded
-        if (strategy->valid && instances[strategy->model->id]->loaded) {
-            InferAction* action = strategy->model->try_dequeue(exec_at, clock, strategy);
+        // Remove all strategies for this instance
+        for (auto &strategy : instance->strategies) {
+            auto it = strategies.find(strategy);
+            CHECK(it != strategies.end()) << "Strategy missing from priority queue";
+            strategies.erase(it);
+        }
+        instance->strategies.clear();
 
-            if (action != nullptr) {
-                send_action(action);
-                active = true;
-            }
+        // Deactivate evicted model
+        if (!strategy.instance->loaded) {
+            strategy.instance->deactivate();
+            continue;
         }
 
-        strategy_queue.pop();
+
+        InferAction* action = strategy.instance->model->try_dequeue(exec_at, clock, strategy.batch_size);
+
+        if (action != nullptr) {
+            send_action(action);
+            active = true;
+        }
+
+        // Add new strategies for this instance
+        add_model_strategies(strategy.instance);
     }
 
-    return active;
+
+    return false;
 }
+
+// bool Scheduler::GPU::schedule_infer() {
+//     // TODO: skip and deactivate models that have been evicted
+//     // TODO: what to do when we run out of reqs
+
+//     tbb::queuing_mutex::scoped_lock lock(infer_mutex);
+
+//     bool active = false;
+
+//     // Handle all newly-loaded models, add to strategy queue
+//     ModelInstance* newly_loaded;
+//     while (newly_loaded_models.try_pop(newly_loaded)) {
+//         auto requests = newly_loaded->model->requests();
+
+//         for (auto &request : requests) {
+//             for (auto &strategy : request->strategies) {
+//                 if (strategy->valid) {
+//                     strategy_queue.push(strategy);
+//                 }
+//             }
+//         }
+//         active = true;
+//     }
+
+//     // Drain all incoming strategies, add to strategy_queue
+//     Request request;
+//     while (incoming_strategies.try_pop(request)) {
+//         for (auto &strategy : request->strategies) {
+//             if (strategy->valid) {
+//                 strategy_queue.push(strategy);
+//             }
+//         }
+//         active = true;
+//     }
+
+//     // Drop any strategies already processed or with missed deadlines
+//     while (strategy_queue.size() > 0) {
+//         auto &strategy = strategy_queue.top();
+
+//         if (strategy->valid && strategy->deadline > util::now()) {
+//             break;
+//         }
+
+//         strategy_queue.pop();
+//     }
+
+//     // if (last_print + 1000000000UL < now) {
+//     //     last_print = now;
+//     //     std::stringstream s;
+//     //     s << "GPU " << id << " strategy queue " << strategy_queue.size() << std::endl;
+//     //     std::cout << s.str();
+//     // }
+
+//     // Schedule infer actions
+    
+//     while (strategy_queue.size() > 0) {
+//         uint64_t exec_at;
+//         int clock;
+//         {
+//             tbb::spin_mutex::scoped_lock lock(exec_mutex);
+//             exec_at = exec.available();
+//             clock = exec.clock();
+//         }
+
+//         uint64_t schedule_until = util::now() + scheduler->schedule_ahead;
+//         if (exec_at >= schedule_until) break;
+
+//         Strategy strategy = strategy_queue.top();
+
+//         // Only valid strategies, for which this GPU has the model loaded
+//         if (strategy->valid && instances[strategy->model->id]->loaded) {
+//             InferAction* action = strategy->model->try_dequeue(exec_at, clock, strategy);
+
+//             if (action != nullptr) {
+//                 send_action(action);
+//                 active = true;
+//             }
+//         }
+
+//         strategy_queue.pop();
+//     }
+
+//     return active;
+// }
 
 void Scheduler::GPU::infer_error(InferAction* action, std::shared_ptr<workerapi::ErrorResult> &error) {
     // std::cout << ("Worker  --> " + error->str() + "\n");
@@ -922,7 +1099,7 @@ void Scheduler::GPU::load_success(LoadWeightsAction* action, std::shared_ptr<wor
     action->instance->model->copies_loaded++;
 
     // Enable new requests
-    newly_loaded_models.push(action->instance);
+    action->instance->activate();
 
     // TODO: change this?
     action->telemetry.goodput = 1.0;
@@ -1268,7 +1445,6 @@ void Scheduler::run_admission_thread() {
             if (request->deadline > now) break;
 
             request->finalize();
-            request->invalidate_strategies();
             timeout_queue.pop();
         }
 
