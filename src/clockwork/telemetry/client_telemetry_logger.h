@@ -27,10 +27,15 @@ namespace clockwork {
 
 class ClientTelemetryLogger {
 public:
+	std::atomic_uint64_t outstanding = 0;
+	std::atomic_uint64_t submitted = 0;
+	std::atomic_uint64_t completed = 0;
 	virtual void log(int user_id, int model_id, int batch_size, 
 		size_t input_size, size_t output_size,
 		uint64_t request_sent, uint64_t response_received,
 		bool success) = 0;
+	void incrOutstanding() { outstanding++; submitted++; }
+	void decrOutstanding() { outstanding--; completed++; }
 	virtual void shutdown(bool awaitCompletion) = 0;
 };
 
@@ -137,6 +142,7 @@ public:
 			}
 
 			std::stringstream report;
+			report << "total=" << submitted.exchange(0) << " ";
 			if (begun && all_samples.size() == 0) {
 				report << "throughput=0" << std::endl;
 			} else if (begun) {

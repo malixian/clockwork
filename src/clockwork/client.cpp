@@ -292,6 +292,8 @@ void ModelImpl::infer(std::vector<uint8_t> &input, std::function<void(std::vecto
 
 	if (print) std::cout << "<--  " << request.str() << std::endl;
 
+	client->telemetry->incrOutstanding();
+
 	uint64_t t_send = util::now();
 	client->connection->infer(request, [this, data, t_send, onSuccess, onError](clientapi::InferenceResponse &response) {
 		uint64_t t_receive = util::now();
@@ -311,6 +313,7 @@ void ModelImpl::infer(std::vector<uint8_t> &input, std::function<void(std::vecto
 				client->telemetry->log(user_id_, model_id_, 1, input_size_, output_size_, t_send, t_receive, false);
 			}
 		}
+		client->telemetry->decrOutstanding();
 		if (data != nullptr) {
 			delete data;
 		}
