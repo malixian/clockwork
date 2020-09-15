@@ -29,6 +29,7 @@ class Scheduler : public clockwork::Scheduler {
     static const uint64_t print_interval = 10000000000UL;
     static const bool print_debug = false;
     static const bool print_loads = false;
+    static const bool print_scheduler_stats = false;
 
     // Non-configurable parameters
     static const uint64_t default_clock = 1380; // default gpu clock speed
@@ -37,7 +38,6 @@ class Scheduler : public clockwork::Scheduler {
     static const float estimate_percentile; // Percentile to use for estimation; 0.99 (effectively max)
     static const uint64_t lag = 10000000UL; // how much can worker lag behind expected completion time before we stop scheduling
     static const uint64_t future = 1000000UL; // used for setting earliest timestamp; expect 1ms lag getting to worker
-    static const int max_loads = 2; // max number of outstanding loads
     static const uint64_t max_loadweights_slo = 25000000UL;
     static const unsigned network_concurrency = 2; // max number of concurrent network xfers
 
@@ -356,6 +356,26 @@ class Scheduler : public clockwork::Scheduler {
 
         tbb::concurrent_queue<ModelInstance*> activated;
 
+        std::atomic_uint64_t schedule_infer_count = 0;
+        std::atomic_uint64_t schedule_infer_active_count = 0;
+        std::atomic_uint64_t schedule_infer_inactive_count = 0;
+        std::atomic_uint64_t schedule_infer_strategies_empty_count = 0;
+        std::atomic_uint64_t schedule_infer_exec_full = 0;
+        std::atomic_uint64_t schedule_infer_action_created = 0;
+        std::atomic_uint64_t schedule_infer_action_attempted = 0;
+
+        std::string stats() {
+            std::stringstream s;
+            s << "GPU-" << id << "-INF ";
+            s << schedule_infer_active_count.exchange(0) << "/" << schedule_infer_count.exchange(0);
+            s << " active, ";
+            s << schedule_infer_strategies_empty_count.exchange(0) << " empty, ";
+            s << schedule_infer_exec_full.exchange(0) << " execfull, ";
+            s << schedule_infer_action_created.exchange(0) << "/";
+            s << schedule_infer_action_attempted.exchange(0) << " created.";
+            return s.str();
+        }
+
      private:
         tbb::queuing_mutex infer_mutex;
         tbb::queuing_mutex load_mutex;
@@ -371,13 +391,8 @@ class Scheduler : public clockwork::Scheduler {
 
         std::atomic_int free_pages;
         bool eviction_required = false;
-        uint64_t last_load = 0;
-        uint64_t last_exec = 0;
         uint64_t last_print = 0;
-        int loads = 0;
 
-
-        // std::priority_queue<StrategyImpl, std::deque<StrategyImpl>, StrategyImpl::Comparator> strategies;
         std::set<StrategyImpl, StrategyImpl::Comparator> strategies;
 
     public:
@@ -455,12 +470,14 @@ class Scheduler : public clockwork::Scheduler {
     tbb::concurrent_queue<GPU*> to_infer;
     std::atomic_uint64_t next_load = 0;
     std::atomic_uint64_t next_infer = 0;
+    std::atomic_uint64_t request_count = 0;
 
  private:
     // Threads
     std::string actions_filename;
     ControllerActionTelemetryLogger* printer;
     std::thread network_printer;
+    std::thread stats_printer;
     std::vector<std::thread> admission_threads;
     std::vector<std::thread> results_threads;
     std::vector<std::thread> infer_threads;
@@ -525,6 +542,7 @@ class Scheduler : public clockwork::Scheduler {
     void run_results_thread();
     void run_infer_thread(int id);
     void run_load_thread(int id);
+    void run_gpu_stats_printer_thread();
 
     // Logic of the dispatcher thread
     void handle_result(std::shared_ptr<workerapi::Result> &result);
