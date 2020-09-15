@@ -169,11 +169,11 @@ Scheduler::Model::Model(Scheduler* scheduler, BatchedModelState &state)
             estimates[batch_size] = estimate * Scheduler::default_clock;
             estimators[batch_size] = new SlidingWindow(Scheduler::estimate_window_size);
             supported_batch_sizes.push_back(batch_size);
+            queues.push_back(new ModelQueue(batch_size));
         } else {
             std::cout << "Excluding b" << batch_size << " with estimate " << estimate << "model=" << state.model_path << std::endl;
         }
 
-        queues.push_back(new ModelQueue(batch_size));
     }
 
     weights_estimator = new SlidingWindow(Scheduler::estimate_window_size);
@@ -224,7 +224,7 @@ void Scheduler::Model::pull_incoming_requests() {
     }
 }
 
-std::vector<Scheduler::StrategyImpl> Scheduler::Model::new_strategies(int gpu_id, unsigned gpu_clock) {
+std::vector<Scheduler::StrategyImpl> Scheduler::Model::new_strategies(int gpu_id, unsigned gpu_clock, int max_batchsize) {
     tbb::queuing_mutex::scoped_lock lock(mutex);
 
     pull_incoming_requests();
@@ -234,6 +234,7 @@ std::vector<Scheduler::StrategyImpl> Scheduler::Model::new_strategies(int gpu_id
         auto &queue = queues[i];
 
         if (queue->size() == 0) continue;
+        if (queue->batchsize > max_batchsize) continue;
 
         StrategyImpl strategy;
         strategy.priority = queue->front()->deadline - estimate(queue->batchsize);
@@ -277,17 +278,24 @@ Scheduler::InferAction* Scheduler::Model::try_dequeue(
     }
 
     // Find the appropriate queue
-    int i = index_lookup(min_batchsize);
-    while (i < queues.size()-1 && queues[i]->has_demand()) {
+    int i = 0;
+    while (i < queues.size()-1 && queues[i+1]->has_demand()) {
         i++;
     }
 
     // Not enough requests available at the requested batchsize
     auto &queue = queues[i];
-    if (!queue->has_demand()) return nullptr;
+    if (queue->batchsize < min_batchsize) {
+        // std::cout << "Skipping q=" << queue->batchsize << " min=" << min_batchsize << " state=" << queues_str() << std::endl;
+        return nullptr;
+    }
+    if (!queue->has_demand()) {
+        // std::cout << "Skipping, no demand, q=" << queue->batchsize << " state=" << queues_str() << std::endl;
+        return nullptr;
+    }
 
     // Create the action
-    uint64_t seqno = 0;
+    uint64_t seqno;
     auto action = new InferAction(scheduler, this);
     for (unsigned i = 0; i < queue->batchsize; i++) {
         auto &request = queue->front();
@@ -840,17 +848,23 @@ bool Scheduler::GPU::schedule_load() {
     return true;
 }
 
-void Scheduler::GPU::add_model_strategies(ModelInstance* instance) {
-    instance->strategies = instance->model->new_strategies(id, exec.clock());
+void Scheduler::GPU::add_model_strategies(ModelInstance* instance, int max_batchsize) {
+    instance->strategies = instance->model->new_strategies(id, exec.clock(), max_batchsize);
     if (instance->strategies.size() == 0) {
         // Strategy should be deactivated
         // There is an unimportant race condition here if requests are concurrently enqueued
         instance->deactivate();
+        return;
     }
 
+    std::stringstream msg;
+    msg << "Adding " << instance->strategies.size() << " strategies: [";
     for (auto &strategy : instance->strategies) {
         this->strategies.insert(strategy);
+        msg << strategy.batch_size << " ";
     }
+    msg << "]" << std::endl;
+    // std::cout << msg.str();
 }
 
 bool Scheduler::GPU::schedule_infer() {
@@ -861,9 +875,9 @@ bool Scheduler::GPU::schedule_infer() {
 
     // All activated instances start dirty
     std::vector<ModelInstance*> newly_activated;
-    ModelInstance* instance;
-    while (activated.try_pop(instance)) {
-        newly_activated.push_back(instance);
+    ModelInstance* activated_model;
+    while (activated.try_pop(activated_model)) {
+        newly_activated.push_back(activated_model);
     }
 
     // Get and incorporate strategies for activated instances
@@ -886,14 +900,18 @@ bool Scheduler::GPU::schedule_infer() {
         if (exec_at >= schedule_until) break;
 
         auto strategy = *strategies.begin();
+        auto instance = strategy.instance;
 
         // Remove all strategies for this instance
+        int expected = instance->strategies.size();
+        int before = strategies.size();
         for (auto &strategy : instance->strategies) {
             auto it = strategies.find(strategy);
             CHECK(it != strategies.end()) << "Strategy missing from priority queue";
             strategies.erase(it);
         }
         instance->strategies.clear();
+        int after = strategies.size();
 
         // Deactivate evicted model
         if (!strategy.instance->loaded) {
@@ -901,20 +919,21 @@ bool Scheduler::GPU::schedule_infer() {
             continue;
         }
 
+        // std::cout << "try_dequeue for " << strategy.str() << ", " << strategies.size() << " strategies, cleared=" << (after-before) << ", expectedcleared=" << expected << std::endl;
 
         InferAction* action = strategy.instance->model->try_dequeue(exec_at, clock, strategy.batch_size);
 
         if (action != nullptr) {
             send_action(action);
             active = true;
+            add_model_strategies(strategy.instance);
+        } else {
+            add_model_strategies(strategy.instance, strategy.batch_size-1);
         }
-
-        // Add new strategies for this instance
-        add_model_strategies(strategy.instance);
     }
 
 
-    return false;
+    return active;
 }
 
 // bool Scheduler::GPU::schedule_infer() {
@@ -1334,7 +1353,7 @@ void Scheduler::start(std::vector<network::controller::WorkerConnection*> worker
     network_printer = std::thread(&networkPrintThread, workers);
     threading::initLoggerThread(network_printer);
 
-    uint64_t num_admission_threads = 2;
+    uint64_t num_admission_threads = 2; // 2
     for (int i = 0; i < num_admission_threads; i++) {
         admission_threads.push_back(std::thread(&Scheduler::run_admission_thread, this));
         threading::initHighPriorityThread(admission_threads[i]);
@@ -1346,13 +1365,13 @@ void Scheduler::start(std::vector<network::controller::WorkerConnection*> worker
         threading::initHighPriorityThread(tracker_threads[i]);
     }
 
-    uint64_t num_results_threads = 2;
+    uint64_t num_results_threads = 2; // 2
     for (int i = 0; i < num_results_threads; i++) {
         results_threads.push_back(std::thread(&Scheduler::run_results_thread, this));
         threading::initHighPriorityThread(results_threads[i]);
     }
 
-    int num_infer_threads = 5;
+    int num_infer_threads = 5; // 5
     for (unsigned i = 0; i < num_infer_threads; i++) {
         infer_threads.push_back(std::thread(&Scheduler::run_infer_thread, this, i));
         threading::initHighPriorityThread(infer_threads[i]);
@@ -1361,7 +1380,7 @@ void Scheduler::start(std::vector<network::controller::WorkerConnection*> worker
         to_infer.push(gpu);
     }
 
-    int num_load_threads = 5;
+    int num_load_threads = 5; // 5
     for (unsigned i = 0; i < num_load_threads; i++) {
         load_threads.push_back(std::thread(&Scheduler::run_load_thread, this, i));
         threading::initHighPriorityThread(load_threads[i]);

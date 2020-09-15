@@ -296,11 +296,22 @@ class Scheduler : public clockwork::Scheduler {
         // Enqueues the request to this model, then enqueues InferStrategies to all active ModelInstances
         void enqueue(Request request);
 
+        std::string queues_str() {
+            std::stringstream msg;
+            bool first = true;
+            for (auto &queue : queues) {
+                if (!first) msg << " ";
+                first = false;
+                msg << "q" << queue->batchsize << "=" << queue->size();
+            }
+            return msg.str();
+        }
+
     private:
         void pull_incoming_requests();
 
     public:
-        std::vector<StrategyImpl> new_strategies(int gpu_id, unsigned gpu_clock);
+        std::vector<StrategyImpl> new_strategies(int gpu_id, unsigned gpu_clock, int max_batchsize);
 
         // Gets actions to execute for this model
         InferAction* try_dequeue(uint64_t gpu_free_at, unsigned gpu_clock, int min_batchsize);
@@ -385,7 +396,7 @@ class Scheduler : public clockwork::Scheduler {
         void send_action(LoadWeightsAction* action);
         void send_action(EvictWeightsAction* action);
 
-        void add_model_strategies(ModelInstance* instance);
+        void add_model_strategies(ModelInstance* instance, int max_batchsize=INT_MAX);
 
         std::vector<EvictWeightsAction*> evict_pages(unsigned required_pages);
 
