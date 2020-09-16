@@ -1233,6 +1233,8 @@ void Scheduler::run_admission_thread() {
 
     int i = 0;
     while (true) {
+        bool active = false;
+
         // Pop a request
         Request request;
         if (request_queue.try_pop(request)) {
@@ -1245,6 +1247,7 @@ void Scheduler::run_admission_thread() {
                 handle_request(request);
                 timeout_queue.push(request);
             }
+            active = true;
             i++;
         }
 
@@ -1257,10 +1260,11 @@ void Scheduler::run_admission_thread() {
 
             request->finalize();
             timeout_queue.pop();
+            active = true;
             i++;
         }
 
-        if (i == 0 || i > 100) {
+        if (!active || i >= 100) {
             usleep(10);
             i = 0;
         }
@@ -1273,10 +1277,12 @@ void Scheduler::run_results_thread() {
 
     int i = 0;
     while (true) {
+        bool active = false;
 
         std::shared_ptr<workerapi::Result> result;
         if (result_queue.try_pop(result)) {
             handle_result(result);
+            active = true;
             i++;
         }
 
@@ -1288,11 +1294,12 @@ void Scheduler::run_results_thread() {
             if (next_timeout.timeout_at <= util::now()) {
                 handle_result(next_timeout.result);
                 should_timeout = false;
+                active = true;
                 i++;
             }
         }
 
-        if (i == 0 || i > 100) {
+        if (!active || i >= 100) {
             usleep(10);
             i = 0;
         }

@@ -5,6 +5,7 @@
 #include <string>
 #include <asio.hpp>
 #include <functional>
+#include <tbb/concurrent_queue.h>
 #include "clockwork/worker.h"
 #include "clockwork/network/network.h"
 #include "clockwork/network/worker_api.h"
@@ -78,16 +79,18 @@ public:
 
 };
 
+class Server;
+
 /* Controller side of the Client<>Controller API network impl */
 class ClientConnection : public message_connection, public message_handler  {
 private:
-	clientapi::ClientAPI* api;
-	message_sender msg_tx_;
+	Server* server;
 
 public:
+	message_sender msg_tx_;
 	std::atomic_bool connected;
 
-	ClientConnection(asio::io_service &io_service, clientapi::ClientAPI* api);
+	ClientConnection(asio::io_service &io_service, Server* server);
 
 protected:
 	virtual message_rx *new_rx_message(message_connection *tcp_conn, uint64_t header_len,
@@ -116,19 +119,28 @@ private:
 	clientapi::ClientAPI* api;
 	std::atomic_bool alive;
 	asio::io_service io_service;
-	std::thread network_thread;
+	std::vector<std::thread> network_threads;
+	std::thread process_thread;
+	tcp::acceptor* acceptor;
+	struct client_message { ClientConnection* client; message_rx* req; };
+	tbb::concurrent_bounded_queue<client_message> messages;
+
 
 public:
 	Server(clientapi::ClientAPI* api, int port = 12346);
 
 	void shutdown(bool awaitShutdown);
 	void join();
-	void run(int port);
+	void run_network_thread();
+	void run_process_thread();
+
+	void completed_receive(ClientConnection* client, message_rx *req);
 
 private:
 	void start_accept(tcp::acceptor* acceptor);
 
 	void handle_accept(ClientConnection* connection, tcp::acceptor* acceptor, const asio::error_code& error);
+	void process_message(ClientConnection* client, message_rx *req);
 
 };
 
