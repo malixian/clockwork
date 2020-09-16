@@ -549,14 +549,14 @@ void Scheduler::GPU::send_action(InferAction* action) {
     action->telemetry.requests_queued = action->model->requests_queued;
     action->telemetry.copies_loaded = action->model->copies_loaded;
 
-    // Send the action
-    scheduler->network->send(worker, infer, action->send_by, action->report_error_at);
-
     // Immediately mark the requests as executing for load balancer
     for (auto &request : action->requests) {
         action->model->tracker->executing(request->demand, id);
     }
     action->model->invalidate_tracker();
+
+    // Send the action
+    scheduler->network->send(worker, infer, action->send_by, action->report_error_at);
 
     if (print_debug) std::cout << ("Worker <--  " + infer->str() + "\n");
 }
@@ -578,13 +578,13 @@ void Scheduler::GPU::send_action(LoadWeightsAction* action) {
     };
     scheduler->add_callback(load->id, callback);
 
-    // Send the action
-    scheduler->network->send(worker, load, UINT64_MAX, 0);
-
     // Record the telemetry
     action->telemetry.set(load);
     action->telemetry.requests_queued = action->instance->model->requests_queued;
     action->telemetry.copies_loaded = action->instance->model->copies_loaded;
+
+    // Send the action
+    scheduler->network->send(worker, load, UINT64_MAX, 0);
 
     if (print_debug || print_loads) std::cout << ("Worker <--  " + load->str() + "\n");
 }
@@ -600,13 +600,13 @@ void Scheduler::GPU::send_action(EvictWeightsAction* action) {
     };
     scheduler->add_callback(evict->id, callback);
 
-    // Send the action
-    scheduler->network->send(worker, evict, UINT64_MAX, 0);
-
     // Record the telemetry
     action->telemetry.set(evict);
     action->telemetry.requests_queued = action->instance->model->requests_queued;
     action->telemetry.copies_loaded = action->instance->model->copies_loaded+1;
+
+    // Send the action
+    scheduler->network->send(worker, evict, UINT64_MAX, 0);
 
     if (print_debug || print_loads) std::cout << ("Worker <--  " + evict->str() + "\n");    
 }
@@ -1245,6 +1245,7 @@ void Scheduler::run_admission_thread() {
                 handle_request(request);
                 timeout_queue.push(request);
             }
+            i++;
         }
 
         // Drop any timed out requests
@@ -1256,10 +1257,12 @@ void Scheduler::run_admission_thread() {
 
             request->finalize();
             timeout_queue.pop();
+            i++;
         }
 
-        if (i++ % 100 == 0) {
+        if (i == 0 || i > 100) {
             usleep(10);
+            i = 0;
         }
     }
 }
@@ -1268,13 +1271,13 @@ void Scheduler::run_results_thread() {
     bool should_timeout = false;
     TimeoutResult next_timeout;
 
+    int i = 0;
     while (true) {
-        bool active = false;
 
         std::shared_ptr<workerapi::Result> result;
         if (result_queue.try_pop(result)) {
             handle_result(result);
-            active = true;
+            i++;
         }
 
         if (!should_timeout) {
@@ -1285,12 +1288,13 @@ void Scheduler::run_results_thread() {
             if (next_timeout.timeout_at <= util::now()) {
                 handle_result(next_timeout.result);
                 should_timeout = false;
-                active = true;
+                i++;
             }
         }
 
-        if (!active) {
+        if (i == 0 || i > 100) {
             usleep(10);
+            i = 0;
         }
     }
 }
@@ -1305,10 +1309,7 @@ void Scheduler::run_infer_thread(int id) {
     while (true) {
         uint64_t i = (next_infer++) % n_gpus;
         bool active = gpus[i]->schedule_infer();
-
-        if (i++ % 100 == 0) {
-            usleep(10);
-        }
+        usleep(10);
     }
 }
 
@@ -1331,7 +1332,6 @@ void Scheduler::run_tracker_thread() {
     std::cout << "Tracker thread running\n";
     std::vector<Model*> models;
     while (true) {
-        bool active = false;
         Model* model;
         while (stale.try_pop(model)) {
             models.push_back(model);
@@ -1343,7 +1343,6 @@ void Scheduler::run_tracker_thread() {
             for (auto &model : models) {
                 tracker->process(model->tracker);
                 model->reset_tracker();
-                active = true;
             }
         }
 

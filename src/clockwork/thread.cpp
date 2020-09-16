@@ -33,18 +33,20 @@ public:
 	std::vector<unsigned> default_pool;
 
 	CoreManager() : in_use(coreCount(), false) {
-		in_use[0] = true;
-		in_use[1] = true;
-		init_pool.push_back(0);
-		init_pool.push_back(1);
+		for (int i = 0; i < default_pool_size; i++) {
+			in_use[i] = true;
+			default_pool.push_back(i);
+		}
+
+		for (int i = 0; i < init_pool_size; i++) {
+			int core = i + default_pool_size;
+			in_use[core] = true;
+			init_pool.push_back(core);
+		}
 
 		unsigned gpu_count = util::get_num_gpus();
 		for (unsigned i = 0; i < gpu_count; i++) {
 			gpu_affinity.push_back(getGPUCoreAffinity(i));
-		}
-
-		for (auto core : init_pool) {
-			default_pool.push_back(core);
 		}
 	}
 
@@ -242,7 +244,8 @@ int minPriority(int scheduler) {
 }
 
 int maxPriority(int scheduler) {
-	return sched_get_priority_max(scheduler);
+	return 49; // 1 less than interrupt priority
+	// return sched_get_priority_max(scheduler);
 }
 
 void setDefaultPriority() {
