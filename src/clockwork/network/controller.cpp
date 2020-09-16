@@ -317,8 +317,11 @@ Server::Server(clientapi::ClientAPI* api, int port) :
 		threading::initNetworkThread(network_threads[i]);
 	}
 
-	this->process_thread = std::thread(&Server::run_process_thread, this);
-	threading::initNetworkThread(process_thread);
+	int num_process_threads = 1;
+	for (int i = 0; i < num_process_threads; i++) {
+		process_threads.push_back(std::thread(&Server::run_process_thread, this));
+		threading::initNetworkThread(process_threads[i]);
+	}
 }
 
 void Server::shutdown(bool awaitShutdown) {

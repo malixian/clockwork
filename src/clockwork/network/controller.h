@@ -120,7 +120,7 @@ private:
 	std::atomic_bool alive;
 	asio::io_service io_service;
 	std::vector<std::thread> network_threads;
-	std::thread process_thread;
+	std::vector<std::thread> process_threads;
 	tcp::acceptor* acceptor;
 	struct client_message { ClientConnection* client; message_rx* req; };
 	tbb::concurrent_bounded_queue<client_message> messages;
