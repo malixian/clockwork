@@ -17,7 +17,6 @@
 #include "clockwork/sliding_window.h"
 #include "tbb/mutex.h"
 #include "tbb/queuing_mutex.h"
-#include "tbb/spin_mutex.h"
 
 namespace clockwork {
 namespace scheduler {
@@ -273,11 +272,11 @@ class Scheduler : public clockwork::Scheduler {
         std::vector<unsigned> index_lookup_;
         unsigned max_batch_size;
 
-        tbb::spin_mutex estimates_mutex;
+        tbb::queuing_mutex estimates_mutex;
         std::vector<uint64_t> estimates;
         std::map<unsigned, SlidingWindow*> estimators;
 
-        tbb::spin_mutex weights_estimate_mutex;
+        tbb::queuing_mutex weights_estimate_mutex;
         SlidingWindow* weights_estimator;
         uint64_t weights_estimate;
 
@@ -383,10 +382,10 @@ class Scheduler : public clockwork::Scheduler {
         network::controller::WorkerConnection* worker;
         Scheduler* scheduler;
 
-        tbb::spin_mutex exec_mutex;
+        tbb::queuing_mutex exec_mutex;
         WorkerTracker exec;
 
-        tbb::spin_mutex loadweights_mutex;
+        tbb::queuing_mutex loadweights_mutex;
         WorkerTracker loadweights;
 
         std::atomic_int free_pages;
@@ -436,7 +435,7 @@ class Scheduler : public clockwork::Scheduler {
             uint64_t send_error_at;
         };
 
-        tbb::spin_mutex mutex;
+        tbb::queuing_mutex mutex;
         unsigned idle;
         std::deque<NetworkAction> pending;
         std::function<void(uint64_t, std::shared_ptr<workerapi::Result>)> error_callback;
@@ -498,7 +497,7 @@ class Scheduler : public clockwork::Scheduler {
     tbb::concurrent_queue<Request> request_queue;
 
     // Callbacks
-    tbb::spin_mutex callbacks_mutex;
+    tbb::queuing_mutex callbacks_mutex;
     typedef std::function<void(std::shared_ptr<workerapi::Result>&)> Callback;
     std::unordered_map<uint64_t, Callback> callbacks;
 

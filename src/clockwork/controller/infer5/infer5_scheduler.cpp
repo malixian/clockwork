@@ -299,7 +299,7 @@ Scheduler::InferAction* Scheduler::Model::try_dequeue(
 const float Scheduler::estimate_percentile = 0.99;
 
 void Scheduler::Model::add_measurement(unsigned batch_size, uint64_t duration, unsigned gpu_clock) {
-    tbb::spin_mutex::scoped_lock lock(estimates_mutex);
+    tbb::queuing_mutex::scoped_lock lock(estimates_mutex);
 
     auto it = estimators.find(batch_size);
     CHECK(it != estimators.end()) << "Unsupported batch size " << batch_size;
@@ -310,7 +310,7 @@ void Scheduler::Model::add_measurement(unsigned batch_size, uint64_t duration, u
 }
 
 void Scheduler::Model::add_weights_measurement(uint64_t duration) {
-    tbb::spin_mutex::scoped_lock lock(weights_estimate_mutex);
+    tbb::queuing_mutex::scoped_lock lock(weights_estimate_mutex);
 
     weights_estimator->insert(duration);
     weights_estimate = weights_estimator->get_percentile(Scheduler::estimate_percentile);
@@ -534,7 +534,7 @@ void Scheduler::GPU::send_action(InferAction* action) {
 
     // Update GPU state
     {
-        tbb::spin_mutex::scoped_lock lock(exec_mutex);
+        tbb::queuing_mutex::scoped_lock lock(exec_mutex);
         exec.add(infer->id, infer->expected_duration);
     }
 
@@ -568,7 +568,7 @@ void Scheduler::GPU::send_action(LoadWeightsAction* action) {
 
     // Update PCI state
     {
-        tbb::spin_mutex::scoped_lock lock(loadweights_mutex);
+        tbb::queuing_mutex::scoped_lock lock(loadweights_mutex);
         loadweights.add(load->id, load->expected_duration);
     }
 
@@ -639,7 +639,7 @@ bool Scheduler::GPU::schedule_load() {
 
     uint64_t available;
     {
-        tbb::spin_mutex::scoped_lock lock(loadweights_mutex);
+        tbb::queuing_mutex::scoped_lock lock(loadweights_mutex);
         available = loadweights.available();
     }
 
@@ -735,7 +735,7 @@ bool Scheduler::GPU::schedule_infer() {
         uint64_t exec_at;
         int clock;
         {
-            tbb::spin_mutex::scoped_lock lock(exec_mutex);
+            tbb::queuing_mutex::scoped_lock lock(exec_mutex);
             exec_at = exec.available();
             clock = exec.clock();
         }
@@ -794,7 +794,7 @@ void Scheduler::GPU::infer_error(InferAction* action, std::shared_ptr<workerapi:
     
     // Update GPU state tracking
     {
-        tbb::spin_mutex::scoped_lock lock(exec_mutex);
+        tbb::queuing_mutex::scoped_lock lock(exec_mutex);
         exec.error(error->id, util::now());
     }
 
@@ -812,7 +812,7 @@ void Scheduler::GPU::infer_success(InferAction* action, std::shared_ptr<workerap
 
     // Update GPU state tracking
     {
-        tbb::spin_mutex::scoped_lock lock(exec_mutex);
+        tbb::queuing_mutex::scoped_lock lock(exec_mutex);
         exec.success(result->id, result->exec.end);
         exec.update_clock(result->gpu_clock);
     }
@@ -857,7 +857,7 @@ void Scheduler::GPU::load_error(LoadWeightsAction* action, std::shared_ptr<worke
 
     // Update PCI state tracking
     {
-        tbb::spin_mutex::scoped_lock lock(loadweights_mutex);
+        tbb::queuing_mutex::scoped_lock lock(loadweights_mutex);
         loadweights.error(error->id, util::now());
     }
 
@@ -876,7 +876,7 @@ void Scheduler::GPU::load_success(LoadWeightsAction* action, std::shared_ptr<wor
 
     // Update PCI state tracking
     {
-        tbb::spin_mutex::scoped_lock lock(loadweights_mutex);
+        tbb::queuing_mutex::scoped_lock lock(loadweights_mutex);
         loadweights.success(result->id, result->end);
     }
 
@@ -1203,14 +1203,14 @@ void Scheduler::handle_request(Request &request) {
 void Scheduler::add_callback(uint64_t action_id, Callback callback) {
     auto pair = std::make_pair(action_id, callback);
 
-    tbb::spin_mutex::scoped_lock lock(callbacks_mutex);
+    tbb::queuing_mutex::scoped_lock lock(callbacks_mutex);
     callbacks.insert(pair);
 }
 
 void Scheduler::handle_result(std::shared_ptr<workerapi::Result> &result) {
     Callback callback;
     {
-        tbb::spin_mutex::scoped_lock lock(callbacks_mutex);
+        tbb::queuing_mutex::scoped_lock lock(callbacks_mutex);
 
         auto it = callbacks.find(result->id);
         CHECK(it != callbacks.end()) 
@@ -1389,7 +1389,7 @@ void Scheduler::NetworkExecutor::send(network::controller::WorkerConnection* wor
 
     NetworkAction toSend;
     {
-        tbb::spin_mutex::scoped_lock lock(mutex);
+        tbb::queuing_mutex::scoped_lock lock(mutex);
 
         pending.push_back({worker, action, start_send_by, send_error_at});
 
@@ -1406,7 +1406,7 @@ void Scheduler::NetworkExecutor::send(network::controller::WorkerConnection* wor
 void Scheduler::NetworkExecutor::sendComplete() {
     NetworkAction toSend;
     {
-        tbb::spin_mutex::scoped_lock lock(mutex);
+        tbb::queuing_mutex::scoped_lock lock(mutex);
         if (!next(toSend)) {
             idle++;
             return;
