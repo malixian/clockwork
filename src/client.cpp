@@ -6,6 +6,7 @@
 #include <iostream>
 #include "clockwork/workload/azure.h"
 #include "clockwork/workload/slo.h"
+#include "clockwork/workload/scalability.h"
 #include "clockwork/thread.h"
 
 using namespace clockwork;
@@ -21,28 +22,46 @@ void printUsage() {
 	std::cerr << "Usage: client [address] [workload] "
 			  << "[workload parameters (if required)]" << std::endl
 			  << "Available workloads with parameters:" << std::endl
+
 			  << "\t example" << std::endl
+
 			  << "\t fill_memory" << std::endl
 			  << "\t\t creates 500 copies of resnet50, more than can fit in memory" << std::endl
 			  << "\t\t 100 of them are closed loop, 400 are gentle open loop" << std::endl
+
 			  << "\t spam [modelname]" << std::endl
 			  << "\t\t default modelname is resnet50_v2" << std::endl
 			  << "\t\t 100 instances, each with 100 closed loop" << std::endl
+
 			  << "\t single-spam" << std::endl
 			  << "\t\t resnet50_v2 x 1, with 1000 closed loop" << std::endl
+
 			  << "\t simple" << std::endl
+
 			  << "\t simple-slo-factor" << std::endl
 			  << "\t\t 3 models with closed-loop concurrency of 1" << std::endl
 			  << "\t\t Updates each model's slo factor every 10 seconds" << std::endl
+
 			  << "\t simple-parametric models clients concurrency requests" << std::endl
 			  << "\t\t Workload parameters:" << std::endl
 			  << "\t\t\t models: number of model copies" << std::endl
 			  << "\t\t\t clients: number of clients among which the models are partitioned" << std::endl
 			  << "\t\t\t concurrency: number of concurrent requests per client" << std::endl
 			  << "\t\t\t requests: total number of requests per client (for termination)" << std::endl
+
 			  << "\t poisson-open-loop num_models rate " << std::endl
 			  << "\t\t Rate should be provided in requests/second" << std::endl
 			  << "\t\t Rate is split across all models" << std::endl
+
+			  << "\t scalability-exp-1 num-models rate-min rate-max rate-factor rate-op period" << std::endl
+			  << "\t\t Workload parameters:" << std::endl
+			  << "\t\t\t num-models: number of \"resnet50_v2\" models" << std::endl
+			  << "\t\t\t rate-min: minimum total request rate" << std::endl
+			  << "\t\t\t rate-max: maximum total request rate" << std::endl
+			  << "\t\t\t rate-factor: rate increment factor" << std::endl
+			  << "\t\t\t rate-op: operator (\"add\"/\"mul\") for incrementing rate" << std::endl
+			  << "\t\t\t period: number of seconds before changing rate" << std::endl
+
 			  << "\t slo-exp-1 model copies dist rate slo-start slo-end slo-factor slo-op period" << std::endl
 			  << "\t\t Workload parameters:" << std::endl
 			  << "\t\t\t model: model name (e.g., \"resnet50_v2\")" << std::endl
@@ -60,6 +79,7 @@ void printUsage() {
 			  << "\t\t\t client volta04:12346 slo-exp-1 resnet50_v2 4 poisson 100 10 100 10 add 3" << std::endl
 			  << "\t\t\t\t (increases slo every 3s as follows: 10 20 30 ... 100)" << std::endl
 			  << "\t\t In each case, an open loop client is used" << std::endl
+
 			  << "\t slo-exp-2 model copies-fg dist-fg rate-fg slo-start-fg slo-end-fg slo-factor-fg slo-op-fg period-fg copies-bg concurrency-bg slo-bg" << std::endl
 			  << "\t\t Description: Running latency-sensitive (foreground or FG) and batch (background or BG) workloads simultaneously" << std::endl
 			  << "\t\t Workload parameters:" << std::endl
@@ -80,16 +100,19 @@ void printUsage() {
 			  << "\t\t\t\t (2 FG models with PoissonOpenLoop clients sending requests at 200 rps)" << std::endl
 			  << "\t\t\t\t (the SLO factor of each FG model is updated every 7 seconds as follows: 2 4 8 16 32)" << std::endl
 			  << "\t\t\t\t (4 BG models with a relaxed SLO factor of 100 and respective ClosedLoop clients configured with a concurrency factor of 1)" << std::endl
+
 			  << "\t comparison_experiment" << std::endl
 			  << "\t\t Description: runs multiple copies of resnet50_v2" << std::endl
 			  << "\t\t Workload parameters:" << std::endl
 			  << "\t\t\t num_models: (int, default 15) the number of models you're using" << std::endl
 			  << "\t\t\t total_requests: (int, default 1000) the total requests across all models, per second" << std::endl
+
 			  << "\t comparison_experiment2" << std::endl
 			  << "\t\t Description: closed-loop version of comparison experiment" << std::endl
 			  << "\t\t Workload parameters:" << std::endl
 			  << "\t\t\t num_models: (int, default 15) the number of models you're using" << std::endl
 			  << "\t\t\t concurrency: (int, default 16) closed loop workload concurrency" << std::endl
+
 			  << "\t azure" << std::endl
 			  << "\t\t Description: replay an azure workload trace.  Can be run with no arguments, in which case default values are used.  The defaults will load 3100 models and replay a trace that will give approximately the total load the system can handle." << std::endl
 			  << "\t\t Workload parameters:" << std::endl
@@ -104,6 +127,21 @@ void printUsage() {
 			  << "\t\t\t interval: (int, default 60) interval duration in seconds" << std::endl
 			  << "\t\t\t trace: (int, 1 to 13 inclusive, default 1) trace ID to replay" << std::endl
 			  << "\t\t\t randomise: (bool, default false) randomize each client's starting point in the trace" << std::endl
+
+			  << "\t azure_scalability_exp" << std::endl
+			  << "\t\t Description: Same as the azure workload above, but with an added mechanism to periodically increase the load factor. Only the necessary workload parameters have been retained." << std::endl
+			  << "\t\t Workload parameters:" << std::endl
+			  << "\t\t\t num_workers: (int, default 1) the number of workers you're using" << std::endl
+			  << "\t\t\t load_factor_min: (float, default 0.1) the minimum load factor" << std::endl
+			  << "\t\t\t load_factor_max: (float, default 2.0) the maximum load factor" << std::endl
+			  << "\t\t\t load_factor_inc: (float, default 2.0) the factor by which load factor is incremented" << std::endl
+			  << "\t\t\t load_factor_period: (float, default 1.0) the period in seconds after which the load factor is incremented" << std::endl
+			  << "\t\t\t memory_load_factor: (1, 2, 3, or 4; default 4):" << std::endl
+			  << "\t\t\t\t 1: loads approx. 200 models" << std::endl
+			  << "\t\t\t\t 2: loads approx. 800 models" << std::endl
+			  << "\t\t\t\t 3: loads approx. 1800 models" << std::endl
+			  << "\t\t\t\t 4: loads approx. 4000 models" << std::endl
+
 			  << "\tbursty_experiment" << std::endl
 			  << "\t\t\t num_models: (int, default 3600) number of 'major' workload models" << std::endl;
 }
@@ -161,6 +199,16 @@ int main(int argc, char *argv[])
 	else if (workload == "poisson-open-loop")
 		engine = workload::poisson_open_loop(client, std::stoul(argv[3]),
 			std::stod(argv[4]));
+	else if (workload == "scalability-exp-1")
+    // num-models rate-min rate-max rate-factor rate-op
+    engine = workload::scalability_experiment_1(
+      client,
+      std::stoul(argv[3]),    // total number of models
+      std::stod(argv[4]),     // total request rate (minimum)
+      std::stod(argv[5]),     // total request rate (maximum)
+      std::stod(argv[6]),     // request rate increment factor
+			std::string(argv[7]),   // request rate increment operator
+			std::stoull(argv[8]));	// seconds between rate increments
 	else if (workload == "slo-exp-1")
 		engine = workload::slo_experiment_1(
 			client,
@@ -206,6 +254,15 @@ int main(int argc, char *argv[])
 			trace_id,
 			randomise_start
 		);
+	} else if (workload == "azure_scalability_exp") {
+		engine = workload::azure_scalability_exp(
+      client,
+      atoi(argv[3]),  // number of workers
+      atof(argv[4]),  // minimum load factor
+      atof(argv[5]),  // maximum load factor
+      atof(argv[6]),  // factor by which load factor is incremented
+      atoi(argv[7]),  // seconds after which load factor is incremented
+      atoi(argv[8])); // memory load factor
 	} else if (workload == "comparison_experiment") {
 		int i = 2;
 		unsigned num_models = argc > ++i ? atoi(argv[i]) : 15;
