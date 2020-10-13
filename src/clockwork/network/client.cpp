@@ -1,4 +1,6 @@
 #include "clockwork/network/client.h"
+#include <sstream>
+#include <iomanip>
 
 namespace clockwork {
 namespace network {
@@ -7,11 +9,48 @@ namespace client {
 using asio::ip::tcp;
 using namespace clockwork::clientapi;
 
-Connection::Connection(asio::io_service& io_service): net_rpc_conn(io_service), connected(false) {
+Connection::Connection(asio::io_service& io_service): net_rpc_conn(io_service), connected(false),
+	logger_thread(&Connection::run_logger_thread, this) {
+	threading::initLoggerThread(logger_thread);
 }
 
 void Connection::ready() {
 	connected.store(true);
+}
+
+void Connection::run_logger_thread() {
+	uint64_t log_every = 10000000000UL;
+	uint64_t last_print = 0;
+    network::connection_stats previous_stats;
+	while (true) {
+		uint64_t now = util::now();
+		if (last_print + log_every <= now) {
+
+	        network::connection_stats stats;
+	        stats += this->stats;
+	        stats -= previous_stats;
+	        previous_stats = stats;
+
+
+	        float duration = (now - last_print) / 1000000000.0;
+	        stats /= duration;
+
+	        std::stringstream msg;
+	        msg << std::fixed << std::setprecision(1);
+	        msg << "Client->Controller: ";
+	        msg << (stats.bytes_sent / (1024*1024.0)) << "MB/s ";
+	        msg << "(" << stats.messages_sent << " msgs) snd, ";
+	        msg << (stats.bytes_received / (1024*1024.0)) << "MB/s ";
+	        msg << "(" << stats.messages_received << " msgs) rcv, ";
+	        msg << std::endl;
+
+	        std::cout << msg.str();
+			last_print = now;
+
+		}
+
+		usleep(100000);
+	}
 }
 
 void Connection::request_done(net_rpc_base &req) {

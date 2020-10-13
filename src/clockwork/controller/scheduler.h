@@ -80,12 +80,11 @@ class EchoScheduler : public Scheduler {
   void clientInfer(
       clientapi::InferenceRequest &request,
       std::function<void(clientapi::InferenceResponse &)> callback) {
-    std::cout << "Received: " << request.str() << std::endl;
+    // std::cout << "Received: " << request.str() << std::endl;
 
     clientapi::InferenceResponse response;
     response.header.user_request_id = request.header.user_request_id;
-    response.header.status = clockworkError;
-    response.header.message = "infer not implemented on EchoScheduler";
+    response.header.status = clockworkSuccess;
     response.output_size = 0;
     response.output = nullptr;
 

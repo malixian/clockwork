@@ -21,8 +21,11 @@ Represents a connection of a client to the Clockwork controller */
 class Connection: public net_rpc_conn, public ClientAPI {
 public:
   std::atomic_bool connected;
+  std::thread logger_thread;
 
   Connection(asio::io_service& io_service);
+
+  void run_logger_thread();
 
   // net_rpc_conn methods
   virtual void ready();
