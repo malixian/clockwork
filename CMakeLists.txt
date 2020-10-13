@@ -78,6 +78,8 @@ add_library( clockwork
 	src/clockwork/controller/scheduler.cpp
 	src/clockwork/controller/smart_scheduler.cpp
 	src/clockwork/controller/concurrent_infer_and_load_scheduler.cpp
+	src/clockwork/controller/infer5/load_tracker.cpp
+	src/clockwork/controller/infer5/infer5_scheduler.cpp
 	src/clockwork/config.cpp
 	src/clockwork/network/client.cpp
 	src/clockwork/workload/workload.cpp

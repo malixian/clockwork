@@ -10,6 +10,7 @@ WorkerConnection::WorkerConnection(asio::io_service &io_service, workerapi::Cont
 		msg_tx_(this, *this),
 		controller(controller),
 		connected(false) {
+	this->callback_ = [](){};
 }
 
 message_rx* WorkerConnection::new_rx_message(message_connection *tcp_conn, uint64_t header_len,
@@ -120,6 +121,7 @@ void WorkerConnection::completed_receive(message_connection *tcp_conn, message_r
 }
 
 void WorkerConnection::completed_transmit(message_connection *tcp_conn, message_tx *req) {
+	callback_();
 	delete req;
 }
 
@@ -168,6 +170,10 @@ void WorkerConnection::sendAction(std::shared_ptr<workerapi::Action> action) {
 	} else {
 		CHECK(false) << "Sending an unsupported action type";
 	}
+}
+
+void WorkerConnection::setTransmitCallback(Callback callback) {
+	this->callback_ = callback;
 }
 
 WorkerManager::WorkerManager() : alive(true), network_thread(&WorkerManager::run, this) {
@@ -221,10 +227,10 @@ WorkerConnection* WorkerManager::connect(std::string host, std::string port, wor
 	return nullptr;
 }
 
-ClientConnection::ClientConnection(asio::io_service &io_service, clientapi::ClientAPI* api) :
+ClientConnection::ClientConnection(asio::io_service &io_service, Server* server) :
 		message_connection(io_service, *this),
 		msg_tx_(this, *this),
-		api(api),
+		server(server),
 		connected(false) {
 }
 
@@ -277,68 +283,7 @@ void ClientConnection::aborted_receive(message_connection *tcp_conn, message_rx 
 }
 
 void ClientConnection::completed_receive(message_connection *tcp_conn, message_rx *req) {
-	int request_id = req->get_msg_id();
-
-	if (auto infer = dynamic_cast<msg_inference_req_rx*>(req)) {
-		auto request = new clientapi::InferenceRequest();
-		infer->get(*request);
-		api->infer(*request, [this, request, request_id] (clientapi::InferenceResponse &response) {
-			delete request;
-			auto rsp = new msg_inference_rsp_tx();
-			rsp->set(response);
-			rsp->set_msg_id(request_id);
-			msg_tx_.send_message(*rsp);
-		});
-
-	} else if (auto evict = dynamic_cast<msg_evict_req_rx*>(req)) {
-		auto request = new clientapi::EvictRequest();
-		evict->get(*request);
-		api->evict(*request, [this, request, request_id] (clientapi::EvictResponse &response) {
-			delete request;
-			auto rsp = new msg_evict_rsp_tx();
-			rsp->set(response);
-			rsp->set_msg_id(request_id);
-			msg_tx_.send_message(*rsp);
-		});
-
-	} else if (auto load_model = dynamic_cast<msg_load_remote_model_req_rx*>(req)) {
-		auto request = new clientapi::LoadModelFromRemoteDiskRequest();
-		load_model->get(*request);
-		api->loadRemoteModel(*request, [this, request, request_id] (clientapi::LoadModelFromRemoteDiskResponse &response) {
-			delete request;
-			auto rsp = new msg_load_remote_model_rsp_tx();
-			rsp->set(response);
-			rsp->set_msg_id(request_id);
-			msg_tx_.send_message(*rsp);
-		});
-		
-	} else if (auto upload_model = dynamic_cast<msg_upload_model_req_rx*>(req)) {
-		auto request = new clientapi::UploadModelRequest();
-		upload_model->get(*request);
-		api->uploadModel(*request, [this, request, request_id] (clientapi::UploadModelResponse &response) {
-			delete request;
-			auto rsp = new msg_upload_model_rsp_tx();
-			rsp->set(response);
-			rsp->set_msg_id(request_id);
-			msg_tx_.send_message(*rsp);
-		});
-
-	} else if (auto ls = dynamic_cast<msg_ls_req_rx*>(req)) {
-		auto request = new clientapi::LSRequest();
-		ls->get(*request);
-		api->ls(*request, [this, request, request_id] (clientapi::LSResponse &response) {
-			delete request;
-			auto rsp = new msg_ls_rsp_tx();
-			rsp->set(response);
-			rsp->set_msg_id(request_id);
-			msg_tx_.send_message(*rsp);
-		});
-		
-	} else {
-		CHECK(false) << "Received an unsupported RPC request";
-	}
-
-	delete req;
+	server->completed_receive(this, req);
 }
 
 void ClientConnection::completed_transmit(message_connection *tcp_conn, message_tx *req) {
@@ -352,9 +297,31 @@ void ClientConnection::aborted_transmit(message_connection *tcp_conn, message_tx
 Server::Server(clientapi::ClientAPI* api, int port) :
 		api(api),
 		io_service(),
-		alive(true),
-		network_thread(&Server::run, this, port) {
-	threading::initNetworkThread(network_thread);
+		alive(true) {
+	messages.set_capacity(100); // very small capacity
+
+	try {
+		auto endpoint = tcp::endpoint(tcp::v4(), port);
+		acceptor = new tcp::acceptor(io_service, endpoint);
+		start_accept(acceptor);
+		std::cout << "IO service thread listening for clients on " << endpoint << std::endl;
+	} catch (std::exception& e) {
+		CHECK(false) << "Exception in network thread: " << e.what();
+	} catch (const char* m) {
+		CHECK(false) << "Exception in network thread: " << m;
+	}
+
+	int num_network_threads = 1;
+	for (int i = 0; i < num_network_threads; i++) {
+		network_threads.push_back(std::thread(&Server::run_network_thread, this));
+		threading::initNetworkThread(network_threads[i]);
+	}
+
+	int num_process_threads = 1;
+	for (int i = 0; i < num_process_threads; i++) {
+		process_threads.push_back(std::thread(&Server::run_process_thread, this));
+		threading::initNetworkThread(process_threads[i]);
+	}
 }
 
 void Server::shutdown(bool awaitShutdown) {
@@ -368,12 +335,8 @@ void Server::join() {
 	while (alive.load());
 }
 
-void Server::run(int port) {
+void Server::run_network_thread() {
 	try {
-		auto endpoint = tcp::endpoint(tcp::v4(), port);
-		tcp::acceptor acceptor(io_service, endpoint);
-		start_accept(&acceptor);
-		std::cout << "IO service thread listening for clients on " << endpoint << std::endl;
 		io_service.run();
 	} catch (std::exception& e) {
 		CHECK(false) << "Exception in network thread: " << e.what();
@@ -384,8 +347,27 @@ void Server::run(int port) {
 	alive.store(false);
 }
 
+void Server::run_process_thread() {
+	int i = 0;
+	while (alive) {
+		bool active = false;
+
+		client_message m;
+		if (messages.try_pop(m)) {
+			process_message(m.client, m.req);
+			i++;
+			active = true;
+		}
+
+		if (!active || i > 100) {
+			usleep(10);
+			i = 0;
+		}
+	}
+}
+
 void Server::start_accept(tcp::acceptor* acceptor) {
-	auto connection = new ClientConnection(acceptor->get_io_service(), api);
+	auto connection = new ClientConnection(acceptor->get_io_service(), this);
 
 	acceptor->async_accept(connection->get_socket(),
 		boost::bind(&Server::handle_accept, this, connection, acceptor,
@@ -401,6 +383,75 @@ void Server::handle_accept(ClientConnection* connection, tcp::acceptor* acceptor
 	start_accept(acceptor);
 }
 
+void Server::completed_receive(ClientConnection* client, message_rx *req) {
+	messages.push({client, req});
+}
+
+
+void Server::process_message(ClientConnection* client, message_rx *req) {
+	int request_id = req->get_msg_id();
+
+	if (auto infer = dynamic_cast<msg_inference_req_rx*>(req)) {
+		auto request = new clientapi::InferenceRequest();
+		infer->get(*request);
+		api->infer(*request, [client, request, request_id] (clientapi::InferenceResponse &response) {
+			delete request;
+			auto rsp = new msg_inference_rsp_tx();
+			rsp->set(response);
+			rsp->set_msg_id(request_id);
+			client->msg_tx_.send_message(*rsp);
+		});
+
+	} else if (auto evict = dynamic_cast<msg_evict_req_rx*>(req)) {
+		auto request = new clientapi::EvictRequest();
+		evict->get(*request);
+		api->evict(*request, [client, request, request_id] (clientapi::EvictResponse &response) {
+			delete request;
+			auto rsp = new msg_evict_rsp_tx();
+			rsp->set(response);
+			rsp->set_msg_id(request_id);
+			client->msg_tx_.send_message(*rsp);
+		});
+
+	} else if (auto load_model = dynamic_cast<msg_load_remote_model_req_rx*>(req)) {
+		auto request = new clientapi::LoadModelFromRemoteDiskRequest();
+		load_model->get(*request);
+		api->loadRemoteModel(*request, [client, request, request_id] (clientapi::LoadModelFromRemoteDiskResponse &response) {
+			delete request;
+			auto rsp = new msg_load_remote_model_rsp_tx();
+			rsp->set(response);
+			rsp->set_msg_id(request_id);
+			client->msg_tx_.send_message(*rsp);
+		});
+		
+	} else if (auto upload_model = dynamic_cast<msg_upload_model_req_rx*>(req)) {
+		auto request = new clientapi::UploadModelRequest();
+		upload_model->get(*request);
+		api->uploadModel(*request, [client, request, request_id] (clientapi::UploadModelResponse &response) {
+			delete request;
+			auto rsp = new msg_upload_model_rsp_tx();
+			rsp->set(response);
+			rsp->set_msg_id(request_id);
+			client->msg_tx_.send_message(*rsp);
+		});
+
+	} else if (auto ls = dynamic_cast<msg_ls_req_rx*>(req)) {
+		auto request = new clientapi::LSRequest();
+		ls->get(*request);
+		api->ls(*request, [client, request, request_id] (clientapi::LSResponse &response) {
+			delete request;
+			auto rsp = new msg_ls_rsp_tx();
+			rsp->set(response);
+			rsp->set_msg_id(request_id);
+			client->msg_tx_.send_message(*rsp);
+		});
+		
+	} else {
+		CHECK(false) << "Received an unsupported RPC request";
+	}
+
+	delete req;
+}
 
 
 }

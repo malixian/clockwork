@@ -35,6 +35,8 @@ const int actionErrorInvalidBatchSize = 31; // Invalid batch size input to an in
 const int actionErrorInvalidModelID = 40; // Invalid ID specified for load model
 const int actionErrorInvalidModelPath = 41; // Invalid path specified for load model
 
+const int networkSendTooLate = 45; // Couldn't start netsend from controller->worker in time
+
 const int loadWeightsTooEarly = 50;
 const int loadWeightsTooLate = 51;
 const int loadWeightsUnknownModel = 52;

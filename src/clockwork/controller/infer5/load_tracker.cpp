@@ -1,8 +1,59 @@
-#include "clockwork/controller/load_tracker.h"
+#include "clockwork/controller/infer5/load_tracker.h"
 #include "clockwork/util.h"
 #include "dmlc/logging.h"
 
 namespace clockwork {
+namespace scheduler {
+namespace infer5 {
+
+ModelLoadTracker* LoadTracker::newModelTracker(int model_id) {
+    return new ModelLoadTracker(capacity, model_id, gpus.size());
+}
+   
+ModelLoadTracker::ModelLoadTracker(int64_t capacity, int model_id, int n_gpus) : 
+        capacity(capacity),
+        model_id(model_id), 
+        touched(n_gpus) {
+    for (int i = 0; i < touched.size(); i++) {
+        touched[i] = false;
+    }
+}
+
+LoadTracker::Demand ModelLoadTracker::addRequest(int64_t size, uint64_t start_exec_by, uint64_t start_loadweights_by) {
+    LoadTracker::Demand demand;
+    demand.exec_size = (size * capacity) / start_exec_by;
+    demand.loadweights_size = (size * capacity) / start_loadweights_by;
+    demand.model_id = model_id;
+
+    this->start_loadweights_by = start_loadweights_by;
+    new_exec += demand.exec_size;
+    new_loadweights += demand.loadweights_size;
+
+    return demand;
+}
+
+void ModelLoadTracker::executing(LoadTracker::Demand &demand, int gpu_id) {
+    delta_loadweights += demand.loadweights_size;
+    demand.loadweights_size = 0;
+    touched[gpu_id] = true;
+}
+
+void ModelLoadTracker::completed(LoadTracker::Demand &demand, int gpu_id) {
+    delta_exec += demand.exec_size;
+    demand.exec_size = 0;
+    touched[gpu_id] = true;
+}
+
+void ModelLoadTracker::cancelled(LoadTracker::Demand &demand) {
+    delta_loadweights += demand.loadweights_size;
+    delta_exec += demand.exec_size;
+    demand.loadweights_size = 0;
+    demand.exec_size = 0;
+}
+
+void ModelLoadTracker::loadComplete(int gpu_id, bool success) {
+    events.push({gpu_id, success});
+}
 
 void LoadTracker::attach(GPU &gpu) {
     for (auto &priority : gpu.detached) {
@@ -145,9 +196,6 @@ void LoadTracker::distributeLoad(Model &model) {
 }
 
 void LoadTracker::addGPU(Model &model, GPU &gpu) {
-    detach(model);
-    invalidatePriorities(model);
-
     CHECK(!model.gpus[gpu.id]) << "Adding model to GPU that already has it";
     CHECK(!model.loading[gpu.id]) << "Adding model to GPU that is already loading it";
     CHECK(!gpu.models[model.id]) << "Adding model to GPU that thinks it already has it";
@@ -157,28 +205,18 @@ void LoadTracker::addGPU(Model &model, GPU &gpu) {
     gpu.models[model.id] = true;
     model.priorities[gpu.id]->preference = model.gpu_count++;
     model.last_used[gpu.id] = seqno_seed++;
-
-    distributeLoad(model);
 }
 
 void LoadTracker::addGPUcomplete(Model &model, GPU &gpu) {
-    detach(model);
-    invalidatePriorities(model);
-
     CHECK(model.gpus[gpu.id]) << "Model load completed on GPU that didn't expect it";
     CHECK(gpu.models[model.id]) << "Model load completed on GPU that didn't expect it";
     CHECK(model.loading[gpu.id]) << "Model load completed on GPU that wasn't loading";
 
     model.loading[gpu.id] = false;
     model.last_used[gpu.id] = seqno_seed++;
-
-    distributeLoad(model);
 }
 
 void LoadTracker::removeGPU(Model &model, GPU &gpu, bool evicted) {
-    detach(model);
-    invalidatePriorities(model);
-
     CHECK(model.gpus[gpu.id]) << "Removing Model from GPU that doesn't have it";
     CHECK(gpu.models[model.id]) << "Removing Model from GPU that doesn't think it has it";
     if (evicted) {
@@ -200,8 +238,6 @@ void LoadTracker::removeGPU(Model &model, GPU &gpu, bool evicted) {
             model.priorities[i]->last_used = seqno_seed++;
         }
     }
-
-    distributeLoad(model);
 }
 
 void LoadTracker::checkRequests(uint64_t now) {
@@ -250,138 +286,6 @@ n_models(num_models), n_gpus(num_gpus), capacity(capacity) {
     }            
 }
 
-LoadTracker::Demand LoadTracker::addRequest(
-        int model_id, int64_t size, uint64_t start_exec_by, uint64_t start_loadweights_by) {
-    // Complete any pending requests
-    uint64_t now = util::now();
-    checkRequests(now);
-
-    // Demand is used to track actual entry and exit
-    LoadTracker::Demand demand;
-    demand.exec_size = (size * capacity) / start_exec_by;
-    demand.loadweights_size = (size * capacity) / start_loadweights_by;
-    demand.model_id = model_id;
-
-    // Request is used to track eligibility for weights loading
-    LoadTracker::Request request;
-    request.loadweights_size = demand.loadweights_size;
-    request.model_id = model_id;
-    request.time = now + start_loadweights_by;
-    requests.push(request);
-
-    // Get the model
-    Model& model = models[model_id];
-    model.outstanding_exec += demand.exec_size;
-    model.outstanding_loadweights += demand.loadweights_size;
-    
-    // Re-distribute model's load
-    detach(model);
-    invalidatePriorities(model);
-    distributeLoad(model);
-
-    return demand;
-}
-
-void LoadTracker::requestExecuting(Demand &demand, int gpu_id) {
-    // Complete any pending requests
-    checkRequests(util::now());
-    
-    auto &model = models[demand.model_id];
-    model.completed_loadweights += demand.loadweights_size;
-    demand.loadweights_size = 0;
-    if (gpu_id >= 0) model.last_used[gpu_id] = seqno_seed++;
-
-    detach(model);
-    invalidatePriorities(model);
-    distributeLoad(model);
-}
-
-void LoadTracker::requestsExecuting(std::vector<Demand*> &demands, int gpu_id) {
-    // Complete any pending requests
-    checkRequests(util::now());
-    
-    auto &model = models[demands[0]->model_id];
-    for (auto &demand : demands) {
-        model.completed_loadweights += demand->loadweights_size;
-        demand->loadweights_size = 0;
-    }
-    if (gpu_id >= 0) model.last_used[gpu_id] = seqno_seed++;
-
-    detach(model);
-    invalidatePriorities(model);
-    distributeLoad(model);
-}
-
-void LoadTracker::requestCompleted(Demand &demand, int gpu_id) {
-    // Complete any pending requests
-    checkRequests(util::now());
-    
-    auto &model = models[demand.model_id];
-    model.completed_exec += demand.exec_size;
-    demand.exec_size = 0;
-    if (gpu_id >= 0) model.last_used[gpu_id] = seqno_seed++;
-
-    detach(model);
-    invalidatePriorities(model);
-    distributeLoad(model);
-}
-
-void LoadTracker::requestsCompleted(std::vector<Demand*> &demands, int gpu_id) {
-    if (demands.size() == 0) return;
-
-    // Complete any pending requests
-    checkRequests(util::now());
-    
-    auto &model = models[demands[0]->model_id];
-    for (auto &demand : demands) {
-        model.completed_exec += demand->exec_size;
-        demand->exec_size = 0;
-    }
-    if (gpu_id >= 0) model.last_used[gpu_id] = seqno_seed++;
-
-    detach(model);
-    invalidatePriorities(model);
-    distributeLoad(model);
-}
-
-void LoadTracker::requestCancelled(Demand &demand) {
-    // Complete any pending requests
-    checkRequests(util::now());
-    
-    auto &model = models[demand.model_id];
-    model.completed_exec += demand.exec_size;
-    model.completed_loadweights += demand.loadweights_size;
-    demand.exec_size = 0;
-    demand.loadweights_size = 0;
-
-    detach(model);
-    invalidatePriorities(model);
-    distributeLoad(model);
-}
-
-void LoadTracker::requestsCancelled(std::vector<Demand*> &demands) {
-    // Complete any pending requests
-    checkRequests(util::now());
-
-    std::set<int> seen;
-
-    for (auto &demand : demands) {
-        auto &model = models[demand->model_id];
-        model.completed_exec += demand->exec_size;
-        model.completed_loadweights += demand->loadweights_size;
-        demand->exec_size = 0;
-        demand->loadweights_size = 0;
-        seen.insert(model.id);
-    }
-
-    for (auto &model_id : seen) {
-        auto &model = models[model_id];
-        detach(model);
-        invalidatePriorities(model);
-        distributeLoad(model);
-    }
-}
-
 int LoadTracker::loadModel(int gpu_id, bool requires_eviction) {
     // Complete any pending requests
     checkRequests(util::now());
@@ -398,20 +302,15 @@ int LoadTracker::loadModel(int gpu_id, bool requires_eviction) {
     if (priority->is_empty) return -1;
     if (priority <= 0) return -1; // all demand satisfied
 
-    Model &model = *(priority->model);
-    addGPU(model, gpu);
-    return model.id;
-}
 
-void LoadTracker::loadModelComplete(int gpu_id, int model_id, bool success) {
-    // Complete any pending requests
-    checkRequests(util::now());
-    
-    if (success) {
-        addGPUcomplete(models[model_id], gpus[gpu_id]);
-    } else {
-        removeGPU(models[model_id], gpus[gpu_id], false);
-    }
+    Model &model = *(priority->model);
+
+    detach(model);
+    invalidatePriorities(model);
+    addGPU(model, gpu);
+    distributeLoad(model);
+
+    return model.id;
 }
 
 int LoadTracker::evictModel(int gpu_id) {
@@ -424,8 +323,64 @@ int LoadTracker::evictModel(int gpu_id) {
 
     auto &priority = *gpu.cached.rbegin();
     Model &model = *(priority->model);
+
+    detach(model);
+    invalidatePriorities(model);
     removeGPU(model, gpus[gpu_id], true);
+    distributeLoad(model);
+
     return model.id;
 }
 
+void LoadTracker::process(ModelLoadTracker* tracker) {
+    // Detach the model
+    Model& model = models[tracker->model_id];
+    detach(model);
+    invalidatePriorities(model);
+
+    // Remove pending load demand
+    uint64_t now = util::now();
+    checkRequests(now);
+
+    // Add new requests
+    int64_t loadweights = tracker->new_loadweights.exchange(0);
+    int64_t exec = tracker->new_exec.exchange(0);
+    if (loadweights > 0) {
+        LoadTracker::Request request;
+        request.model_id = tracker->model_id;
+        request.loadweights_size = tracker->new_loadweights;
+        request.time = now + tracker->start_loadweights_by;
+        requests.push(request);
+    }
+    model.outstanding_exec += exec;
+    model.outstanding_loadweights += loadweights;
+
+    // Process completed requests
+    model.completed_exec += tracker->delta_exec.exchange(0);
+    model.completed_loadweights += tracker->delta_loadweights.exchange(0);
+
+    // Update last used for models
+    for (int i = 0; i < tracker->touched.size(); i++) {
+        if (tracker->touched[i]) {
+            model.last_used[i] = seqno_seed++;
+            tracker->touched[i] = false;
+        }
+    }
+
+    // Process loadcomplete events
+    ModelLoadTracker::LoadEvent event;
+    while (tracker->events.try_pop(event)) {
+        if (event.success) {
+            addGPUcomplete(model, gpus[event.gpu_id]);
+        } else {
+            removeGPU(model, gpus[event.gpu_id], false);
+        }
+    }
+    
+    // Re-distribute model's load
+    distributeLoad(model);
+}
+
+}
+}
 }

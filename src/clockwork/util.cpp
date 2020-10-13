@@ -436,5 +436,16 @@ std::vector<unsigned> make_batch_lookup(std::vector<unsigned> supported_batch_si
   return lookup;
 }
 
+std::vector<unsigned> make_reverse_batch_lookup(std::vector<unsigned> supported_batch_sizes) {
+  std::sort(supported_batch_sizes.begin(), supported_batch_sizes.end());
+  std::vector<unsigned> index_lookup;
+  for (int i = 0; i < supported_batch_sizes.size(); i++) {
+    while (index_lookup.size() <= supported_batch_sizes[i]) {
+      index_lookup.push_back(i);
+    }
+  }
+  return index_lookup;
+}
+
 }
 }

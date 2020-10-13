@@ -3,6 +3,7 @@
 #include "clockwork/controller/stress_test_controller.h"
 #include "clockwork/controller/smart_scheduler.h"
 #include "clockwork/controller/concurrent_infer_and_load_scheduler.h"
+#include "clockwork/controller/infer5/infer5_scheduler.h"
 #include "clockwork/telemetry/controller_request_logger.h"
 #include <csignal>
 #include <sstream>
@@ -124,6 +125,37 @@ int main(int argc, char *argv[]) {
         std::cout << "Logging requests to " << requests_filename << std::endl;
         std::cout << "Logging actions to " << actions_filename << std::endl;
         Scheduler* scheduler = new scheduler::infer4::Scheduler(
+            default_slo,
+            schedule_ahead, schedule_ahead,
+            generate_inputs,
+            max_gpus,
+            max_exec_time,
+            max_batch_size,
+            actions_filename
+        );
+        controller::ControllerWithStartupPhase* controller = new controller::ControllerWithStartupPhase(
+            client_requests_listen_port,
+            worker_host_port_pairs,
+            1000000000UL, // 10s load stage timeout
+            new controller::ControllerStartup(max_batch_size, max_exec_time), // in future the startup type might be customizable
+            scheduler,
+            ControllerRequestTelemetry::log_and_summarize(
+                requests_filename,     // 
+                10000000000UL
+            )
+        );
+        controller->join();
+    } else if (controller_type == "INFER5") {
+        int i = 2;
+        bool generate_inputs = argc > ++i ? atoi(argv[i]) != 0 : false;
+        int max_gpus = argc > ++i ? std::stoull(argv[i]) : 100;
+        uint64_t schedule_ahead = argc > ++i ? std::stoull(argv[i]) : (generate_inputs ? 15000000UL : 10000000UL);
+        uint64_t default_slo = argc > ++i ? std::stoull(argv[i]) : 100000000UL;
+        uint64_t max_exec_time = argc > ++i ? std::stoull(argv[i]) : 250000000UL;
+        int max_batch_size = argc > ++i ? atoi(argv[i]) : 8;
+        std::cout << "Logging requests to " << requests_filename << std::endl;
+        std::cout << "Logging actions to " << actions_filename << std::endl;
+        Scheduler* scheduler = new scheduler::infer5::Scheduler(
             default_slo,
             schedule_ahead, schedule_ahead,
             generate_inputs,
