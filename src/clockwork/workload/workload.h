@@ -419,6 +419,10 @@ public:
 		}
 	}
 
+	void set_distribution(TDISTRIBUTION new_distribution) {
+		distribution = new_distribution;
+	}
+
 	void Submit(unsigned interval, uint64_t remaining, uint64_t next_arrival) {
 		unsigned rate = intervals[interval];
 		// std::cout << "Interval " << interval << ", rate=" << rate << ", remaining=" << remaining << ", next=" << next_arrival << std::endl;
@@ -481,6 +485,50 @@ public:
 			Exponential(scale_factor / 60000000000.0)) {
 	}
 
+};
+
+class AdjustScaleFactor : public Timer {
+public:
+	std::vector<TraceReplay<Exponential>*> workloads;
+	uint64_t period;
+	double current;
+	std::function<double(double)> update;
+	std::function<bool(double)> terminate;
+
+	AdjustScaleFactor(
+		unsigned period_seconds,
+		double initial_scale_factor,
+		std::vector<TraceReplay<Exponential>*> workloads,
+		std::function<double(double)> update,
+		std::function<bool(double)> terminate)
+			: period(period_seconds * 1000000000UL),
+			  current(initial_scale_factor),
+			  workloads(workloads),
+			  update(update),
+			  terminate(terminate) {}
+
+	virtual void Start(uint64_t now) {
+		SetTimeout(period, [this]() { update_scale_factor(); });
+	}
+
+  void update_scale_factor() {
+		current = update(current);
+		try_termination();
+
+		std::cout << ">>>> Updating scale_factor to " << current << std::endl;
+		for (auto workload : workloads) {
+			workload->set_distribution(Exponential(current / 60000000000.0));
+		}
+
+		SetTimeout(period, [this]() { update_scale_factor(); });
+  }
+
+	void try_termination() {
+		if (terminate(current)) {
+			engine->running = 0;
+			std::cout << "Terminating engine" << std::endl;
+		}
+	}
 };
 
 template <typename TDISTRIBUTION> class AdjustRate : public Timer {
