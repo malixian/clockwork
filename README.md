@@ -48,7 +48,7 @@ The following pages step through the things required to build and run Clockwork
 clockwork-users@googlegroups.com
 
 #### People
-Arpan Gujarati, Reza Karimi, Safya Alzayat, Antoine Kaufmann, Ymir Vigfusson, Jonathan Mace
+Arpan Gujarati, Reza Karimi, Safya Alzayat, Wei Hao, Antoine Kaufmann, Ymir Vigfusson, Jonathan Mace
 
 #### Organizations
 
