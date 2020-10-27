@@ -193,10 +193,18 @@ int main(int argc, char *argv[]) {
     } else if (controller_type == "SMART") {
 
 		int i = 2;
+
+
+        bool generate_inputs = argc > ++i ? atoi(argv[i]) != 0 : false;
         int max_gpus = argc > ++i ? std::stoull(argv[i]) : 100;
+        uint64_t schedule_ahead = argc > ++i ? std::stoull(argv[i]) : (generate_inputs ? 15000000UL : 10000000UL);
         uint64_t default_slo = argc > ++i ? std::stoull(argv[i]) : 100000000UL;
-        uint64_t max_exec_time = argc > ++i ? std::stoull(argv[i]) : 25000000UL;
+        uint64_t max_exec_time = argc > ++i ? std::stoull(argv[i]) : 250000000UL;
         int max_batch_size = argc > ++i ? atoi(argv[i]) : 8;
+        std::cout << "Logging requests to " << requests_filename << std::endl;
+        std::cout << "Logging actions to " << actions_filename << std::endl;
+
+
 		std::string action_telemetry_file = argc > ++i ? argv[i] : actions_filename;
         Scheduler* scheduler = new SmartScheduler(
             default_slo,
