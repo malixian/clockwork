@@ -67,7 +67,8 @@ public:
 				return i;
 			}
 		}
-		CHECK(false) << "All cores exhausted for GPU " << gpu_id;
+		//CHECK(false) << "All cores exhausted for GPU " << gpu_id;
+		std::cout << "[Warning] All cores exhausted for GPU " << gpu_id << ". The thread is being placed on a random core. This could negatively impact the performance of the system." << std::endl;
 		return 0;
 	}
 
