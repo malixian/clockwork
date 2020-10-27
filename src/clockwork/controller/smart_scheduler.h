@@ -14,9 +14,9 @@ class SmartScheduler : public Scheduler {
   static const unsigned latency_profiling_window = 100;
   static const uint64_t scheduling_epoch = 1000000ULL;
   static const uint64_t schedule_ahead_length = 5000000ULL;
-  static const uint64_t network_transfer_latency = 1000000ULL;
-  static const uint64_t pci_slack = 1000000ULL;
-  static const uint64_t infer_slack = 500000ULL;
+  static const uint64_t network_transfer_latency = 2000000ULL;
+  static const uint64_t pci_slack = 1500000ULL;
+  static const uint64_t infer_slack = 1500000ULL;
   static const uint64_t weights_evict_latency = 1000000ULL;
   // it means we must be observing at least 50 drops to trigger replication
   static const unsigned replication_sensitivity = 50;

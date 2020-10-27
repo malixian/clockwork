@@ -352,8 +352,7 @@ void SmartScheduler::clientInfer(
   } else {
     slo_goal = default_slo;
   }
-  slo_goal = ((slo_goal > 20000000) ? (slo_goal - 5000000)
-                              : (slo_goal - 2 * network_transfer_latency)); // aim for a tighter slo
+  slo_goal -= 5000000; // aim for a tighter slo
   uint64_t deadline = arrived + slo_goal;
 
   request_queue.push_back(Request(request_id, request.header.user_request_id,
